@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Arial', Helvetica, ui-sans-serif, system-ui, sans-serif;
+  --font-diwani: 'Aref Ruqaa', 'Amiri', 'Traditional Arabic', serif;
+  --font-kufi: 'Reem Kufi', sans-serif;
+}
+
+.font-diwani {
+  font-family: 'Aref Ruqaa', 'Amiri', 'Traditional Arabic', serif;
+}
+
+.font-kufi {
+  font-family: 'Reem Kufi', sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+@media print {
+  @page { margin: 10mm; }
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background-color: white !important;
+  }
+}
+
