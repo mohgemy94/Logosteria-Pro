@@ -1,4 +1,5 @@
-import { Partner, VoucherType } from '../types/accounting';
+import { enqueueSyncRecord } from "../services/DatabaseProvider";
+import { Partner, VoucherType, JournalEntryStatus } from '../types/accounting';
 import { getCurrencyInfo } from './currency';
 import { 
   DB_SALES_INVOICES_KEY, 
@@ -7,23 +8,14 @@ import {
   DB_PAYMENT_VOUCHERS_KEY 
 } from './sequences';
 import { notifyDataChanged } from './localFolderBackup';
+import { loadJournalEntries } from './trialBalanceStore';
 
 export const CUSTOMERS_STORAGE_KEY = 'accounting_customers';
 export const VENDORS_STORAGE_KEY = 'accounting_vendors';
 
-export const DEFAULT_CUSTOMERS_LIST: Partner[] = [
-  { id: 'c-1', name: 'شركة التقنية الحديثة المحدودة', type: 'CUSTOMER', taxNumber: '300000000000003', phone: '0501112233', address: 'المملكة العربية السعودية - الرياض - طريق الملك فهد', openingBalance: 12500 },
-  { id: 'c-2', name: 'مؤسسة البناء العمراني للمقاولات', type: 'CUSTOMER', taxNumber: '300000000000004', phone: '0502223344', address: 'المملكة العربية السعودية - جدة - حي الروضة', openingBalance: 25000 },
-  { id: 'c-3', name: 'مجموعة المروج التجارية', type: 'CUSTOMER', taxNumber: '310987654300003', phone: '0504445566', address: 'المملكة العربية السعودية - مكة المكرمة - العزيزية', openingBalance: 5000 },
-  { id: 'c-4', name: 'مؤسسة الأفق للتجارة والمقاولات', type: 'CUSTOMER', taxNumber: '300555666700003', phone: '0555123456', address: 'المملكة العربية السعودية - الدمام - حي الشاطئ', openingBalance: 0 }
-];
+export const DEFAULT_CUSTOMERS_LIST: Partner[] = [];
 
-export const DEFAULT_VENDORS_LIST: Partner[] = [
-  { id: 'v-1', name: 'شركة التوريدات العالمية للصناعة', type: 'VENDOR', taxNumber: '300000000000005', phone: '0503334455', address: 'المملكة العربية السعودية - الرياض - المدينة الصناعية الثانية', openingBalance: -18000 },
-  { id: 'v-2', name: 'مصنع الخليج للعبوات والكرتون', type: 'VENDOR', taxNumber: '300777888900003', phone: '0507778899', address: 'المملكة العربية السعودية - جدة - المرحلة الرابعة', openingBalance: -6500 },
-  { id: 'v-3', name: 'شركة النقل واللوجستيات السريعة', type: 'VENDOR', taxNumber: '300999111200003', phone: '0508889900', address: 'المملكة العربية السعودية - الخبر - طريق الملك فيصل', openingBalance: 0 },
-  { id: 'v-4', name: 'مؤسسة استيراد قطع الغيار الألمانية', type: 'VENDOR', taxNumber: '310444333200003', phone: '0509990011', address: 'المملكة العربية السعودية - الرياض - حي السلي', openingBalance: 0 }
-];
+export const DEFAULT_VENDORS_LIST: Partner[] = [];
 
 export interface StoredInvoiceTotals {
   subtotal: number;
@@ -73,6 +65,9 @@ export interface StoredPurchaseInvoiceRecord {
   createdAt: string;
 }
 
+import { VoucherInvoiceAllocation, applyVoucherAllocations } from './invoiceAllocation';
+export type { VoucherInvoiceAllocation };
+
 export interface StoredVoucherRecord {
   id: string;
   type: VoucherType;
@@ -84,13 +79,34 @@ export interface StoredVoucherRecord {
   accountId: string;
   amount: number;
   description: string;
+  status?: 'DRAFT' | 'POSTED';
+  postedAt?: string | undefined;
   createdAt: string;
+  paymentMethod?: 'CASH' | 'BANK_TRANSFER' | 'CHECK' | 'SPAN' | 'OTHER' | undefined;
+  referenceNo?: string | undefined;
+  bankName?: string | undefined;
+  checkDueDate?: string | undefined;
+  costCenterId?: string | undefined;
+  costCenterName?: string | undefined;
+  allocations?: VoucherInvoiceAllocation[] | undefined;
+  // دورة الاعتماد الهرمية (Approval Hierarchy)
+  requiresApproval?: boolean | undefined;
+  approvalStatus?: 'NOT_REQUIRED' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | undefined;
+  approvedBy?: string | undefined;
+  approvedAt?: string | undefined;
+  approvalRole?: string | undefined;
+  approvalNotes?: string | undefined;
+  rejectedBy?: string | undefined;
+  rejectedAt?: string | undefined;
+  rejectionReason?: string | undefined;
+  preparedBy?: string | undefined;
+  disbursedBy?: string | undefined;
 }
 
 export interface PartnerLedgerTx {
   id: string;
   date: string;
-  type: 'OPENING' | 'SALES_INVOICE' | 'PURCHASE_INVOICE' | 'RECEIPT_VOUCHER' | 'PAYMENT_VOUCHER';
+  type: 'OPENING' | 'SALES_INVOICE' | 'PURCHASE_INVOICE' | 'RECEIPT_VOUCHER' | 'PAYMENT_VOUCHER' | 'JOURNAL_ENTRY';
   docTypeLabel: string;
   docNumber: string;
   description: string;
@@ -117,6 +133,7 @@ export interface PartnerStatement {
   totalPurchaseInvoices: number;
   totalReceiptVouchers: number;
   totalPaymentVouchers: number;
+  totalJournalEntries?: number;
   totalWithdrawals: number; // إجمالي المسحوبات/الفواتير
   totalPayments: number; // إجمالي المدفوعات/السندات
   lastTransactionDate: string;
@@ -134,12 +151,17 @@ export function loadCustomers(): Partner[] {
   if (typeof window === 'undefined') return DEFAULT_CUSTOMERS_LIST;
   try {
     const raw = localStorage.getItem(CUSTOMERS_STORAGE_KEY);
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {
     console.error('Failed to load customers:', e);
+  }
+  try {
+    localStorage.setItem(CUSTOMERS_STORAGE_KEY, JSON.stringify(DEFAULT_CUSTOMERS_LIST));
+  } catch (e) {
+    console.error(e);
   }
   return DEFAULT_CUSTOMERS_LIST;
 }
@@ -159,12 +181,17 @@ export function loadVendors(): Partner[] {
   if (typeof window === 'undefined') return DEFAULT_VENDORS_LIST;
   try {
     const raw = localStorage.getItem(VENDORS_STORAGE_KEY);
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {
     console.error('Failed to load vendors:', e);
+  }
+  try {
+    localStorage.setItem(VENDORS_STORAGE_KEY, JSON.stringify(DEFAULT_VENDORS_LIST));
+  } catch (e) {
+    console.error(e);
   }
   return DEFAULT_VENDORS_LIST;
 }
@@ -208,32 +235,60 @@ export function loadPurchaseInvoices(): StoredPurchaseInvoiceRecord[] {
   return [];
 }
 
+export const DEFAULT_RECEIPT_VOUCHERS: StoredVoucherRecord[] = [];
+
+export const DEFAULT_PAYMENT_VOUCHERS: StoredVoucherRecord[] = [];
+
 export function loadReceiptVouchers(): StoredVoucherRecord[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined') return DEFAULT_RECEIPT_VOUCHERS;
   try {
     const raw = localStorage.getItem(DB_RECEIPT_VOUCHERS_KEY);
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {
     console.error('Failed to load receipt vouchers:', e);
   }
-  return [];
+  try {
+    localStorage.setItem(DB_RECEIPT_VOUCHERS_KEY, JSON.stringify(DEFAULT_RECEIPT_VOUCHERS));
+  } catch (e) {
+    console.error(e);
+  }
+  return DEFAULT_RECEIPT_VOUCHERS;
 }
 
 export function loadPaymentVouchers(): StoredVoucherRecord[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined') return DEFAULT_PAYMENT_VOUCHERS;
   try {
     const raw = localStorage.getItem(DB_PAYMENT_VOUCHERS_KEY);
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {
     console.error('Failed to load payment vouchers:', e);
   }
-  return [];
+  try {
+    localStorage.setItem(DB_PAYMENT_VOUCHERS_KEY, JSON.stringify(DEFAULT_PAYMENT_VOUCHERS));
+  } catch (e) {
+    console.error(e);
+  }
+  return DEFAULT_PAYMENT_VOUCHERS;
+}
+
+/**
+ * Loads all vouchers (both Receipt and Payment) combined, enriched and sorted
+ */
+export function loadAllVouchers(): StoredVoucherRecord[] {
+  const receipts = loadReceiptVouchers();
+  const payments = loadPaymentVouchers();
+  const combined = [...receipts, ...payments];
+  return combined.sort((a, b) => {
+    const timeA = new Date(a.date || a.createdAt).getTime();
+    const timeB = new Date(b.date || b.createdAt).getTime();
+    return timeB - timeA;
+  });
 }
 
 /**
@@ -273,7 +328,7 @@ export function getPartnerAccountStatement(partner: Partner): PartnerStatement {
   const rawTxList: {
     date: string;
     createdAt: string;
-    type: 'OPENING' | 'SALES_INVOICE' | 'PURCHASE_INVOICE' | 'RECEIPT_VOUCHER' | 'PAYMENT_VOUCHER';
+    type: 'OPENING' | 'SALES_INVOICE' | 'PURCHASE_INVOICE' | 'RECEIPT_VOUCHER' | 'PAYMENT_VOUCHER' | 'JOURNAL_ENTRY';
     docTypeLabel: string;
     docNumber: string;
     description: string;
@@ -327,23 +382,28 @@ export function getPartnerAccountStatement(partner: Partner): PartnerStatement {
   // 2. Sales Invoices
   rawSalesInvoices.forEach(inv => {
     if (isPartnerMatch(inv.partnerId, inv.partnerName, partner)) {
-      totalSalesCount++;
+      const invStatus = inv.status || 'DRAFT';
+      const isPosted = invStatus === 'POSTED';
+      if (isPosted) totalSalesCount++;
       const grandTotal = inv.totals?.grandTotal ?? 0;
       const cashPaid = inv.totals?.cashPaid ?? 0;
       const itemsCount = inv.items?.length || 0;
-      const desc = `فاتورة مبيعات #${inv.invoiceNumber} (${itemsCount} بنود) ${inv.notes ? '- ' + inv.notes : ''}`;
+      const isReturn = inv.invoiceType?.includes('RETURN');
+      const docLabel = isReturn ? 'مرتجع مبيعات' : 'فاتورة مبيعات';
+      const desc = `${docLabel} #${inv.invoiceNumber} (${itemsCount} بنود) ${inv.notes ? '- ' + inv.notes : ''}${!isPosted ? ' (مسودة - غير مرحلة)' : ''}`;
       
-      // Customer is debited for invoice total
+      // Customer is debited for invoice total. Only POSTED invoices affect balance.
+      // If it's a return, customer is CREDITED.
       rawTxList.push({
         date: inv.date || todayStr,
         createdAt: inv.createdAt || nowStr,
         type: 'SALES_INVOICE',
-        docTypeLabel: 'فاتورة مبيعات',
+        docTypeLabel: isPosted ? `${docLabel} (مرحلة)` : `${docLabel} (مسودة - غير مرحلة)`,
         docNumber: `#${inv.invoiceNumber}`,
         description: desc,
-        debit: grandTotal,
-        credit: 0,
-        status: inv.status,
+        debit: isPosted && !isReturn ? grandTotal : 0,
+        credit: isPosted && isReturn ? grandTotal : 0,
+        status: invStatus,
         rawDoc: inv
       });
 
@@ -353,12 +413,12 @@ export function getPartnerAccountStatement(partner: Partner): PartnerStatement {
           date: inv.date || todayStr,
           createdAt: inv.createdAt || nowStr,
           type: 'RECEIPT_VOUCHER',
-          docTypeLabel: 'سداد نقدي بالفاتورة',
+          docTypeLabel: isPosted ? 'سداد نقدي بالفاتورة' : 'سداد نقدي (مسودة - غير مرحل)',
           docNumber: `INV-PAY-#${inv.invoiceNumber}`,
-          description: `سداد فوري مسجل على فاتورة المبيعات #${inv.invoiceNumber}`,
-          debit: 0,
-          credit: cashPaid,
-          status: inv.status,
+          description: `سداد فوري مسجل على ${docLabel} #${inv.invoiceNumber}`,
+          debit: isPosted && isReturn ? cashPaid : 0,
+          credit: isPosted && !isReturn ? cashPaid : 0,
+          status: invStatus,
           rawDoc: inv
         });
       }
@@ -368,23 +428,28 @@ export function getPartnerAccountStatement(partner: Partner): PartnerStatement {
   // 3. Purchase Invoices
   rawPurchaseInvoices.forEach(inv => {
     if (isPartnerMatch(inv.partnerId, inv.partnerName, partner)) {
-      totalPurchaseCount++;
+      const invStatus = inv.status || 'DRAFT';
+      const isPosted = invStatus === 'POSTED';
+      if (isPosted) totalPurchaseCount++;
       const grandTotal = inv.totals?.grandTotal ?? 0;
       const cashPaid = inv.totals?.cashPaid ?? 0;
       const itemsCount = inv.items?.length || 0;
-      const desc = `فاتورة مشتريات #${inv.invoiceNumber} ${inv.supplierRef ? '(مرجع: ' + inv.supplierRef + ')' : ''} (${itemsCount} بنود)`;
+      const isReturn = inv.invoiceType?.includes('RETURN');
+      const docLabel = isReturn ? 'مرتجع مشتريات' : 'فاتورة مشتريات';
+      const desc = `${docLabel} #${inv.invoiceNumber} ${inv.supplierRef ? '(مرجع: ' + inv.supplierRef + ')' : ''} (${itemsCount} بنود)${!isPosted ? ' (مسودة - غير مرحلة)' : ''}`;
 
-      // Vendor is credited for invoice total (we owe vendor)
+      // Vendor is credited for invoice total (we owe vendor). Only POSTED invoices affect balance.
+      // If it's a return, vendor is DEBITED.
       rawTxList.push({
         date: inv.date || todayStr,
         createdAt: inv.createdAt || nowStr,
         type: 'PURCHASE_INVOICE',
-        docTypeLabel: 'فاتورة مشتريات',
+        docTypeLabel: isPosted ? `${docLabel} (مرحلة)` : `${docLabel} (مسودة - غير مرحلة)`,
         docNumber: `#${inv.invoiceNumber}`,
         description: desc,
-        debit: 0,
-        credit: grandTotal,
-        status: inv.status,
+        debit: isPosted && isReturn ? grandTotal : 0,
+        credit: isPosted && !isReturn ? grandTotal : 0,
+        status: invStatus,
         rawDoc: inv
       });
 
@@ -394,12 +459,12 @@ export function getPartnerAccountStatement(partner: Partner): PartnerStatement {
           date: inv.date || todayStr,
           createdAt: inv.createdAt || nowStr,
           type: 'PAYMENT_VOUCHER',
-          docTypeLabel: 'سداد نقدي بالفاتورة',
+          docTypeLabel: isPosted ? 'سداد نقدي بالفاتورة' : 'سداد نقدي (مسودة - غير مرحل)',
           docNumber: `PO-PAY-#${inv.invoiceNumber}`,
-          description: `سداد فوري مسجل على فاتورة المشتريات #${inv.invoiceNumber}`,
-          debit: cashPaid,
-          credit: 0,
-          status: inv.status,
+          description: `سداد فوري مسجل على ${docLabel} #${inv.invoiceNumber}`,
+          debit: isPosted && !isReturn ? cashPaid : 0,
+          credit: isPosted && isReturn ? cashPaid : 0,
+          status: invStatus,
           rawDoc: inv
         });
       }
@@ -409,23 +474,26 @@ export function getPartnerAccountStatement(partner: Partner): PartnerStatement {
   // 4. Receipt Vouchers (سندات القبض الخارجية)
   rawReceiptVouchers.forEach(v => {
     if (isPartnerMatch(v.partnerId, v.partnerName, partner)) {
-      totalReceiptCount++;
+      const vStatus = v.status || 'DRAFT';
+      const isPosted = vStatus === 'POSTED';
+      if (isPosted) totalReceiptCount++;
       const amount = Number(v.amount) || 0;
       const accountLabel = v.accountId === 'bank' ? 'البنك الأهلي' : 'الصندوق الرئيسي';
-      const desc = `${v.description || 'سند قبض نقدية'} [${accountLabel}]`;
+      const desc = `${v.description || 'سند قبض نقدية'} [${accountLabel}]${!isPosted ? ' (مسودة - غير مرحل)' : ''}`;
 
       // Receipt from customer -> Credit to customer (reduces receivable)
       // Receipt from vendor -> Credit to vendor (reduces debit/advance)
+      // Only POSTED vouchers affect the accounting running balance
       rawTxList.push({
         date: v.date || todayStr,
         createdAt: v.createdAt || nowStr,
         type: 'RECEIPT_VOUCHER',
-        docTypeLabel: 'سند قبض خارجي',
+        docTypeLabel: isPosted ? 'سند قبض خارجي (مرحل)' : 'سند قبض (مسودة - غير مرحل)',
         docNumber: `#${v.voucherNumber}`,
         description: desc,
         debit: 0,
-        credit: amount,
-        status: 'POSTED',
+        credit: isPosted ? amount : 0,
+        status: vStatus,
         rawDoc: v
       });
     }
@@ -434,26 +502,62 @@ export function getPartnerAccountStatement(partner: Partner): PartnerStatement {
   // 5. Payment Vouchers (سندات الصرف الخارجية)
   rawPaymentVouchers.forEach(v => {
     if (isPartnerMatch(v.partnerId, v.partnerName, partner)) {
-      totalPaymentCount++;
+      const vStatus = v.status || 'DRAFT';
+      const isPosted = vStatus === 'POSTED';
+      if (isPosted) totalPaymentCount++;
       const amount = Number(v.amount) || 0;
       const accountLabel = v.accountId === 'bank' ? 'البنك الأهلي' : 'الصندوق الرئيسي';
-      const desc = `${v.description || 'سند صرف نقدية'} [${accountLabel}]`;
+      const desc = `${v.description || 'سند صرف نقدية'} [${accountLabel}]${!isPosted ? ' (مسودة - غير مرحل)' : ''}`;
 
       // Payment to vendor -> Debit to vendor (reduces payable)
       // Payment to customer -> Debit to customer (refund/deposit)
+      // Only POSTED vouchers affect the accounting running balance
       rawTxList.push({
         date: v.date || todayStr,
         createdAt: v.createdAt || nowStr,
         type: 'PAYMENT_VOUCHER',
-        docTypeLabel: 'سند صرف خارجي',
+        docTypeLabel: isPosted ? 'سند صرف خارجي (مرحل)' : 'سند صرف (مسودة - غير مرحل)',
         docNumber: `#${v.voucherNumber}`,
         description: desc,
-        debit: amount,
+        debit: isPosted ? amount : 0,
         credit: 0,
-        status: 'POSTED',
+        status: vStatus,
         rawDoc: v
       });
     }
+  });
+
+  // 6. Manual Journal Entries with Sub-Ledger Partner Tags (المدرسة الثانية: قيود اليومية المرتبطة بدفتر الأستاذ المساعد)
+  let totalJournalCount = 0;
+  const rawJournalEntries = loadJournalEntries();
+  rawJournalEntries.forEach(entry => {
+    if (entry.status !== JournalEntryStatus.Posted) return;
+    
+    // Check all items in this entry that match the partner
+    entry.items.forEach((item, itemIdx) => {
+      const match = isPartnerMatch(item.partnerId, item.partnerName, partner);
+      if (match) {
+        totalJournalCount++;
+        const debitAmt = Number(item.debit) || 0;
+        const creditAmt = Number(item.credit) || 0;
+        const entryDesc = item.partnerName
+          ? `قيد يومية #${entry.entryNumber} - ${entry.description || 'تسوية محاسبية'} [حساب مراقبة: ${item.partnerName}]`
+          : `قيد يومية #${entry.entryNumber} - ${entry.description || 'تسوية محاسبية'}`;
+
+        rawTxList.push({
+          date: entry.date || todayStr,
+          createdAt: `${entry.date}T00:00:${String(itemIdx).padStart(2, '0')}.000Z`,
+          type: 'JOURNAL_ENTRY',
+          docTypeLabel: 'قيد يومية عامة (Sub-Ledger)',
+          docNumber: `#${entry.entryNumber}`,
+          description: entryDesc,
+          debit: debitAmt,
+          credit: creditAmt,
+          status: 'POSTED',
+          rawDoc: entry
+        });
+      }
+    });
   });
 
   // Chronological sorting
@@ -506,8 +610,8 @@ export function getPartnerAccountStatement(partner: Partner): PartnerStatement {
 
   if (isCustomer) {
     netBalance = totalDebitSum - totalCreditSum;
-    totalWithdrawals = rawTxList.filter(t => t.type === 'SALES_INVOICE').reduce((s, t) => s + t.debit, 0) + (openingBal > 0 ? openingBal : 0);
-    totalPayments = rawTxList.filter(t => t.type === 'RECEIPT_VOUCHER').reduce((s, t) => s + t.credit, 0);
+    totalWithdrawals = rawTxList.filter(t => t.type === 'SALES_INVOICE').reduce((s, t) => s + t.debit - t.credit, 0) + (openingBal > 0 ? openingBal : 0);
+    totalPayments = rawTxList.filter(t => t.type === 'RECEIPT_VOUCHER').reduce((s, t) => s + t.credit - t.debit, 0);
 
     if (netBalance > 0.001) {
       balanceType = 'DEBIT';
@@ -519,8 +623,8 @@ export function getPartnerAccountStatement(partner: Partner): PartnerStatement {
   } else {
     // Vendor
     netBalance = totalCreditSum - totalDebitSum;
-    totalWithdrawals = rawTxList.filter(t => t.type === 'PURCHASE_INVOICE').reduce((s, t) => s + t.credit, 0) + (openingBal < 0 ? Math.abs(openingBal) : 0);
-    totalPayments = rawTxList.filter(t => t.type === 'PAYMENT_VOUCHER').reduce((s, t) => s + t.debit, 0);
+    totalWithdrawals = rawTxList.filter(t => t.type === 'PURCHASE_INVOICE').reduce((s, t) => s + t.credit - t.debit, 0) + (openingBal < 0 ? Math.abs(openingBal) : 0);
+    totalPayments = rawTxList.filter(t => t.type === 'PAYMENT_VOUCHER').reduce((s, t) => s + t.debit - t.credit, 0);
 
     if (netBalance > 0.001) {
       balanceType = 'CREDIT';
@@ -549,6 +653,7 @@ export function getPartnerAccountStatement(partner: Partner): PartnerStatement {
     totalPurchaseInvoices: totalPurchaseCount,
     totalReceiptVouchers: totalReceiptCount,
     totalPaymentVouchers: totalPaymentCount,
+    totalJournalEntries: totalJournalCount,
     totalWithdrawals,
     totalPayments,
     lastTransactionDate: lastTxDate,
@@ -638,7 +743,8 @@ export function calculateInvoicePartnerImpact(
   paidAmount: number = 0,
   excludeInvoiceNumber?: string,
   invoiceType: 'CUSTOMER' | 'VENDOR' = 'CUSTOMER',
-  existingStatement?: PartnerStatement | null
+  existingStatement?: PartnerStatement | null,
+  isReturn: boolean = false
 ): InvoicePartnerBalanceImpact | null {
   if (!partner) return null;
 
@@ -732,7 +838,8 @@ export function calculateInvoicePartnerImpact(
   }
 
   // Net effect on balance is only the remaining unpaid amount
-  const netAdditionToDebt = remainingAmount;
+  // If it is a return, it reduces the debt.
+  const netAdditionToDebt = isReturn ? -remainingAmount : remainingAmount;
   const newNetSigned = prevNetSigned + netAdditionToDebt;
   const newAbs = Math.abs(newNetSigned);
   let newType: 'DEBIT' | 'CREDIT' | 'ZERO' = 'ZERO';
@@ -778,3 +885,81 @@ export function calculateInvoicePartnerImpact(
   };
 }
 
+/**
+ * Toggles or updates the posting status of an external voucher (RECEIPT or PAYMENT)
+ */
+export function setVoucherPostingStatus(
+  voucherId: string, 
+  voucherType: VoucherType, 
+  targetStatus: 'POSTED' | 'DRAFT'
+): { success: boolean; newStatus: 'POSTED' | 'DRAFT'; voucherNumber?: string; partnerName?: string; postedAt?: string | undefined } {
+  const isReceipt = voucherType === VoucherType.Receipt;
+  const storageKey = isReceipt ? DB_RECEIPT_VOUCHERS_KEY : DB_PAYMENT_VOUCHERS_KEY;
+  const list = isReceipt ? loadReceiptVouchers() : loadPaymentVouchers();
+  
+  let voucherNumber = '';
+  let partnerName = '';
+  let postedAt: string | undefined = undefined;
+  let found = false;
+
+  const nowIso = new Date().toISOString();
+
+  const updated = list.map(v => {
+    if (v.id === voucherId) {
+      found = true;
+      voucherNumber = v.voucherNumber;
+      partnerName = v.partnerName;
+      postedAt = targetStatus === 'POSTED' ? (v.postedAt || nowIso) : undefined;
+      return { 
+        ...v, 
+        status: targetStatus,
+        postedAt
+      };
+    }
+    return v;
+  });
+
+  if (!found) {
+    return { success: false, newStatus: targetStatus };
+  }
+
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+    applyVoucherAllocations(voucherType);
+    dispatchPartnerLedgerUpdated();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('alpha-chart-of-accounts-updated'));
+      window.dispatchEvent(new Event('alpha-journal-entries-updated'));
+      window.dispatchEvent(new Event('alpha-vouchers-updated'));
+      window.dispatchEvent(new Event('alpha-trial-balance-updated'));
+    }
+    return { success: true, newStatus: targetStatus, voucherNumber, partnerName, postedAt };
+  } catch (err) {
+    console.error('Failed to set voucher posting status:', err);
+    return { success: false, newStatus: targetStatus };
+  }
+}
+
+
+
+
+/**
+ * Pushes a partner change to the Outbox Sync Engine.
+ */
+export async function syncPartnerRecord(partner: Partner, type: 'customers' | 'vendors', action: 'INSERT' | 'UPDATE' | 'DELETE') {
+  try {
+    await enqueueSyncRecord(type, partner.id, action, {
+      id: partner.id,
+      code: partner.code || '',
+      name: partner.name || '',
+      phone: partner.phone || '',
+      address: partner.address || '',
+      tax_number: partner.taxNumber || '',
+      opening_balance: partner.openingBalance || 0,
+      opening_balance_type: partner.openingBalanceType || 'DEBIT',
+      is_active: partner.isActive !== false ? 1 : 0
+    });
+  } catch (err) {
+    console.error(`Failed to sync ${type}:`, err);
+  }
+}

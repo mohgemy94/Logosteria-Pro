@@ -38,6 +38,8 @@ export interface SystemFullBackup {
       receiptVouchers: number;
       paymentVouchers: number;
       internalVouchers: number;
+      internalReceiptVouchers?: number;
+      internalPaymentVouchers?: number;
       customers: number;
       vendors: number;
       employees: number;
@@ -46,6 +48,7 @@ export interface SystemFullBackup {
       manufacturingBOMs: number;
       workOrders: number;
       workCenters: number;
+      inventoryAudits?: number;
     };
   };
   settings: any;
@@ -56,6 +59,8 @@ export interface SystemFullBackup {
   receiptVouchers: any[];
   paymentVouchers: any[];
   internalVouchers: any[];
+  internalReceiptVouchers?: any[];
+  internalPaymentVouchers?: any[];
   customers: any[];
   vendors: any[];
   partnerBalances: any[];
@@ -67,6 +72,7 @@ export interface SystemFullBackup {
   manufacturingWorkOrders: any[];
   manufacturingWorkCenters: any[];
   journalEntries: any[];
+  inventoryAudits?: any[];
 }
 
 // Storage keys
@@ -289,6 +295,8 @@ export function collectSystemBackupData(): SystemFullBackup {
   const receiptVouchers = getStoredJson('alpha_receipt_vouchers_v1', []);
   const paymentVouchers = getStoredJson('alpha_payment_vouchers_v1', []);
   const internalVouchers = getStoredJson('alpha_internal_vouchers_v1', []);
+  const internalReceiptVouchers = getStoredJson('alpha_internal_receipt_vouchers_v1', []);
+  const internalPaymentVouchers = getStoredJson('alpha_internal_payment_vouchers_v1', []);
   const customers = getStoredJson('accounting_customers', []);
   const vendors = getStoredJson('accounting_vendors', []);
   const partnerBalances = getStoredJson('alpha_partner_balances_v1', []);
@@ -300,6 +308,7 @@ export function collectSystemBackupData(): SystemFullBackup {
   const manufacturingWorkOrders = getStoredJson('alpha_mfg_work_orders_v1', []);
   const manufacturingWorkCenters = getStoredJson('alpha_mfg_work_centers_v1', []);
   const journalEntries = getStoredJson('alpha_journal_entries_v1', []);
+  const inventoryAudits = getStoredJson('alpha_inventory_audits_v1', []);
   const settings = getStoredJson('alpha_system_settings_v1', {});
   const sequences = getStoredJson('alpha_document_sequences_v3', {});
 
@@ -316,6 +325,8 @@ export function collectSystemBackupData(): SystemFullBackup {
         receiptVouchers: receiptVouchers.length,
         paymentVouchers: paymentVouchers.length,
         internalVouchers: internalVouchers.length,
+        internalReceiptVouchers: internalReceiptVouchers.length,
+        internalPaymentVouchers: internalPaymentVouchers.length,
         customers: customers.length,
         vendors: vendors.length,
         employees: payrollEmployees.length,
@@ -323,7 +334,8 @@ export function collectSystemBackupData(): SystemFullBackup {
         promissoryNotes: promissoryNotes.length,
         manufacturingBOMs: manufacturingBOMs.length,
         workOrders: manufacturingWorkOrders.length,
-        workCenters: manufacturingWorkCenters.length
+        workCenters: manufacturingWorkCenters.length,
+        inventoryAudits: inventoryAudits.length
       }
     },
     settings,
@@ -334,6 +346,8 @@ export function collectSystemBackupData(): SystemFullBackup {
     receiptVouchers,
     paymentVouchers,
     internalVouchers,
+    internalReceiptVouchers,
+    internalPaymentVouchers,
     customers,
     vendors,
     partnerBalances,
@@ -344,7 +358,8 @@ export function collectSystemBackupData(): SystemFullBackup {
     manufacturingBOMs,
     manufacturingWorkOrders,
     manufacturingWorkCenters,
-    journalEntries
+    journalEntries,
+    inventoryAudits
   };
 }
 
@@ -367,7 +382,8 @@ export function countTotalRecords(backup: SystemFullBackup): number {
     rc.promissoryNotes +
     rc.manufacturingBOMs +
     rc.workOrders +
-    rc.workCenters
+    rc.workCenters +
+    (rc.inventoryAudits || 0)
   );
 }
 
@@ -457,6 +473,7 @@ LOGUSTRIA ERP - AUTOMATIC LOCAL BACKUP REPOSITORY
         await writeFileToDirectory(modulesDir, 'payroll_employees.json', JSON.stringify(backup.payrollEmployees, null, 2));
         await writeFileToDirectory(modulesDir, 'installments.json', JSON.stringify(backup.installmentsContracts, null, 2));
         await writeFileToDirectory(modulesDir, 'manufacturing_bom.json', JSON.stringify(backup.manufacturingBOMs, null, 2));
+        await writeFileToDirectory(modulesDir, 'inventory_audits.json', JSON.stringify(backup.inventoryAudits || [], null, 2));
         await writeFileToDirectory(modulesDir, 'company_settings.json', JSON.stringify(backup.settings, null, 2));
       } catch (err) {
         console.warn('Could not write modular files:', err);
@@ -594,6 +611,14 @@ export function restoreSystemFromBackup(backup: any): {
       localStorage.setItem('alpha_internal_vouchers_v1', JSON.stringify(backup.internalVouchers));
       counts['السندات الداخلية'] = backup.internalVouchers.length;
     }
+    if (Array.isArray(backup.internalReceiptVouchers)) {
+      localStorage.setItem('alpha_internal_receipt_vouchers_v1', JSON.stringify(backup.internalReceiptVouchers));
+      counts['سندات القبض الداخلي'] = backup.internalReceiptVouchers.length;
+    }
+    if (Array.isArray(backup.internalPaymentVouchers)) {
+      localStorage.setItem('alpha_internal_payment_vouchers_v1', JSON.stringify(backup.internalPaymentVouchers));
+      counts['سندات الصرف الداخلي'] = backup.internalPaymentVouchers.length;
+    }
     if (Array.isArray(backup.customers)) {
       localStorage.setItem('accounting_customers', JSON.stringify(backup.customers));
       counts['العملاء'] = backup.customers.length;
@@ -631,6 +656,10 @@ export function restoreSystemFromBackup(backup: any): {
     if (Array.isArray(backup.manufacturingWorkCenters)) {
       localStorage.setItem('alpha_mfg_work_centers_v1', JSON.stringify(backup.manufacturingWorkCenters));
     }
+    if (Array.isArray(backup.inventoryAudits)) {
+      localStorage.setItem('alpha_inventory_audits_v1', JSON.stringify(backup.inventoryAudits));
+      counts['محاضر الجرد الدوري والتسويات'] = backup.inventoryAudits.length;
+    }
     if (backup.settings && typeof backup.settings === 'object') {
       localStorage.setItem('alpha_system_settings_v1', JSON.stringify(backup.settings));
       counts['إعدادات النظام والمنشأة'] = 1;
@@ -641,6 +670,7 @@ export function restoreSystemFromBackup(backup: any): {
 
     // Trigger local storage event so other components refresh
     window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event('alpha-inventory-audits-updated'));
     window.dispatchEvent(new CustomEvent('logustria-data-restored'));
 
     return { success: true, restoredCounts: counts };

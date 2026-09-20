@@ -25,5 +25,460 @@ body {
     print-color-adjust: exact;
     background-color: white !important;
   }
+  .print\:hidden {
+    display: none !important;
+  }
+  /* Remove shadow and border radius for clean printing */
+  * {
+    box-shadow: none !important;
+  }
+  /* Force tables to break nicely */
+  table { page-break-inside:auto }
+  tr    { page-break-inside:avoid; page-break-after:auto }
+  thead { display:table-header-group }
+  tfoot { display:table-footer-group }
+}
+
+/* Simulate print mode inside the preview modal */
+.report-preview-modal-root .print\:hidden {
+  display: none !important;
+}
+.report-preview-modal-root .print\:block {
+  display: block !important;
+}
+.report-preview-modal-root .print-report-target {
+  box-shadow: none !important;
+}
+
+/* Custom Visible Scrollbar for All Modals and Scrollable Containers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 6px;
+  border: 2px solid #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Firefox standard scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+/* Mobile: Do NOT make modal headers fixed/sticky on mobile screens (exclude fullscreen preview modals) */
+@media (max-width: 640px) {
+  .fixed.inset-0:not(.print-preview-modal-root) {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    align-items: flex-start !important;
+    padding-top: 1rem !important;
+    padding-bottom: 2rem !important;
+  }
+
+  .fixed.inset-0:not(.print-preview-modal-root) > div {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Make modal headers and table thead flow naturally on mobile screens */
+  .modal-header,
+  [data-modal-header],
+  .fixed.inset-0:not(.print-preview-modal-root) thead.sticky,
+  .fixed.inset-0:not(.print-preview-modal-root) .sticky.top-0 {
+    position: static !important;
+    top: auto !important;
+  }
+}
+
+@media print {
+  @page { 
+    margin: 5mm; 
+  }
+
+  html, body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  /* When printing from the preview modal, hide the rest of the application so only the document prints */
+  body.print-preview-active #root,
+  body.print-preview-active > *:not(.print-preview-modal-root) {
+    display: none !important;
+  }
+
+  body.print-preview-active .print-controls-bar,
+  body.print-preview-active .print\:hidden {
+    display: none !important;
+  }
+
+  body.print-preview-active .print-preview-modal-root {
+    position: static !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    z-index: auto !important;
+  }
+
+  body.print-preview-active .print-document-scaler {
+    transform: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* TACTILE 3D BUTTON DESIGN SYSTEM                                             */
+/* -------------------------------------------------------------------------- */
+.btn-3d {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-weight: 800;
+  border-radius: 0.75rem;
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
+              filter 0.15s ease,
+              box-shadow 0.16s ease,
+              background 0.15s ease,
+              border-color 0.15s ease,
+              border-bottom-width 0.1s ease;
+  user-select: none;
+  cursor: pointer;
+  border-style: solid;
+  border-top-width: 1px;
+  border-right-width: 1px;
+  border-left-width: 1px;
+  border-bottom-width: 3.5px;
+  white-space: nowrap;
+  backface-visibility: hidden;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.btn-3d:hover:not(:disabled) {
+  transform: scale(1.04);
+  filter: brightness(1.06);
+  box-shadow: 0 6px 16px -2px rgba(0, 0, 0, 0.16);
+  z-index: 2;
+}
+
+.btn-3d:active:not(:disabled) {
+  transform: translateY(2px) scale(0.96);
+  border-bottom-width: 1.5px !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.12) !important;
+  filter: brightness(0.98);
+}
+
+.btn-3d:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none !important;
+  border-bottom-width: 2px !important;
+  filter: grayscale(0.2);
+}
+
+/* 3D Emerald (Post / Success / Approve) */
+.btn-3d-emerald {
+  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  border-top-color: #34d399;
+  border-left-color: #059669;
+  border-right-color: #059669;
+  border-bottom-color: #064e3b;
+  box-shadow: 0 2px 4px -1px rgba(5, 150, 105, 0.25), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+}
+.btn-3d-emerald:hover:not(:disabled) {
+  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+}
+
+/* 3D Success / Plant Green (أخضر زرعي حيوي مجسم) */
+.btn-3d-success {
+  background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+  color: #ffffff;
+  border-top-color: #4ade80;
+  border-left-color: #16a34a;
+  border-right-color: #16a34a;
+  border-bottom-color: #14532d;
+  box-shadow: 0 2px 4px -1px rgba(22, 163, 74, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+}
+.btn-3d-success:hover:not(:disabled) {
+  background: linear-gradient(180deg, #4ade80 0%, #16a34a 100%);
+}
+
+/* 3D Blue (Primary / New Invoice) */
+.btn-3d-blue {
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  border-top-color: #60a5fa;
+  border-left-color: #1d4ed8;
+  border-right-color: #1d4ed8;
+  border-bottom-color: #172554;
+  box-shadow: 0 2px 4px -1px rgba(37, 99, 235, 0.25), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+}
+.btn-3d-blue:hover:not(:disabled) {
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
+/* 3D Indigo / Navy */
+.btn-3d-indigo {
+  background: linear-gradient(180deg, #1e3a8a 0%, #172554 100%);
+  color: #ffffff;
+  border-top-color: #3b82f6;
+  border-left-color: #1e3a8a;
+  border-right-color: #1e3a8a;
+  border-bottom-color: #030712;
+  box-shadow: 0 2px 4px -1px rgba(30, 58, 138, 0.25);
+}
+.btn-3d-indigo:hover:not(:disabled) {
+  background: linear-gradient(180deg, #2563eb 0%, #172554 100%);
+}
+
+/* 3D Teal */
+.btn-3d-teal {
+  background: linear-gradient(180deg, #0d9488 0%, #0f766e 100%);
+  color: #ffffff;
+  border-top-color: #2dd4bf;
+  border-left-color: #0f766e;
+  border-right-color: #0f766e;
+  border-bottom-color: #134e4a;
+  box-shadow: 0 2px 4px -1px rgba(13, 148, 136, 0.25);
+}
+.btn-3d-teal:hover:not(:disabled) {
+  background: linear-gradient(180deg, #14b8a6 0%, #0f766e 100%);
+}
+
+/* 3D Purple */
+.btn-3d-purple {
+  background: linear-gradient(180deg, #7c3aed 0%, #6d28d9 100%);
+  color: #ffffff;
+  border-top-color: #a78bfa;
+  border-left-color: #6d28d9;
+  border-right-color: #6d28d9;
+  border-bottom-color: #4c1d95;
+  box-shadow: 0 2px 4px -1px rgba(124, 58, 237, 0.25);
+}
+.btn-3d-purple:hover:not(:disabled) {
+  background: linear-gradient(180deg, #8b5cf6 0%, #6d28d9 100%);
+}
+
+/* 3D Cyan */
+.btn-3d-cyan {
+  background: linear-gradient(180deg, #0891b2 0%, #0e7490 100%);
+  color: #ffffff;
+  border-top-color: #22d3ee;
+  border-left-color: #0e7490;
+  border-right-color: #0e7490;
+  border-bottom-color: #164e63;
+  box-shadow: 0 2px 4px -1px rgba(8, 145, 178, 0.25);
+}
+.btn-3d-cyan:hover:not(:disabled) {
+  background: linear-gradient(180deg, #06b6d4 0%, #0e7490 100%);
+}
+
+/* 3D Slate / Dark (Direct Print) */
+.btn-3d-slate {
+  background: linear-gradient(180deg, #334155 0%, #0f172a 100%);
+  color: #ffffff;
+  border-top-color: #64748b;
+  border-left-color: #1e293b;
+  border-right-color: #1e293b;
+  border-bottom-color: #020617;
+  box-shadow: 0 2px 4px -1px rgba(15, 23, 42, 0.3);
+}
+.btn-3d-slate:hover:not(:disabled) {
+  background: linear-gradient(180deg, #475569 0%, #0f172a 100%);
+}
+
+/* 3D Rose (PDF Export / Danger) */
+.btn-3d-rose {
+  background: linear-gradient(180deg, #f43f5e 0%, #e11d48 100%);
+  color: #ffffff;
+  border-top-color: #fb7185;
+  border-left-color: #e11d48;
+  border-right-color: #e11d48;
+  border-bottom-color: #881337;
+  box-shadow: 0 2px 4px -1px rgba(225, 29, 72, 0.25);
+}
+.btn-3d-rose:hover:not(:disabled) {
+  background: linear-gradient(180deg, #fb7185 0%, #be123c 100%);
+}
+
+/* 3D Red / Danger (أحمر ناصع مجسم) */
+.btn-3d-red,
+.btn-3d-danger {
+  background: linear-gradient(180deg, #dc2626 0%, #b91c1c 100%);
+  color: #ffffff;
+  border-top-color: #f87171;
+  border-left-color: #b91c1c;
+  border-right-color: #b91c1c;
+  border-bottom-color: #7f1d1d;
+  box-shadow: 0 2px 4px -1px rgba(220, 38, 38, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+}
+.btn-3d-red:hover:not(:disabled),
+.btn-3d-danger:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
+  color: #ffffff;
+}
+
+/* 3D Warning (برتقالي / كهرماني مجسم) */
+.btn-3d-warning {
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  color: #ffffff;
+  border-top-color: #fcd34d;
+  border-left-color: #d97706;
+  border-right-color: #d97706;
+  border-bottom-color: #78350f;
+  box-shadow: 0 2px 4px -1px rgba(217, 119, 6, 0.25);
+}
+.btn-3d-warning:hover:not(:disabled) {
+  background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
+}
+
+/* 3D Soft Danger (Delete / Remove) */
+.btn-3d-danger-soft {
+  background: linear-gradient(180deg, #ffffff 0%, #fff1f2 100%);
+  color: #e11d48;
+  border-top-color: #fecdd3;
+  border-left-color: #fda4af;
+  border-right-color: #fda4af;
+  border-bottom-color: #f43f5e;
+  box-shadow: 0 1px 2px 0 rgba(225, 29, 72, 0.08);
+}
+.btn-3d-danger-soft:hover:not(:disabled) {
+  background: linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%);
+  color: #be123c;
+}
+
+/* 3D Soft Emerald (Success Soft / Statements) */
+.btn-3d-success-soft {
+  background: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%);
+  color: #047857;
+  border-top-color: #a7f3d0;
+  border-left-color: #6ee7b7;
+  border-right-color: #6ee7b7;
+  border-bottom-color: #10b981;
+  box-shadow: 0 1px 2px 0 rgba(16, 185, 129, 0.08);
+}
+.btn-3d-success-soft:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+  color: #065f46;
+}
+
+/* 3D Soft Blue (Primary Soft) */
+.btn-3d-primary-soft {
+  background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
+  color: #1d4ed8;
+  border-top-color: #bfdbfe;
+  border-left-color: #93c5fd;
+  border-right-color: #93c5fd;
+  border-bottom-color: #3b82f6;
+  box-shadow: 0 1px 2px 0 rgba(59, 130, 246, 0.08);
+}
+.btn-3d-primary-soft:hover:not(:disabled) {
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  color: #1e40af;
+}
+
+/* 3D Purple (Creditor / Advances / Special) */
+.btn-3d-purple {
+  background: linear-gradient(180deg, #9333ea 0%, #7e22ce 100%);
+  color: #ffffff;
+  border-top-color: #c084fc;
+  border-left-color: #7e22ce;
+  border-right-color: #7e22ce;
+  border-bottom-color: #581c87;
+  box-shadow: 0 2px 4px -1px rgba(126, 34, 206, 0.25);
+}
+.btn-3d-purple:hover:not(:disabled) {
+  background: linear-gradient(180deg, #a855f7 0%, #7e22ce 100%);
+}
+
+/* 3D Amber (Unpost / Warning) */
+.btn-3d-amber {
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  color: #ffffff;
+  border-top-color: #fcd34d;
+  border-left-color: #d97706;
+  border-right-color: #d97706;
+  border-bottom-color: #78350f;
+  box-shadow: 0 2px 4px -1px rgba(217, 119, 6, 0.25);
+}
+.btn-3d-amber:hover:not(:disabled) {
+  background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
+}
+
+/* 3D White / Neutral (Draft / History / Options / Cancel) */
+.btn-3d-white {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  color: #1e293b;
+  border-top-color: #e2e8f0;
+  border-left-color: #cbd5e1;
+  border-right-color: #cbd5e1;
+  border-bottom-color: #94a3b8;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+.btn-3d-white:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+  color: #0f172a;
+}
+
+/* 3D Active State (For open dropdowns or active toggles) */
+.btn-3d-active {
+  background: linear-gradient(180deg, #0f172a 0%, #020617 100%) !important;
+  color: #ffffff !important;
+  border-top-color: #334155 !important;
+  border-left-color: #1e293b !important;
+  border-right-color: #1e293b !important;
+  border-bottom-color: #000000 !important;
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* 3D Segment Navigation Pill */
+.nav-3d-segment {
+  display: inline-flex;
+  align-items: center;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+  border: 1px solid #cbd5e1;
+  border-bottom: 3.5px solid #94a3b8;
+  border-radius: 0.75rem;
+  padding: 0.2rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+}
+
+/* Universal Tactile Depth Enhancement for Standard UI Buttons */
+button:not(.btn-flat):not([role="tab"]):not(.recharts-legend-item):not(.btn-3d) {
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.15s ease, box-shadow 0.15s ease;
+  transform-origin: center center;
+}
+
+button:not(.btn-flat):not([role="tab"]):not(.recharts-legend-item):not(.btn-3d):hover:not(:disabled) {
+  transform: scale(1.025);
+}
+
+button:not(.btn-flat):not([role="tab"]):not(.recharts-legend-item):not(.btn-3d):active:not(:disabled) {
+  transform: translateY(1.5px) scale(0.98);
 }
 

@@ -1,12 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
-  X, Eye, FileText, Download,
-  Building2, ShieldCheck, CheckCircle2
+  X, Eye, FileText,
+  Building2, ShieldCheck, CheckCircle2, RotateCcw
 } from 'lucide-react';
 import { Partner } from '../types/accounting';
-import { getPartnerAccountStatement, PartnerStatement } from '../utils/partnerLedger';
+import { getPartnerAccountStatement, PartnerStatement, setVoucherPostingStatus, PartnerLedgerTx } from '../utils/partnerLedger';
 import PrintPreviewModal, { PrintPreviewData } from './PrintPreviewModal';
 import { useSystemCurrency } from '../utils/currency';
+import ExportButtonGroup from './ExportButtonGroup';
 
 interface PartnerStatementModalProps {
   partner: Partner | null;
@@ -24,11 +25,43 @@ export default function PartnerStatementModal({
   const [dateTo, setDateTo] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'INVOICES' | 'VOUCHERS'>('ALL');
   const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setRefreshTrigger(prev => prev + 1);
+    };
+    window.addEventListener('partnerLedgerUpdated', handleUpdate);
+    return () => window.removeEventListener('partnerLedgerUpdated', handleUpdate);
+  }, []);
 
   const statement: PartnerStatement | null = useMemo(() => {
     if (!partner) return null;
     return getPartnerAccountStatement(partner);
-  }, [partner]);
+  }, [partner, refreshTrigger]);
+
+  const handleToggleVoucherPosting = (tx: PartnerLedgerTx) => {
+    if (!tx.rawDoc || !partner) return;
+    const v = tx.rawDoc;
+    const isPosted = tx.status === 'POSTED' || !tx.status;
+    const targetStatus = isPosted ? 'DRAFT' : 'POSTED';
+
+    if (isPosted) {
+      if (!confirm(`هل أنت متأكد من رغبتك في إلغاء ترحيل ${tx.docTypeLabel} رقم (${tx.docNumber}) وإعادته كمسودة؟\n\n⚠️ سيتم إلغاء تأثيره المالي فوراً من كشف حساب (${partner.name}) وتحديث الرصيد.`)) {
+        return;
+      }
+    }
+
+    const res = setVoucherPostingStatus(v.id, v.type, targetStatus);
+    if (res.success) {
+      setRefreshTrigger(prev => prev + 1);
+      if (targetStatus === 'DRAFT') {
+        alert(`📝 تم إلغاء ترحيل السند (${tx.docNumber}) بنجاح وإعادته كمسودة (غير مرحل). تم إيقاف أثره في كشف الحساب.`);
+      } else {
+        alert(`✅ تم ترحيل السند (${tx.docNumber}) بنجاح وتحديث كشف الحساب.`);
+      }
+    }
+  };
 
   const filteredTransactions = useMemo(() => {
     if (!statement) return [];
@@ -73,41 +106,6 @@ export default function PartnerStatementModal({
     }))
   };
 
-  const handleExportCSV = () => {
-    const headers = [
-      'التاريخ',
-      'نوع الحركة',
-      'رقم المستند',
-      'البيان',
-      'مدين (مسحوبات)',
-      'دائن (مدفوعات)',
-      'الرصيد التراكمي',
-      'حالة الرصيد'
-    ];
-
-    const rows = filteredTransactions.map(tx => [
-      tx.date,
-      `"${tx.docTypeLabel}"`,
-      `"${tx.docNumber}"`,
-      `"${tx.description.replace(/"/g, '""')}"`,
-      tx.debit.toFixed(2),
-      tx.credit.toFixed(2),
-      tx.runningBalance.toFixed(2),
-      tx.runningBalanceType === 'DEBIT' ? 'مدين' : tx.runningBalanceType === 'CREDIT' ? 'دائن' : 'متزن'
-    ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + 
-      [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `كشف_حساب_${partner.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
       <div 
@@ -147,25 +145,44 @@ export default function PartnerStatementModal({
             <button
               type="button"
               onClick={() => setShowPrintPreview(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-sm"
+              className="btn-3d btn-3d-indigo px-3.5 py-1.5 text-xs font-black hover:scale-105 active:scale-95 transition-all"
               title="معاينة كشف الحساب والطباعة الرسمية"
             >
               <Eye size={14} /> معاينة وطباعة
             </button>
-            <button
-              type="button"
-              onClick={handleExportCSV}
-              className="flex items-center gap-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-              title="تصدير إكسل / CSV"
-            >
-              <Download size={14} /> تصدير
-            </button>
+            <ExportButtonGroup
+              title={`كشف حساب تفصيلي - ${partner.name}`}
+              filename={`كشف_حساب_${partner.name.replace(/\s+/g, '_')}`}
+              headers={[
+                'التاريخ',
+                'نوع الحركة',
+                'رقم المستند',
+                'البيان',
+                'مدين (مسحوبات)',
+                'دائن (مدفوعات)',
+                'الرصيد التراكمي',
+                'حالة الرصيد'
+              ]}
+              rows={filteredTransactions.map(tx => [
+                tx.date,
+                tx.docTypeLabel,
+                tx.docNumber,
+                tx.description,
+                tx.debit,
+                tx.credit,
+                tx.runningBalance,
+                tx.runningBalanceType === 'DEBIT' ? 'مدين' : tx.runningBalanceType === 'CREDIT' ? 'دائن' : 'متزن'
+              ])}
+              filterSummary={`الطرف التجاري: ${partner.name} | الرقم الضريبي: ${partner.taxNumber || 'غير متوفر'} | الرصيد الحالي: ${statement.balanceFormatted} ${currencySymbol} (${statement.balanceLabel})`}
+              size="xs"
+            />
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer mr-1"
+              className="btn-3d btn-3d-slate p-1.5 text-slate-200 hover:text-white hover:scale-105 active:scale-95 transition-all"
+              title="إغلاق"
             >
-              <X size={20} />
+              <X size={18} />
             </button>
           </div>
         </div>
@@ -247,12 +264,12 @@ export default function PartnerStatementModal({
           <div className="bg-white p-3 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <span className="text-slate-500 font-semibold">تصفية الحركات:</span>
-              <div className="flex bg-slate-100 p-0.5 rounded-lg">
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setTypeFilter('ALL')}
-                  className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
-                    typeFilter === 'ALL' ? 'bg-white text-slate-800 font-bold shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+                  className={`px-2.5 py-1 text-xs rounded-xl transition-all cursor-pointer hover:scale-105 active:scale-95 ${
+                    typeFilter === 'ALL' ? 'btn-3d btn-3d-blue text-white' : 'btn-3d btn-3d-white text-slate-600'
                   }`}
                 >
                   كافة الحركات ({statement.transactions.length})
@@ -260,8 +277,8 @@ export default function PartnerStatementModal({
                 <button
                   type="button"
                   onClick={() => setTypeFilter('INVOICES')}
-                  className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
-                    typeFilter === 'INVOICES' ? 'bg-white text-blue-700 font-bold shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+                  className={`px-2.5 py-1 text-xs rounded-xl transition-all cursor-pointer hover:scale-105 active:scale-95 ${
+                    typeFilter === 'INVOICES' ? 'btn-3d btn-3d-indigo text-white' : 'btn-3d btn-3d-white text-slate-600'
                   }`}
                 >
                   الفواتير فقط ({statement.totalSalesInvoices + statement.totalPurchaseInvoices})
@@ -269,8 +286,8 @@ export default function PartnerStatementModal({
                 <button
                   type="button"
                   onClick={() => setTypeFilter('VOUCHERS')}
-                  className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
-                    typeFilter === 'VOUCHERS' ? 'bg-white text-emerald-700 font-bold shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+                  className={`px-2.5 py-1 text-xs rounded-xl transition-all cursor-pointer hover:scale-105 active:scale-95 ${
+                    typeFilter === 'VOUCHERS' ? 'btn-3d btn-3d-success text-white' : 'btn-3d btn-3d-white text-slate-600'
                   }`}
                 >
                   السندات المالية فقط ({statement.totalReceiptVouchers + statement.totalPaymentVouchers})
@@ -301,7 +318,8 @@ export default function PartnerStatementModal({
                 <button
                   type="button"
                   onClick={() => { setDateFrom(''); setDateTo(''); }}
-                  className="text-indigo-600 hover:underline text-[11px] font-semibold cursor-pointer"
+                  className="btn-3d btn-3d-white px-2 py-1 text-[11px] text-indigo-700 font-semibold cursor-pointer hover:scale-105 active:scale-95 transition-all"
+                  title="إلغاء تصفية التاريخ"
                 >
                   إعادة ضبط
                 </button>
@@ -332,6 +350,7 @@ export default function PartnerStatementModal({
                     <th className="p-3 text-left font-mono text-blue-700">مدين (مسحوبات)</th>
                     <th className="p-3 text-left font-mono text-emerald-700">دائن (سدادات)</th>
                     <th className="p-3 text-left font-mono text-slate-900">الرصيد التراكمي</th>
+                    <th className="p-3 text-center">إجراءات السند</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -367,12 +386,39 @@ export default function PartnerStatementModal({
                           ({tx.runningBalanceType === 'DEBIT' ? 'مدين' : tx.runningBalanceType === 'CREDIT' ? 'دائن' : '0'})
                         </span>
                       </td>
+                      <td className="p-3 text-center whitespace-nowrap">
+                        {(tx.type === 'RECEIPT_VOUCHER' || tx.type === 'PAYMENT_VOUCHER') && tx.rawDoc ? (
+                          (tx.status === 'POSTED' || !tx.status) ? (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleVoucherPosting(tx)}
+                              className="btn-3d btn-3d-warning px-2.5 py-1 text-[11px] font-black cursor-pointer hover:scale-105 active:scale-95 transition-all"
+                              title="إلغاء ترحيل هذا السند فوراً وإعادته كمسودة وإيقاف أثره من كشف الحساب"
+                            >
+                              <RotateCcw size={11} />
+                              <span>إلغاء الترحيل</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleVoucherPosting(tx)}
+                              className="btn-3d btn-3d-success px-2.5 py-1 text-[11px] font-black cursor-pointer hover:scale-105 active:scale-95 transition-all"
+                              title="ترحيل السند واعتماده في كشف الحساب"
+                            >
+                              <CheckCircle2 size={11} />
+                              <span>ترحيل السند</span>
+                            </button>
+                          )
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-normal">معتمد</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
 
                   {filteredTransactions.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-slate-400">
+                      <td colSpan={8} className="p-8 text-center text-slate-400">
                         لا توجد حركات مسجلة لهذا الطرف وفق معايير التصفية المختارة.
                       </td>
                     </tr>
@@ -392,6 +438,7 @@ export default function PartnerStatementModal({
                     <td className="p-3 text-left font-mono text-indigo-800 font-bold">
                       {statement.balanceFormatted} {currencySymbol}
                     </td>
+                    <td></td>
                   </tr>
                 </tfoot>
               </table>
@@ -409,7 +456,7 @@ export default function PartnerStatementModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+            className="btn-3d btn-3d-slate px-5 py-2 text-white text-xs font-bold hover:scale-105 active:scale-95 transition-all"
           >
             إغلاق
           </button>

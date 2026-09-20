@@ -30,6 +30,10 @@ import {
 } from '../data/mockInstallments';
 import { getSystemSettings } from '../utils/settings';
 import { useSystemCurrency } from '../utils/currency';
+import { Partner } from '../types/accounting';
+import { loadCustomers } from '../utils/partnerLedger';
+import InstallmentKpiModal, { InstallmentKpiModalType } from './InstallmentKpiModal';
+import ExportButtonGroup from './ExportButtonGroup';
 
 export default function InstallmentsScreen() {
   const { symbol: currencySymbol, fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
@@ -37,12 +41,16 @@ export default function InstallmentsScreen() {
   const [contracts, setContracts] = useState<InstallmentContract[]>(() => getStoredInstallments());
   const [promissoryNotes, setPromissoryNotes] = useState<PromissoryNote[]>(() => getStoredPromissoryNotes());
   const [systemSettings] = useState(() => getSystemSettings());
+  const [customers, setCustomers] = useState<Partner[]>(() => loadCustomers());
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [scheduleFilter, setScheduleFilter] = useState<'ALL' | 'OVERDUE' | 'DUE_SOON' | 'PAID'>('ALL');
   const [selectedContractForView, setSelectedContractForView] = useState<InstallmentContract | null>(null);
+
+  // KPI Drill-Down Modal State
+  const [kpiModalType, setKpiModalType] = useState<InstallmentKpiModalType | null>(null);
 
   // Modals
   const [isNewContractModalOpen, setIsNewContractModalOpen] = useState(false);
@@ -110,12 +118,21 @@ export default function InstallmentsScreen() {
     const handleUpdate = () => {
       setContracts(getStoredInstallments());
       setPromissoryNotes(getStoredPromissoryNotes());
+      setCustomers(loadCustomers());
     };
     window.addEventListener('alpha-installments-updated', handleUpdate);
     window.addEventListener('alpha-promissory-notes-updated', handleUpdate);
+    window.addEventListener('alpha-customers-updated', handleUpdate);
+    window.addEventListener('alpha-system-reset-completed', handleUpdate);
+    window.addEventListener('alpha-data-changed', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
     return () => {
       window.removeEventListener('alpha-installments-updated', handleUpdate);
       window.removeEventListener('alpha-promissory-notes-updated', handleUpdate);
+      window.removeEventListener('alpha-customers-updated', handleUpdate);
+      window.removeEventListener('alpha-system-reset-completed', handleUpdate);
+      window.removeEventListener('alpha-data-changed', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
     };
   }, []);
 
@@ -531,7 +548,7 @@ export default function InstallmentsScreen() {
           <button
             type="button"
             onClick={() => setIsNewContractModalOpen(true)}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl shadow-xs transition-colors cursor-pointer"
+            className="btn-3d btn-3d-emerald text-xs sm:text-sm px-4 py-2.5 shadow-sm cursor-pointer"
           >
             <Plus size={16} />
             <span>إنشاء عقد تقسيط جديد</span>
@@ -540,7 +557,7 @@ export default function InstallmentsScreen() {
           <button
             type="button"
             onClick={() => setIsNewNoteModalOpen(true)}
-            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl shadow-xs transition-colors cursor-pointer"
+            className="btn-3d btn-3d-slate text-xs sm:text-sm px-4 py-2.5 shadow-sm cursor-pointer"
           >
             <FileCheck size={16} />
             <span>تحرير كمبيالة / سند لأمر</span>
@@ -548,90 +565,120 @@ export default function InstallmentsScreen() {
         </div>
       </div>
 
-      {/* KPI METRICS OVERVIEW CARDS */}
+      {/* KPI METRICS OVERVIEW CARDS (Interactive with Drill-down Modals) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 print:hidden">
         {/* Total Financed */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold">إجمالي مبالغ التقسيط</span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+        <button
+          type="button"
+          onClick={() => setKpiModalType('TOTAL_FINANCED')}
+          className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs hover:border-blue-400 hover:shadow-md transition-all duration-200 flex flex-col justify-between text-right cursor-pointer group"
+          title="انقر لعرض تفاصيل إجمالي التمويل ومحفظة العقود"
+        >
+          <div className="flex items-center justify-between text-slate-500 mb-2 w-full">
+            <span className="text-xs font-semibold group-hover:text-blue-600 transition-colors">إجمالي مبالغ التقسيط</span>
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all shadow-xs">
               <TrendingUp size={16} />
             </div>
           </div>
-          <div>
-            <div className="text-xl sm:text-2xl font-bold text-slate-900">
+          <div className="w-full">
+            <div className="text-xl sm:text-2xl font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
               {metrics.totalFinancedSum.toLocaleString()} <span className="text-xs text-slate-500 font-normal">{currencySymbol}</span>
             </div>
-            <div className="text-[11px] text-blue-600 font-medium mt-1">
-              {metrics.activeContractsCount} عقود تقسيط جارية
+            <div className="text-[11px] text-blue-600 font-medium mt-1 flex items-center justify-between">
+              <span>{metrics.activeContractsCount} عقود تقسيط جارية</span>
+              <span className="text-[10px] text-blue-500 underline opacity-0 group-hover:opacity-100 transition-opacity">عرض التفاصيل ←</span>
             </div>
           </div>
-        </div>
+        </button>
 
         {/* Collected */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold">إجمالي المبالغ المحصلة</span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+        <button
+          type="button"
+          onClick={() => setKpiModalType('TOTAL_COLLECTED')}
+          className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs hover:border-emerald-400 hover:shadow-md transition-all duration-200 flex flex-col justify-between text-right cursor-pointer group"
+          title="انقر لعرض تفاصيل التحصيلات وسجل الدفعات"
+        >
+          <div className="flex items-center justify-between text-slate-500 mb-2 w-full">
+            <span className="text-xs font-semibold group-hover:text-emerald-700 transition-colors">إجمالي المبالغ المحصلة</span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-xs">
               <CheckCircle2 size={16} />
             </div>
           </div>
-          <div>
-            <div className="text-xl sm:text-2xl font-bold text-emerald-600">
+          <div className="w-full">
+            <div className="text-xl sm:text-2xl font-bold text-emerald-600 group-hover:text-emerald-700 transition-colors">
               {metrics.totalPaidSum.toLocaleString()} <span className="text-xs text-slate-500 font-normal">{currencySymbol}</span>
             </div>
-            <div className="text-[11px] text-slate-500 mt-1">
-              نسبة التحصيل: {metrics.totalFinancedSum > 0 ? Math.round((metrics.totalPaidSum / metrics.totalFinancedSum) * 100) : 0}%
+            <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
+              <span>نسبة التحصيل: {metrics.totalFinancedSum > 0 ? Math.round((metrics.totalPaidSum / metrics.totalFinancedSum) * 100) : 0}%</span>
+              <span className="text-[10px] text-emerald-600 underline opacity-0 group-hover:opacity-100 transition-opacity">كشف السداد ←</span>
             </div>
           </div>
-        </div>
+        </button>
 
         {/* Remaining Balance */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold">المتبقي في ذمة العملاء</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+        <button
+          type="button"
+          onClick={() => setKpiModalType('TOTAL_REMAINING')}
+          className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs hover:border-amber-400 hover:shadow-md transition-all duration-200 flex flex-col justify-between text-right cursor-pointer group"
+          title="انقر لعرض المتبقي في ذمة العملاء وجدول الاستحقاقات"
+        >
+          <div className="flex items-center justify-between text-slate-500 mb-2 w-full">
+            <span className="text-xs font-semibold group-hover:text-amber-700 transition-colors">المتبقي في ذمة العملاء</span>
+            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-all shadow-xs">
               <Clock size={16} />
             </div>
           </div>
-          <div>
-            <div className="text-xl sm:text-2xl font-bold text-amber-600">
+          <div className="w-full">
+            <div className="text-xl sm:text-2xl font-bold text-amber-600 group-hover:text-amber-700 transition-colors">
               {metrics.totalRemainingSum.toLocaleString()} <span className="text-xs text-slate-500 font-normal">{currencySymbol}</span>
             </div>
-            <div className="text-[11px] text-slate-500 mt-1">
-              أرباح المرابحة: {metrics.totalProfitSum.toLocaleString()} {currencySymbol}
+            <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
+              <span>أرباح المرابحة: {metrics.totalProfitSum.toLocaleString()} {currencySymbol}</span>
+              <span className="text-[10px] text-amber-600 underline opacity-0 group-hover:opacity-100 transition-opacity">جدول الذمم ←</span>
             </div>
           </div>
-        </div>
+        </button>
 
         {/* Overdue Alerts */}
-        <div className="bg-white p-4 rounded-2xl border border-red-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold text-red-700">الأقساط المتأخرة</span>
-            <div className="w-8 h-8 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+        <button
+          type="button"
+          onClick={() => setKpiModalType('OVERDUE_ALERTS')}
+          className="bg-white p-4 rounded-2xl border border-red-200 shadow-xs hover:border-red-400 hover:shadow-md transition-all duration-200 flex flex-col justify-between text-right cursor-pointer group relative overflow-hidden"
+          title="انقر لعرض تنبيهات الأقساط المتأخرة وإرسال رسائل التذكير"
+        >
+          {metrics.overdueCount > 0 && (
+            <span className="absolute top-2 left-2 flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600" />
+            </span>
+          )}
+          <div className="flex items-center justify-between text-slate-500 mb-2 w-full">
+            <span className="text-xs font-semibold text-red-700 group-hover:text-red-800 transition-colors">الأقساط المتأخرة</span>
+            <div className="w-8 h-8 rounded-xl bg-red-50 text-red-600 flex items-center justify-center group-hover:bg-red-600 group-hover:text-white transition-all shadow-xs">
               <AlertTriangle size={16} />
             </div>
           </div>
-          <div>
-            <div className="text-xl sm:text-2xl font-bold text-red-600">
+          <div className="w-full">
+            <div className="text-xl sm:text-2xl font-bold text-red-600 group-hover:text-red-700 transition-colors">
               {metrics.overdueAmount.toLocaleString()} <span className="text-xs text-slate-500 font-normal">{currencySymbol}</span>
             </div>
-            <div className="text-[11px] text-red-600 font-medium mt-1">
-              {metrics.overdueCount} قسط يستوجب المتابعة العاجلة
+            <div className="text-[11px] text-red-600 font-medium mt-1 flex items-center justify-between">
+              <span>{metrics.overdueCount} قسط يستوجب المتابعة</span>
+              <span className="text-[10px] text-red-700 underline font-bold">تنبيهات ومطالبة ←</span>
             </div>
           </div>
-        </div>
+        </button>
       </div>
 
-      {/* TABS NAVIGATION */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-1.5 shadow-xs flex items-center gap-1 overflow-x-auto print:hidden">
+      {/* TABS NAVIGATION WITH 3D INTERACTIVITY */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-2 shadow-xs flex items-center gap-2 overflow-x-auto print:hidden">
         <button
           type="button"
           onClick={() => setActiveTab('contracts')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+          className={`btn-3d text-xs sm:text-sm px-4 py-2.5 cursor-pointer whitespace-nowrap ${
             activeTab === 'contracts'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              ? 'btn-3d-emerald shadow-sm'
+              : 'btn-3d-white text-slate-700'
           }`}
         >
           <CreditCard size={16} />
@@ -641,10 +688,10 @@ export default function InstallmentsScreen() {
         <button
           type="button"
           onClick={() => setActiveTab('schedule')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+          className={`btn-3d text-xs sm:text-sm px-4 py-2.5 cursor-pointer whitespace-nowrap ${
             activeTab === 'schedule'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              ? 'btn-3d-blue shadow-sm'
+              : 'btn-3d-white text-slate-700'
           }`}
         >
           <Layers size={16} />
@@ -654,10 +701,10 @@ export default function InstallmentsScreen() {
         <button
           type="button"
           onClick={() => setActiveTab('promissory')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+          className={`btn-3d text-xs sm:text-sm px-4 py-2.5 cursor-pointer whitespace-nowrap ${
             activeTab === 'promissory'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              ? 'btn-3d-slate shadow-sm'
+              : 'btn-3d-white text-slate-700'
           }`}
         >
           <FileCheck size={16} />
@@ -667,10 +714,10 @@ export default function InstallmentsScreen() {
         <button
           type="button"
           onClick={() => setActiveTab('calculator')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+          className={`btn-3d text-xs sm:text-sm px-4 py-2.5 cursor-pointer whitespace-nowrap ${
             activeTab === 'calculator'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              ? 'btn-3d-purple shadow-sm'
+              : 'btn-3d-white text-slate-700'
           }`}
         >
           <Sparkles size={16} />
@@ -693,7 +740,7 @@ export default function InstallmentsScreen() {
                 className="w-full pr-9 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-emerald-500"
               />
             </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
               <select
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value)}
@@ -704,6 +751,36 @@ export default function InstallmentsScreen() {
                 <option value="COMPLETED">عقود مسددة بالكامل</option>
                 <option value="DEFAULTED">عقود متعثرة</option>
               </select>
+
+              <ExportButtonGroup
+                title="سجل عقود التقسيط والتمويل"
+                filename="عقود_التقسيط"
+                headers={[
+                  'رقم العقد',
+                  'اسم العميل',
+                  'الهاتف',
+                  'البيان / السلعة',
+                  'إجمالي العقد',
+                  'الدفعة الأولى',
+                  'المسدد',
+                  'المتبقي',
+                  'عدد الأقساط',
+                  'الحالة'
+                ]}
+                rows={filteredContracts.map(c => [
+                  c.contractNumber,
+                  c.customerName,
+                  c.customerPhone || '',
+                  c.itemDescription,
+                  c.totalFinanced,
+                  c.downPayment,
+                  c.totalPaid,
+                  c.totalRemaining,
+                  c.monthsCount,
+                  c.status === 'ACTIVE' ? 'ساري' : c.status === 'COMPLETED' ? 'مسدد' : 'متعثر'
+                ])}
+                size="sm"
+              />
             </div>
           </div>
 
@@ -783,10 +860,10 @@ export default function InstallmentsScreen() {
                             <button
                               type="button"
                               onClick={() => setSelectedContractForView(contract)}
-                              className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
+                              className="btn-3d btn-3d-white p-1.5 text-slate-700 hover:text-emerald-700 cursor-pointer"
                               title="عرض تفاصيل العقد وجدول الأقساط"
                             >
-                              <Eye size={16} />
+                              <Eye size={15} />
                             </button>
                             <button
                               type="button"
@@ -794,10 +871,10 @@ export default function InstallmentsScreen() {
                                 setSelectedContractForView(contract);
                                 setTimeout(() => window.print(), 200);
                               }}
-                              className="p-1.5 rounded-lg text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                              className="btn-3d btn-3d-white p-1.5 text-slate-700 hover:text-blue-700 cursor-pointer"
                               title="طباعة العقد وجدول الاستهلاك"
                             >
-                              <Printer size={16} />
+                              <Printer size={15} />
                             </button>
                           </div>
                         </td>
@@ -826,7 +903,7 @@ export default function InstallmentsScreen() {
                 className="w-full pr-9 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-emerald-500"
               />
             </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
               <select
                 value={scheduleFilter}
                 onChange={e => setScheduleFilter(e.target.value as any)}
@@ -837,6 +914,40 @@ export default function InstallmentsScreen() {
                 <option value="DUE_SOON">مستحقة خلال 30 يوماً</option>
                 <option value="PAID">الأقساط المسددة</option>
               </select>
+
+              <ExportButtonGroup
+                title="جدول استحقاق الأقساط والتحصيل"
+                filename="جدول_الاقساط"
+                headers={[
+                  'رقم القسط',
+                  'اسم العميل',
+                  'رقم العقد',
+                  'تاريخ الاستحقاق',
+                  'مبلغ القسط',
+                  'أصل المبلغ',
+                  'الأرباح',
+                  'المسدد',
+                  'المتبقي',
+                  'الكمبيالة',
+                  'حالة القسط',
+                  'سند القبض'
+                ]}
+                rows={allSchedules.map(({ contract, item }) => [
+                  item.installmentNumber,
+                  contract.customerName,
+                  contract.contractNumber,
+                  item.dueDate,
+                  item.totalAmount,
+                  item.principalAmount,
+                  item.profitAmount,
+                  item.paidAmount,
+                  item.remainingAmount,
+                  item.promissoryNoteId || 'غير محدد',
+                  item.status === 'PAID' ? 'مسدد' : (item.status === 'OVERDUE' || (item.status === 'PENDING' && new Date(item.dueDate) < new Date())) ? 'متأخر' : item.status === 'PARTIAL' ? 'سداد جزئي' : 'مستحق',
+                  item.receiptVoucherNumber || ''
+                ])}
+                size="sm"
+              />
             </div>
           </div>
 
@@ -923,7 +1034,7 @@ export default function InstallmentsScreen() {
                             <button
                               type="button"
                               onClick={() => handleOpenPayment(contract, item)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors cursor-pointer shadow-xs"
+                              className="btn-3d btn-3d-emerald inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold shadow-2xs cursor-pointer"
                             >
                               <Receipt size={14} />
                               <span>تحصيل وسداد</span>
@@ -960,7 +1071,7 @@ export default function InstallmentsScreen() {
                 className="w-full pr-9 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-emerald-500"
               />
             </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
               <select
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value)}
@@ -973,6 +1084,34 @@ export default function InstallmentsScreen() {
                 <option value="PROTESTED">مرفوضة / بروتستو</option>
                 <option value="ENDORSED">مظهرة ومجيرة</option>
               </select>
+
+              <ExportButtonGroup
+                title="سجل محفظة الكمبيالات والسندات الإذنية"
+                filename="محفظة_الكمبيالات"
+                headers={[
+                  'رقم الورقة',
+                  'النوع',
+                  'المسحوب عليه (المدين)',
+                  'الضامن الكفيل',
+                  'تاريخ التحرير',
+                  'تاريخ الاستحقاق',
+                  'المبلغ المالي',
+                  'الحالة',
+                  'رقم العقد المربوط'
+                ]}
+                rows={filteredNotes.map(n => [
+                  n.noteNumber,
+                  n.type === 'PROMISSORY_NOTE' ? 'سند لأمر' : 'كمبيالة تجارية',
+                  n.drawee,
+                  n.guarantor || 'لا يوجد',
+                  n.issueDate,
+                  n.dueDate,
+                  n.amount,
+                  n.status === 'PORTFOLIO' ? 'في المحفظة' : n.status === 'SENT_FOR_COLLECTION' ? 'مرسلة للتحصيل' : n.status === 'COLLECTED' ? 'محصلة' : n.status === 'PROTESTED' ? 'مرفوضة' : 'مجيرة',
+                  n.contractNumber || ''
+                ])}
+                size="sm"
+              />
             </div>
           </div>
 
@@ -1054,7 +1193,7 @@ export default function InstallmentsScreen() {
                             setSelectedNoteForPrint(note);
                             setIsPrintNoteModalOpen(true);
                           }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                          className="btn-3d btn-3d-white inline-flex items-center gap-1 px-3 py-1.5 text-slate-700 text-xs font-bold cursor-pointer"
                         >
                           <Printer size={14} />
                           <span>معاينة وطباعة</span>
@@ -1134,7 +1273,7 @@ export default function InstallmentsScreen() {
                 }));
                 setIsNewContractModalOpen(true);
               }}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer shadow-xs"
+              className="w-full btn-3d btn-3d-emerald py-3 text-xs sm:text-sm font-bold shadow-sm cursor-pointer"
             >
               تحويل المعطيات إلى عقد تقسيط رسمي ←
             </button>
@@ -1207,10 +1346,48 @@ export default function InstallmentsScreen() {
             <form onSubmit={handleSaveContract} className="space-y-4 text-xs sm:text-sm">
               {/* Customer Info */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                <div className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
-                  <ShieldCheck size={16} className="text-blue-600" />
-                  بيانات العميل (المشتري / المدين)
+                <div className="font-bold text-slate-800 flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5">
+                    <ShieldCheck size={16} className="text-blue-600" />
+                    بيانات العميل (المشتري / المدين)
+                  </span>
+                  {customers.length > 0 && (
+                    <span className="text-[11px] text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md font-medium">
+                      متصل بسجل العملاء ({customers.length} عميل)
+                    </span>
+                  )}
                 </div>
+
+                {/* Fast Select from Existing Customers */}
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1 text-xs">
+                    اختيار سريع من قاعدة بيانات العملاء (تعبئة تلقائية)
+                  </label>
+                  <select
+                    onChange={e => {
+                      const selected = customers.find(c => c.id === e.target.value);
+                      if (selected) {
+                        setNewContract(prev => ({
+                          ...prev,
+                          customerName: selected.name,
+                          customerPhone: selected.phone || '',
+                          customerNationalId: selected.taxNumber || '',
+                          customerAddress: selected.address || ''
+                        }));
+                      }
+                    }}
+                    defaultValue=""
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-2xs mb-2"
+                  >
+                    <option value="" disabled>-- اختر عميلاً مسجلاً لجلب بياناته تلقائياً --</option>
+                    {customers.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.phone ? `(${c.phone})` : ''} {c.code ? `[${c.code}]` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-slate-700 font-semibold mb-1">اسم العميل *</label>
@@ -1390,13 +1567,13 @@ export default function InstallmentsScreen() {
                 <button
                   type="button"
                   onClick={() => setIsNewContractModalOpen(false)}
-                  className="px-5 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold"
+                  className="btn-3d btn-3d-white px-5 py-2.5 text-slate-700 font-semibold cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs transition-colors"
+                  className="btn-3d btn-3d-emerald px-6 py-2.5 text-white font-bold shadow-sm cursor-pointer"
                 >
                   اعتماد وحفظ العقد وتوليد الأقساط ←
                 </button>
@@ -1495,13 +1672,13 @@ export default function InstallmentsScreen() {
                 <button
                   type="button"
                   onClick={() => setIsPayModalOpen(false)}
-                  className="px-5 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold"
+                  className="btn-3d btn-3d-white px-5 py-2.5 text-slate-700 font-semibold cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs transition-colors"
+                  className="btn-3d btn-3d-emerald px-6 py-2.5 text-white font-bold shadow-sm cursor-pointer"
                 >
                   تأكيد السداد وإصدار الإيصال ←
                 </button>
@@ -1531,7 +1708,7 @@ export default function InstallmentsScreen() {
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                  className="btn-3d btn-3d-white flex items-center gap-1.5 px-3.5 py-2 text-slate-700 text-xs font-bold cursor-pointer"
                 >
                   <Printer size={15} />
                   <span>طباعة العقد</span>
@@ -1679,7 +1856,7 @@ export default function InstallmentsScreen() {
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold transition-colors cursor-pointer"
+                  className="btn-3d btn-3d-emerald flex items-center gap-1 px-3.5 py-1.5 text-xs font-bold shadow-xs cursor-pointer"
                 >
                   <Printer size={14} />
                   <span>طباعة الورقة</span>
@@ -1801,7 +1978,40 @@ export default function InstallmentsScreen() {
               </div>
 
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">اسم المسحوب عليه (المدين) *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-slate-700 font-semibold text-xs">اسم المسحوب عليه (المدين) *</label>
+                  {customers.length > 0 && (
+                    <span className="text-[10px] text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md font-medium">
+                      اختيار من سجل العملاء
+                    </span>
+                  )}
+                </div>
+
+                {/* Fast Select from Customers */}
+                <select
+                  onChange={e => {
+                    const selected = customers.find(c => c.id === e.target.value);
+                    if (selected) {
+                      setNewFreeNote(prev => ({
+                        ...prev,
+                        drawee: selected.name,
+                        draweePhone: selected.phone || '',
+                        draweeNationalId: selected.taxNumber || '',
+                        draweeAddress: selected.address || ''
+                      }));
+                    }
+                  }}
+                  defaultValue=""
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-2xs mb-2"
+                >
+                  <option value="" disabled>-- اختر من قاعدة بيانات العملاء لجلب البيانات تلقائياً --</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.phone ? `(${c.phone})` : ''} {c.code ? `[${c.code}]` : ''}
+                    </option>
+                  ))}
+                </select>
+
                 <input
                   type="text"
                   required
@@ -1870,13 +2080,13 @@ export default function InstallmentsScreen() {
                 <button
                   type="button"
                   onClick={() => setIsNewNoteModalOpen(false)}
-                  className="px-5 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold"
+                  className="btn-3d btn-3d-white px-5 py-2.5 text-slate-700 font-semibold cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs transition-colors"
+                  className="btn-3d btn-3d-emerald px-6 py-2.5 text-white font-bold shadow-sm cursor-pointer"
                 >
                   حفظ في محفظة الأوراق المالية ←
                 </button>
@@ -1885,6 +2095,20 @@ export default function InstallmentsScreen() {
           </div>
         </div>
       )}
+
+      {/* KPI DRILL-DOWN MODAL */}
+      <InstallmentKpiModal
+        type={kpiModalType}
+        isOpen={Boolean(kpiModalType)}
+        onClose={() => setKpiModalType(null)}
+        contracts={contracts}
+        onOpenPayment={(contract, item) => {
+          handleOpenPayment(contract, item);
+        }}
+        onSelectContractForView={contract => {
+          setSelectedContractForView(contract);
+        }}
+      />
     </div>
   );
 }

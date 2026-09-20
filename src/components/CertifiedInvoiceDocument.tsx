@@ -1,5 +1,5 @@
 import { forwardRef, useMemo } from 'react';
-import { QrCode, Phone, MapPin, User, FileText, Calendar, CreditCard, Clock, ShieldCheck } from 'lucide-react';
+import { Phone, MapPin, User, FileText, Calendar, CreditCard, Clock, ShieldCheck } from 'lucide-react';
 import type { PrintPreviewData } from './PrintPreviewModal';
 import { tafqeetArabic, tafqeetEnglish } from '../utils/tafqeet';
 import { getSystemSettings } from '../utils/settings';
@@ -10,6 +10,7 @@ import {
   type PrintColorMode,
   getPaperFormatDef 
 } from '../utils/printPaperFormats';
+import { BarcodeImage, VoucherQrCodeImage, VoucherSecuritySeal } from './VoucherBarcodeView';
 
 export interface CertifiedInvoiceDocumentProps {
   data: PrintPreviewData;
@@ -87,6 +88,17 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
     const def = getPaperFormatDef(format, customSize);
 
     const grandAmount = data.grandTotal ?? data.amount ?? 0;
+    const remainingAmountVal = Number(
+      data.remainingAmount !== undefined
+        ? data.remainingAmount
+        : data.remainingBalance !== undefined
+        ? data.remainingBalance
+        : data.partnerBalanceImpact?.remainingAmount !== undefined
+        ? data.partnerBalanceImpact.remainingAmount
+        : data.partnerBalanceImpact?.newBalance !== undefined
+        ? Math.abs(data.partnerBalanceImpact.newBalance)
+        : Math.max(0, grandAmount - (data.paidAmount ?? grandAmount))
+    );
     
     const currencyInfo = useMemo(() => {
       if (data.currency) {
@@ -98,12 +110,43 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
     const currSymbol = isEn ? currencyInfo.symbolEn : currencyInfo.symbol;
     const currFullName = isEn ? `${currencyInfo.nameEn} (${currencyInfo.code})` : `${currencyInfo.nameAr} (${currencyInfo.code})`;
 
+    const effectiveVatRate = useMemo(() => {
+      if (data.taxRate !== undefined && data.taxRate > 0) return data.taxRate;
+      const itemWithTax = data.items?.find(i => (i.taxRate ?? 0) > 0);
+      if (itemWithTax && itemWithTax.taxRate) return itemWithTax.taxRate;
+      if (data.subtotal && data.taxTotal && data.subtotal > 0) {
+        return Number(((data.taxTotal / data.subtotal) * 100).toFixed(2));
+      }
+      return 15;
+    }, [data.taxRate, data.items, data.subtotal, data.taxTotal]);
+
     const tafqeetText = useMemo(() => {
       if (isEn) {
         return tafqeetEnglish(grandAmount, currencyInfo.nameEn, currencyInfo.subunitEn);
       }
       return data.amountInWords || tafqeetArabic(grandAmount, currencyInfo.nameAr, currencyInfo.subunitAr);
     }, [data.amountInWords, grandAmount, isEn, currencyInfo]);
+
+    const formattedTafqeet = useMemo(() => {
+      if (isEn) {
+        return tafqeetText;
+      }
+      let t = (tafqeetText || '').trim();
+      // حذف كلمة "فقط" الأولى إذا كانت موجودة في البداية
+      t = t.replace(/^فقط\s+/, '').trim();
+      
+      if (t.endsWith('فقط لا غير')) {
+        // مكتملة بالفعل
+      } else if (t.endsWith('لا غير')) {
+        t = t.replace(/\s*لا غير$/, ' فقط لا غير');
+      } else {
+        t = `${t} فقط لا غير`;
+      }
+      
+      // تأكيد نهائي على حذف كلمة "فقط" الأولى
+      t = t.replace(/^فقط\s+/, '').trim();
+      return t;
+    }, [tafqeetText, isEn]);
 
     const isCompact = def.widthMm <= 110;
     const isThermal = def.isThermal || isCompact;
@@ -117,6 +160,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
     const isReceiptVoucher = data.voucherType === 'RECEIPT' || data.title.includes('قبض');
     const isPaymentVoucher = data.voucherType === 'PAYMENT' || data.title.includes('صرف');
     const isInternalVoucher = data.voucherType === 'INTERNAL' || data.title.includes('تحويل');
+    const isStatement = Boolean(data.statementPeriod || (data.transactions && data.transactions.length > 0) || data.title.includes('كشف حساب'));
 
     const isSalesDoc = Boolean(
       data.partnerType === 'CUSTOMER' ||
@@ -147,27 +191,27 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
         };
       }
 
-      // Sales Invoice: Sky Cyan & Indigo
+      // Sales Invoice: Dark Navy Blue (الكحلي الغامق)
       if (isSalesDoc && !isVoucher) {
         return {
-          banner: 'bg-gradient-to-r from-sky-600 via-indigo-900 to-slate-950 text-white shadow-md border-b-2 border-sky-400',
-          tableHeader: 'bg-gradient-to-r from-indigo-950 via-slate-900 to-sky-950 text-sky-200 border-b border-sky-600/50',
-          accentText: 'text-sky-300',
-          totalBg: 'bg-gradient-to-r from-indigo-950 via-sky-950 to-indigo-900 text-white shadow-md border border-sky-500/40',
-          totalText: 'text-sky-300',
-          badge: 'bg-sky-500/20 text-sky-200 border border-sky-400/40',
+          banner: 'bg-gradient-to-r from-blue-900 via-blue-950 to-slate-950 text-white shadow-md border-b-2 border-blue-950',
+          tableHeader: 'bg-gradient-to-r from-slate-950 via-blue-950 to-slate-950 text-blue-100 border-b-2 border-blue-950',
+          accentText: 'text-blue-200',
+          totalBg: 'bg-gradient-to-r from-slate-950 via-blue-950 to-slate-900 text-white shadow-md border border-blue-950',
+          totalText: 'text-blue-200',
+          badge: 'bg-blue-950/60 text-blue-100 border border-blue-950',
         };
       }
 
-      // Purchases Invoice: Green & Emerald
+      // Purchases Invoice: Very Dark Green (الأخضر الغامق جداً)
       if (isPurchaseDoc && !isVoucher) {
         return {
-          banner: 'bg-gradient-to-r from-emerald-600 via-teal-900 to-slate-950 text-white shadow-md border-b-2 border-emerald-400',
-          tableHeader: 'bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 text-emerald-200 border-b border-emerald-600/50',
-          accentText: 'text-emerald-300',
-          totalBg: 'bg-gradient-to-r from-emerald-950 via-teal-950 to-emerald-900 text-white shadow-md border border-emerald-500/40',
-          totalText: 'text-emerald-300',
-          badge: 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40',
+          banner: 'bg-gradient-to-r from-emerald-900 via-emerald-950 to-slate-950 text-white shadow-md border-b-2 border-emerald-950',
+          tableHeader: 'bg-gradient-to-r from-slate-950 via-emerald-950 to-slate-950 text-emerald-100 border-b-2 border-emerald-950',
+          accentText: 'text-emerald-200',
+          totalBg: 'bg-gradient-to-r from-slate-950 via-emerald-950 to-slate-900 text-white shadow-md border border-emerald-900',
+          totalText: 'text-emerald-200',
+          badge: 'bg-emerald-950/60 text-emerald-100 border border-emerald-800',
         };
       }
 
@@ -227,10 +271,10 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
       : (settings?.company?.address || 'المملكة العربية السعودية - الرياض');
 
     const partnerTypeBadge = data.partnerType === 'VENDOR' 
-      ? (isEn ? 'Supplier / Vendor' : 'مورد معتمد') 
+      ? (isEn ? 'Supplier / Vendor' : 'مورد') 
       : data.partnerType === 'EMPLOYEE' 
       ? (isEn ? 'Employee' : 'موظف') 
-      : (isEn ? 'Customer' : 'عميل معتمد');
+      : (isEn ? 'Customer' : 'عميل');
 
     const partnerRoleLabel = data.partnerType === 'VENDOR'
       ? (isEn ? 'Vendor / Supplier:' : 'اسم المورد:')
@@ -290,6 +334,15 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
               <span>{isEn ? 'Doc No:' : 'رقم المستند:'} #{data.docNumber}</span>
               <span>{isEn ? 'Date:' : 'التاريخ:'} {data.date}</span>
             </div>
+            {/* Scannable Barcode on Thermal Receipt */}
+            <div className="pt-1 flex justify-center">
+              <BarcodeImage 
+                value={data.docNumber || '0000'} 
+                height={26} 
+                barWidth={1.05} 
+                fontSize={7.5} 
+              />
+            </div>
           </div>
 
           {/* Customer Details Box in Thermal Receipt */}
@@ -324,35 +377,51 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
           {isVoucher ? (
             <div className="py-2 border-b-2 border-dashed border-black space-y-2">
               {/* Paid Amount */}
-              <div className="p-2 border-2 border-black bg-slate-100 rounded text-center">
+              <div className="p-2 border-2 border-black bg-slate-100 rounded text-center space-y-1">
                 <span className="text-[9px] font-black block uppercase text-black">
                   {isEn 
                     ? (isReceiptVoucher ? 'Amount Received:' : 'Paid Amount:') 
                     : (isReceiptVoucher ? 'المبلغ المدفوع (المقبوض):' : 'المبلغ المدفوع:')}
                 </span>
-                <span className="text-base font-mono font-black text-black">
+                <span className="text-base font-mono font-black text-black block">
                   {grandAmount.toFixed(2)} {currSymbol}
                 </span>
+                <div className="text-[8px] font-bold text-black border-t border-black/30 pt-0.5 leading-tight">
+                  <span>{isEn ? 'In words: ' : 'المبلغ كتابة بالحروف: '}</span>
+                  <span className="font-semibold">({formattedTafqeet})</span>
+                </div>
               </div>
 
-              {/* Amount in Words */}
-              <div className="p-1.5 border border-black rounded bg-white text-[9px] text-black">
-                <span className="font-bold block text-[8px] text-slate-700">{isEn ? 'Amount in Words:' : 'المبلغ كتابة بالحروف وفقط:'}</span>
-                <p className="font-black leading-tight">{tafqeetText}</p>
+              {/* Remaining Amount */}
+              <div className="p-1.5 border border-black bg-white rounded text-center">
+                <span className="text-[8px] font-bold block uppercase text-slate-700">
+                  {isEn ? 'Remaining Amount:' : 'المبلغ المتبقي:'}
+                </span>
+                <span className="text-sm font-mono font-black text-black">
+                  {remainingAmountVal.toFixed(2)} {currSymbol}
+                </span>
               </div>
 
               {/* Accounting Description */}
               {(data.notes || (data.items && data.items[0]?.description)) && (
                 <div className="text-[9px] text-black">
-                  <span className="font-bold">{isEn ? 'Purpose / Description:' : 'البيان المحاسبي:'} </span>
+                  <span className="font-bold">{isEn ? 'Being:' : 'البيان:'} </span>
                   <span className="font-medium">{data.notes || (data.items && data.items[0]?.description)}</span>
                 </div>
               )}
 
-              {data.paymentMethod && (
-                <div className="text-[9px] text-black">
-                  <span className="font-bold">{isEn ? 'Method / Account:' : 'طريقة السداد / الحساب:'} </span>
-                  <span className="font-medium">{data.paymentMethod}</span>
+              {/* Thermal Settled Invoices List */}
+              {data.allocatedInvoices && data.allocatedInvoices.length > 0 && (
+                <div className="mt-1.5 pt-1.5 border-t border-dashed border-black/40 text-[9px]">
+                  <div className="font-bold text-black mb-0.5">{isEn ? 'Settled Invoices:' : 'الفواتير المسواة بهذا السند:'}</div>
+                  <div className="space-y-0.5">
+                    {data.allocatedInvoices.map((inv, idx) => (
+                      <div key={idx} className="flex justify-between items-center font-mono">
+                        <span>#{inv.invoiceNumber}</span>
+                        <span className="font-bold">{(inv.allocatedAmount || 0).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -397,7 +466,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
             )}
             {data.taxTotal !== undefined && data.taxTotal > 0 && (
               <div className="flex justify-between">
-                <span className="font-sans font-bold">{isEn ? 'VAT 15%:' : 'ضريبة القيمة المضافة 15%:'}</span>
+                <span className="font-sans font-bold">{isEn ? `VAT (${effectiveVatRate}%):` : `ضريبة القيمة المضافة (${effectiveVatRate}%):`}</span>
                 <span className="font-black">{data.taxTotal.toFixed(2)} {currSymbol}</span>
               </div>
             )}
@@ -466,14 +535,20 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
           </div>
 
           {/* QR Code */}
-          <div className="py-2.5 text-center flex flex-col items-center justify-center">
-            <div className="p-1 bg-white border-2 border-black rounded inline-block">
-              <QrCode size={def.widthMm <= 60 ? 44 : 56} className="text-black" />
+          {settings?.taxAndInvoice?.enableQrCode !== false && (
+            <div className="py-2 text-center flex flex-col items-center justify-center">
+              <VoucherQrCodeImage 
+                data={data} 
+                size={def.widthMm <= 60 ? 54 : 64} 
+                showVerificationHash={true} 
+              />
+              <span className="text-[7.5px] font-mono font-black text-black mt-1">
+                {isVoucher 
+                  ? (isEn ? 'OFFICIAL VERIFIED VOUCHER' : 'سند معتمد - رمز التحقق والمطابقة')
+                  : (isEn ? 'ZATCA Certified Simplified Tax Invoice' : 'فاتورة ضريبية مبسطة معتمدة (ZATCA)')}
+              </span>
             </div>
-            <span className="text-[8px] font-mono font-black text-black mt-1">
-              {isEn ? 'ZATCA Certified Simplified Tax Invoice' : 'فاتورة ضريبية مبسطة معتمدة (ZATCA)'}
-            </span>
-          </div>
+          )}
 
           {/* Footer note */}
           <div className="text-center text-[9px] text-black font-bold pt-1 border-t-2 border-dashed border-black">
@@ -639,55 +714,57 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
         {/* Header: Company Official Letterhead */}
         <div className={`pb-2.5 mb-2.5 ${isBw ? 'border-b-2 border-black' : 'border-b-2 border-slate-800'}`}>
           <div className="flex justify-between items-start gap-3">
-            <div className="space-y-1 flex-1 min-w-0">
-              <div className="flex items-center gap-2.5">
-                {settings?.company?.logoUrl ? (
-                  <img 
-                    src={settings.company.logoUrl} 
-                    alt="Logo" 
-                    className={`${isMedium ? 'h-8' : 'h-11'} w-auto object-contain rounded shrink-0 ${
-                      isBw ? 'filter grayscale contrast-125' : 'shadow-2xs'
-                    }`}
-                  />
-                ) : null}
-                <div className="min-w-0">
-                  <h1 className={`${isMedium ? 'text-lg' : 'text-xl'} font-black ${isBw ? 'text-black' : 'text-slate-900'} truncate`}>
-                    {companyName}
-                  </h1>
-                  {settings?.company?.nameEn && !isEn && (
-                    <p className={`text-[10px] font-bold font-sans ${isBw ? 'text-slate-800' : 'text-indigo-900'}`}>
-                      {settings.company.nameEn}
-                    </p>
-                  )}
-                  {settings?.company?.nameAr && isEn && (
-                    <p className={`text-[10px] font-bold font-sans ${isBw ? 'text-slate-800' : 'text-indigo-900'}`}>
-                      {settings.company.nameAr}
-                    </p>
-                  )}
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              {settings?.company?.logoUrl ? (
+                <img 
+                  src={settings.company.logoUrl} 
+                  alt="Logo" 
+                  className={`${isMedium ? 'h-10 sm:h-12' : 'h-12 sm:h-14'} w-auto object-contain rounded shrink-0 ${
+                    isBw ? 'filter grayscale contrast-125' : 'shadow-2xs'
+                  }`}
+                />
+              ) : null}
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <h1 className={`${isMedium ? 'text-lg' : 'text-xl'} font-black ${isBw ? 'text-black' : 'text-slate-900'} leading-tight truncate`}>
+                  {companyName}
+                </h1>
+                {settings?.company?.nameEn && !isEn && (
+                  <p className={`text-[10px] font-bold font-sans leading-tight ${isBw ? 'text-slate-800' : 'text-indigo-900'}`}>
+                    {settings.company.nameEn}
+                  </p>
+                )}
+                {settings?.company?.nameAr && isEn && (
+                  <p className={`text-[10px] font-bold font-sans leading-tight ${isBw ? 'text-slate-800' : 'text-indigo-900'}`}>
+                    {settings.company.nameAr}
+                  </p>
+                )}
+                <p className={`text-[11px] font-bold pt-0.5 leading-snug ${isBw ? 'text-black' : 'text-slate-700'}`}>
+                  {settings?.company?.branchName ? `${settings.company.branchName} - ` : ''}
+                  {companyAddress}
+                </p>
+                <div className={`flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] font-bold font-mono pt-0.5 leading-snug ${isBw ? 'text-black' : 'text-slate-700'}`}>
+                  <span>{isEn ? 'VAT No:' : 'الرقم الضريبي:'} {settings?.company?.taxNumber || '310123456700003'}</span>
+                  <span>{isEn ? 'CR:' : 'س.ت:'} {settings?.company?.commercialRegister || '1010987654'}</span>
+                  <span>{isEn ? 'Tel:' : 'الهاتف:'} {settings?.company?.phone || '+966 11 456 7890'}</span>
                 </div>
               </div>
-
-              <p className={`text-[11px] font-bold pt-0.5 ${isBw ? 'text-black' : 'text-slate-700'}`}>
-                {settings?.company?.branchName ? `${settings.company.branchName} - ` : ''}
-                {companyAddress}
-              </p>
-
-              <div className={`flex flex-wrap items-center gap-3 text-[11px] font-bold font-mono pt-0.5 ${isBw ? 'text-black' : 'text-slate-700'}`}>
-                <span>{isEn ? 'VAT No:' : 'الرقم الضريبي:'} {settings?.company?.taxNumber || '310123456700003'}</span>
-                <span>{isEn ? 'CR:' : 'س.ت:'} {settings?.company?.commercialRegister || '1010987654'}</span>
-                <span>{isEn ? 'Tel:' : 'الهاتف:'} {settings?.company?.phone || '+966 11 456 7890'}</span>
-              </div>
             </div>
 
-            {/* ZATCA E-Invoice QR Code Badge */}
-            <div className={`flex flex-col items-center bg-white p-1.5 rounded-lg shrink-0 ${isBw ? 'border-2 border-black' : 'border border-slate-300 shadow-2xs'}`}>
-              <div className={`${isMedium ? 'w-10 h-10' : 'w-12 h-12'} bg-white p-0.5 rounded ${isBw ? 'border border-black' : 'border border-slate-200'} flex items-center justify-center`}>
-                <QrCode size={isMedium ? 34 : 42} className={isBw ? 'text-black' : 'text-slate-900'} />
+            {/* E-Invoice & Voucher QR Code Badge */}
+            {settings?.taxAndInvoice?.enableQrCode !== false && (
+              <div className={`flex flex-col items-center bg-white p-1 rounded-lg shrink-0 ${isBw ? 'border-2 border-black' : 'border border-slate-300 shadow-2xs'}`}>
+                <VoucherQrCodeImage 
+                  data={data} 
+                  size={isMedium ? 40 : 48} 
+                  showVerificationHash={false} 
+                />
+                <span className={`text-[7px] font-mono font-black mt-0.5 text-center px-1 ${isBw ? 'text-black' : isVoucher ? 'text-purple-800' : 'text-indigo-800'}`}>
+                  {isVoucher 
+                    ? (isEn ? 'OFFICIAL VERIFIED' : 'اعتماد وتحقق ضوئي') 
+                    : 'ZATCA E-INVOICE'}
+                </span>
               </div>
-              <span className={`text-[7px] font-mono font-black mt-0.5 text-center ${isBw ? 'text-black' : 'text-indigo-800'}`}>
-                ZATCA E-INVOICE
-              </span>
-            </div>
+            )}
           </div>
 
           {/* Document Banner */}
@@ -702,13 +779,23 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                 </p>
               )}
             </div>
-            <div className={`${isEn ? 'text-right' : 'text-left'} font-mono`}>
-              <span className={`text-[10px] block font-sans font-bold ${isBw ? 'text-slate-800' : 'text-slate-200'}`}>
-                {isEn ? 'Document No.' : 'رقم المستند'}
-              </span>
-              <span className={`text-base font-black ${isBw ? 'text-black' : docTheme.accentText}`}>
-                #{data.docNumber || '---'}
-              </span>
+            <div className={`flex items-center gap-3 ${isEn ? 'text-right' : 'text-left'}`}>
+              <div className="bg-white p-1 rounded border border-black/20 shrink-0">
+                <BarcodeImage 
+                  value={data.docNumber || '0000'} 
+                  height={26} 
+                  barWidth={1.1} 
+                  fontSize={7.5} 
+                />
+              </div>
+              <div className="font-mono">
+                <span className={`text-[10px] block font-sans font-bold ${isBw ? 'text-slate-800' : 'text-slate-200'}`}>
+                  {isEn ? 'Document No.' : 'رقم المستند'}
+                </span>
+                <span className={`text-base font-black ${isBw ? 'text-black' : docTheme.accentText}`}>
+                  #{data.docNumber || '---'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -718,25 +805,39 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
         {/* ============================================================== */}
         {pairedRowCount > 0 && (
           <div className={`mb-2.5 rounded-lg overflow-hidden ${
-            isBw ? 'border-2 border-black bg-white' : 'border border-slate-200 bg-white shadow-2xs'
+            isBw 
+              ? 'border-2 border-black bg-white' 
+              : isSalesDoc
+              ? 'border-2 border-blue-950 bg-white shadow-2xs'
+              : 'border border-slate-200 bg-white shadow-2xs'
           }`}>
             {/* Card Header Bar */}
             <div className={`px-3 py-1 flex items-center justify-between text-[11px] font-bold ${
               isBw 
                 ? 'bg-slate-200 text-black border-b-2 border-black' 
+                : isSalesDoc
+                ? 'bg-blue-950 text-white border-b-2 border-blue-950'
                 : 'bg-slate-100/90 text-slate-800 border-b border-slate-200'
             }`}>
               <div className="flex items-center gap-1.5">
-                <User size={12} className={isBw ? 'text-black' : 'text-blue-600'} />
+                <User size={12} className={isBw ? 'text-black' : isSalesDoc ? 'text-blue-200' : 'text-blue-600'} />
                 <span className="">
-                  {isEn ? 'CUSTOMER & INVOICE DETAILS' : 'بيانات العميل والفاتورة'}
+                  {isVoucher 
+                    ? (isEn ? 'PARTY & VOUCHER DETAILS' : 'بيانات الطرف والسند')
+                    : (isEn ? 'CUSTOMER & INVOICE DETAILS' : 'بيانات العميل والفاتورة')}
                 </span>
               </div>
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
-                isBw ? 'bg-white border-black text-black' : 'bg-white border-slate-300 text-slate-700 shadow-2xs'
-              }`}>
-                {partnerTypeBadge}
-              </span>
+              {!isVoucher && (
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                  isBw 
+                    ? 'bg-white border-black text-black' 
+                    : isSalesDoc
+                    ? 'bg-blue-900 border-blue-800 text-blue-100 shadow-2xs'
+                    : 'bg-white border-slate-300 text-slate-700 shadow-2xs'
+                }`}>
+                  {partnerTypeBadge}
+                </span>
+              )}
             </div>
 
             {/* Dynamic Paired Rows */}
@@ -821,113 +922,134 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
               <span className="">
                 {isEn 
                   ? (isReceiptVoucher ? 'OFFICIAL RECEIPT VOUCHER DETAILS' : isPaymentVoucher ? 'OFFICIAL PAYMENT VOUCHER DETAILS' : 'INTERNAL TRANSFER VOUCHER DETAILS')
-                  : (isReceiptVoucher ? 'بيانات سند القبض المالي المعتمد' : isPaymentVoucher ? 'بيانات سند الصرف المالي المعتمد' : 'بيانات سند التحويل المالي الداخلي')}
-              </span>
-              <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${
-                isBw ? 'bg-white text-black border border-black' : 'bg-white/20 text-amber-300'
-              }`}>
-                {isEn ? 'CERTIFIED MONETARY VOUCHER' : 'سند مالي مرحل ومعتمد'}
+                  : (isReceiptVoucher ? 'بيانات سند القبض المالي' : isPaymentVoucher ? 'بيانات سند الصرف المالي' : 'بيانات سند التحويل المالي')}
               </span>
             </div>
 
             <div className="p-4 space-y-3.5">
               {/* 1. المبلغ المدفوع (Paid Amount) */}
-              <div className={`p-4 rounded-xl flex flex-row items-center justify-between gap-3 ${
+              <div className={`p-4 rounded-xl flex flex-col gap-2.5 ${
                 isBw 
                   ? 'bg-slate-100 border-2 border-black' 
                   : 'bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xs'
               }`}>
-                <div className="space-y-0.5">
-                  <span className={`text-xs font-black uppercase block ${
-                    isBw ? 'text-black' : 'text-slate-300'
-                  }`}>
-                    {isEn 
-                      ? (isReceiptVoucher ? 'Amount Received / Paid:' : 'Paid Amount:') 
-                      : (isReceiptVoucher ? 'المبلغ المدفوع (المقبوض):' : 'المبلغ المدفوع:')}
-                  </span>
-                  <span className={`text-[10px] font-medium block ${
-                    isBw ? 'text-slate-700' : 'text-slate-400'
-                  }`}>
-                    {isEn ? 'Net Certified Monetary Value' : 'صافي القيمة النقدية المقيدة بالسند'}
-                  </span>
+                <div className="flex flex-row items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <span className={`text-xs font-black uppercase block ${
+                      isBw ? 'text-black' : 'text-slate-300'
+                    }`}>
+                      {isEn 
+                        ? 'Amount:'
+                        : 'المبلغ:'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-baseline gap-2">
+                    <span className={`text-3xl font-mono font-black ${
+                      isBw ? 'text-black' : 'text-amber-300'
+                    }`}>
+                      {grandAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className={`text-xs font-bold px-2 py-1 rounded ${
+                      isBw ? 'bg-white border border-black text-black' : 'bg-white/10 text-white border border-white/20'
+                    }`}>
+                      {currFullName}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="flex items-baseline gap-2">
-                  <span className={`text-3xl font-mono font-black ${
-                    isBw ? 'text-black' : 'text-amber-300'
-                  }`}>
-                    {grandAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                  <span className={`text-xs font-bold px-2 py-1 rounded ${
-                    isBw ? 'bg-white border border-black text-black' : 'bg-white/10 text-white border border-white/20'
-                  }`}>
-                    {currFullName}
-                  </span>
-                </div>
-              </div>
-
-              {/* 2. أسفلها: المبلغ بالحروف وفقط (... فقط لا غير) */}
-              <div className={`p-3.5 rounded-xl border ${
-                isBw 
-                  ? 'border-2 border-black bg-white text-black' 
-                  : 'border-amber-300 bg-amber-50/90 text-amber-950 shadow-2xs'
-              }`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-xs font-black flex items-center gap-1.5 ${
-                    isBw ? 'text-black' : 'text-amber-900'
-                  }`}>
-                    <span>{isEn ? 'Amount in Words:' : 'المبلغ كتابة بالحروف وفقط:'}</span>
-                  </span>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                    isBw ? 'bg-slate-200 text-black' : 'bg-amber-200/80 text-amber-900'
-                  }`}>
-                    {isEn ? 'Verified Tafqeet' : 'تفقيط معتمد'}
-                  </span>
-                </div>
-                <p className={`text-sm font-black font-sans leading-relaxed ${
-                  isBw ? 'text-black' : 'text-amber-950'
+                {/* المبلغ كتابة بالحروف في نفس الخانة */}
+                <div className={`pt-2 border-t text-xs flex flex-wrap items-baseline gap-1.5 ${
+                  isBw ? 'border-black text-black font-bold' : 'border-white/20 text-slate-200'
                 }`}>
-                  {tafqeetText}
-                </p>
+                  <span className={`font-bold ${isBw ? 'text-black' : 'text-slate-300'}`}>
+                    {isEn ? 'Amount in words:' : 'المبلغ كتابة بالحروف:'}
+                  </span>
+                  <span className={`font-black ${isBw ? 'text-black' : 'text-amber-300'}`}>
+                    ({formattedTafqeet})
+                  </span>
+                </div>
               </div>
 
-              {/* 3. البيان والشرح المحاسبي والحساب */}
-              <div className={`grid grid-cols-12 gap-3 p-3 rounded-xl border ${
+              <div className={`p-3.5 rounded-xl border ${
                 isBw ? 'border-2 border-black bg-slate-50' : 'border-slate-200 bg-slate-50/80'
               }`}>
-                <div className="col-span-8 space-y-1">
+                <div className="space-y-1">
                   <span className={`text-[10px] font-bold block ${
                     isBw ? 'text-black' : 'text-slate-600'
                   }`}>
-                    {isEn ? 'Accounting Purpose / Being:' : 'وذلك عن (البيان والشرح المحاسبي لسبب السند):'}
+                    {isEn ? 'Being:' : 'البيان:'}
                   </span>
                   <p className={`text-xs font-bold leading-relaxed ${
                     isBw ? 'text-black' : 'text-slate-900'
                   }`}>
-                    {data.notes || (data.items && data.items[0]?.description) || (isReceiptVoucher ? 'سند قبض مالي معتمد' : isPaymentVoucher ? 'سند صرف مالي معتمد' : 'سند تحويل ومناقلة داخلية')}
-                  </p>
-                </div>
-
-                <div className="col-span-4 space-y-1 border-r border-slate-200 pr-3">
-                  <span className={`text-[10px] font-bold block ${
-                    isBw ? 'text-black' : 'text-slate-600'
-                  }`}>
-                    {isEn ? 'Payment Method / Account:' : 'طريقة السداد / الحساب:'}
-                  </span>
-                  <p className={`text-xs font-black ${
-                    isBw ? 'text-black' : 'text-indigo-900'
-                  }`}>
-                    {data.paymentMethod || (isEn ? 'Main Cash Vault' : 'الصندوق الرئيسي (نقداً)')}
+                    {data.notes || (data.items && data.items[0]?.description) || (isReceiptVoucher ? 'سند قبض مالي' : isPaymentVoucher ? 'سند صرف مالي' : 'سند تحويل ومناقلة داخلية')}
                   </p>
                 </div>
               </div>
+
+              {/* Settled & Allocated Invoices Schedule */}
+              {data.allocatedInvoices && data.allocatedInvoices.length > 0 && (
+                <div className="mt-3 space-y-1.5">
+                  <div className={`flex items-center justify-between text-[11px] font-black pb-1 border-b ${
+                    isBw ? 'text-black border-black' : 'text-slate-800 border-slate-300'
+                  }`}>
+                    <span>{isEn ? 'Settled & Allocated Invoices:' : 'الفواتير المستحقة المسواة والمخصصة بهذا السند:'}</span>
+                    <span className="font-mono text-[10px] text-slate-500">
+                      {data.allocatedInvoices.length} {isEn ? 'Invoices' : 'فواتير'}
+                    </span>
+                  </div>
+                  <div className={`overflow-x-auto overflow-y-hidden rounded-lg border ${isBw ? 'border-2 border-black' : 'border-slate-200'}`}>
+                    <table className={`w-full min-w-full ${isEn ? 'text-left' : 'text-right'} border-collapse text-[10px]`}>
+                      <thead>
+                        <tr className={`${isBw ? 'bg-black text-white' : 'bg-slate-100 text-slate-800'} font-bold`}>
+                          <th className="py-1.5 px-2">{isEn ? 'Invoice #' : 'رقم الفاتورة'}</th>
+                          <th className="py-1.5 px-2">{isEn ? 'Date' : 'تاريخها'}</th>
+                          <th className={`py-1.5 px-2 ${isEn ? 'text-right' : 'text-left'}`}>{isEn ? 'Invoice Total' : 'إجمالي الفاتورة'}</th>
+                          <th className={`py-1.5 px-2 ${isEn ? 'text-right' : 'text-left'}`}>{isEn ? 'Settled Amount' : 'المبلغ المسدد بالسند'}</th>
+                          <th className={`py-1.5 px-2 ${isEn ? 'text-right' : 'text-left'}`}>{isEn ? 'Remaining' : 'المتبقي'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {data.allocatedInvoices.map((inv, idx) => (
+                          <tr key={idx} className={isBw ? 'even:bg-slate-100' : 'even:bg-slate-50/60'}>
+                            <td className="py-1.5 px-2 font-mono font-bold text-blue-700">#{inv.invoiceNumber}</td>
+                            <td className="py-1.5 px-2 font-mono text-slate-600">{inv.date || '-'}</td>
+                            <td className={`py-1.5 px-2 font-mono ${isEn ? 'text-right' : 'text-left'}`}>
+                              {(inv.invoiceTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
+                            </td>
+                            <td className={`py-1.5 px-2 font-mono font-bold text-emerald-700 ${isEn ? 'text-right' : 'text-left'}`}>
+                              {(inv.allocatedAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
+                            </td>
+                            <td className={`py-1.5 px-2 font-mono ${isEn ? 'text-right' : 'text-left'}`}>
+                              {(inv.remainingBalance ?? 0) <= 0.001 ? (
+                                <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[9px] border border-emerald-200">
+                                  {isEn ? 'Paid in Full' : 'مسددة بالكامل'}
+                                </span>
+                              ) : (
+                                <span>{(inv.remainingBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : (
           /* Regular Itemized Table for Invoices/Quotations/Orders */
           data.items && data.items.length > 0 && (
-            <div className={`mb-2.5 overflow-hidden rounded-lg ${isBw ? 'border-2 border-black' : 'border border-slate-200 shadow-2xs'}`}>
-              <table className={`w-full ${isEn ? 'text-left' : 'text-right'} border-collapse text-[11px]`}>
+            <div className={`mb-2.5 overflow-x-auto overflow-y-hidden rounded-lg ${
+              isBw 
+                ? 'border-2 border-black' 
+                : isSalesDoc 
+                ? 'border-2 border-blue-950 shadow-2xs' 
+                : 'border border-slate-200 shadow-2xs'
+            }`}>
+              <table className={`w-full min-w-full ${isEn ? 'text-left' : 'text-right'} border-collapse text-[11px]`}>
                 <thead>
                   <tr className={`${docTheme.tableHeader} font-bold`}>
                     <th className={`py-1.5 px-2 w-7 text-center ${isBw ? (isEn ? 'border-r-2 border-black' : 'border-l-2 border-black') : (isEn ? 'border-r border-slate-700/60' : 'border-l border-slate-700/60')}`}>#</th>
@@ -969,7 +1091,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                         </td>
                         {data.classification === 'TAX' && (
                           <td className={`py-1.5 px-2 text-center font-mono font-bold ${isBw ? (isEn ? 'text-black border-r border-slate-400' : 'text-black border-l border-slate-400') : (isEn ? 'text-slate-700 border-r border-slate-100' : 'text-slate-700 border-l border-slate-100')}`}>
-                            {item.taxRate ?? 15}%
+                            {item.taxRate !== undefined ? item.taxRate : effectiveVatRate}%
                           </td>
                         )}
                         <td className={`py-1.5 px-2 ${isEn ? 'text-right' : 'text-left'} font-mono font-black ${isBw ? 'text-black' : 'text-indigo-900'}`}>
@@ -986,8 +1108,8 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
 
         {/* Statement of Account Transactions Table (if present) */}
         {data.transactions && data.transactions.length > 0 && (
-          <div className={`mb-2.5 overflow-hidden rounded-lg ${isBw ? 'border-2 border-black' : 'border border-slate-200 shadow-2xs'}`}>
-            <table className={`w-full ${isEn ? 'text-left' : 'text-right'} border-collapse text-[11px]`}>
+          <div className={`mb-2.5 overflow-x-auto overflow-y-hidden rounded-lg ${isBw ? 'border-2 border-black' : 'border border-slate-200 shadow-2xs'}`}>
+            <table className={`w-full min-w-full ${isEn ? 'text-left' : 'text-right'} border-collapse text-[11px]`}>
               <thead>
                 <tr className={`${isBw ? 'bg-slate-200 text-black border-b-2 border-black' : 'bg-slate-800 text-slate-100'} font-bold`}>
                   <th className={`py-1.5 px-2 w-7 text-center ${isBw ? (isEn ? 'border-r-2 border-black' : 'border-l-2 border-black') : (isEn ? 'border-r border-slate-700' : 'border-l border-slate-700')}`}>#</th>
@@ -1036,8 +1158,9 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
           </div>
         )}
 
-        {/* Summary & Totals Calculation Block */}
-        <div className="grid grid-cols-2 gap-2.5 items-start mb-3">
+        {/* Summary & Totals Calculation Block (Invoices Only - Hidden for Vouchers & Statements) */}
+        {!isStatement && !isVoucher && (
+          <div className="grid grid-cols-2 gap-2.5 items-start mb-3">
           {/* Column 1: Notes & Instructions */}
           <div className={`space-y-2 p-2.5 rounded-lg ${isBw ? 'bg-slate-50 border-2 border-black' : 'bg-slate-50/70 border border-slate-200'}`}>
             <div>
@@ -1072,7 +1195,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
 
             {data.taxTotal !== undefined && data.taxTotal > 0 && (
               <div className="flex justify-between items-center text-slate-700 font-medium">
-                <span>{isEn ? 'Value Added Tax (15%):' : 'ضريبة القيمة المضافة (15%):'}</span>
+                <span>{isEn ? `Value Added Tax (${effectiveVatRate}%):` : `ضريبة القيمة المضافة (${effectiveVatRate}%):`}</span>
                 <span className="font-mono font-bold text-indigo-700">
                   {data.taxTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
                 </span>
@@ -1104,18 +1227,28 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
 
             {/* المبلغ كتابة بالحروف وفقط - أسفل خانة صافي المبلغ الإجمالي */}
             <div className={`p-2 rounded-lg text-[11px] font-sans ${
-              isBw ? 'border-2 border-black bg-white text-black' : 'border border-slate-200 bg-amber-50/70 text-slate-900'
+              isBw 
+                ? 'border-2 border-black bg-white text-black' 
+                : isSalesDoc
+                ? 'border border-blue-950/30 bg-amber-50/70 text-slate-900'
+                : 'border border-slate-200 bg-amber-50/70 text-slate-900'
             }`}>
               <span className={`text-[10px] font-bold block mb-0.5 ${isBw ? 'text-black' : 'text-amber-900'}`}>
                 {isEn ? 'Amount in Words:' : 'المبلغ كتابة بالحروف:'}
               </span>
-              <p className={`font-bold text-[11px] leading-relaxed ${isBw ? 'text-black' : 'text-slate-900'}`}>
+              <p className={`font-black text-[11px] leading-relaxed ${
+                isBw 
+                  ? 'text-black' 
+                  : (grandAmount === 0 || tafqeetText.includes('صفر') || tafqeetText.includes('Zero'))
+                  ? 'text-amber-600 font-black' 
+                  : 'text-slate-900'
+              }`}>
                 {tafqeetText}
               </p>
             </div>
 
             {/* Payment Breakdown Box */}
-            {data.paidAmount !== undefined && (
+            {data.paidAmount !== undefined && !isVoucher && (
               <div className={`p-2 rounded-lg text-[11px] font-sans border ${
                 isBw ? 'border-black bg-slate-100 text-black' : 'border-slate-200 bg-slate-50 text-slate-800'
               }`}>
@@ -1124,15 +1257,15 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                     {isEn ? 'Payment Status & Terms:' : 'تفاصيل السداد وطريقة الدفع:'}
                   </span>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
-                    data.paidAmount >= grandAmount - 0.001 && grandAmount > 0
+                    (data.paidAmount ?? 0) >= grandAmount - 0.001 && grandAmount > 0
                       ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-                      : data.paidAmount > 0.001
+                      : (data.paidAmount ?? 0) > 0.001
                       ? 'bg-amber-100 text-amber-900 border border-amber-300'
                       : 'bg-blue-100 text-blue-900 border border-blue-300'
                   }`}>
-                    {data.paidAmount >= grandAmount - 0.001 && grandAmount > 0
+                    {(data.paidAmount ?? 0) >= grandAmount - 0.001 && grandAmount > 0
                       ? (isEn ? 'Cash (Fully Paid)' : 'فاتورة نقدية (مسددة بالكامل)')
-                      : data.paidAmount > 0.001
+                      : (data.paidAmount ?? 0) > 0.001
                       ? (isEn ? 'Partial Payment' : 'فاتورة جزئية (سداد جزء)')
                       : (isEn ? 'On Account (Credit)' : 'فاتورة آجلة (غير مسددة)')}
                   </span>
@@ -1141,7 +1274,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                   <div className="flex justify-between items-center text-slate-600">
                     <span className="font-sans">{isEn ? 'Paid Amount:' : 'المبلغ المسدد:'}</span>
                     <span className="font-bold text-emerald-700">
-                      {Number(data.paidAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
+                      {Number(data.paidAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-slate-600">
@@ -1203,6 +1336,42 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
             )}
           </div>
         </div>
+        )}
+
+        {/* Amount in Words for Vouchers (when Summary block is hidden) */}
+        {isVoucher && (
+          <div className="grid grid-cols-2 gap-2.5 items-start mb-3">
+            <div className={`p-2 rounded-lg text-[11px] font-sans ${
+              isBw 
+                ? 'border-2 border-black bg-white text-black' 
+                : 'border border-slate-200 bg-amber-50/70 text-slate-900'
+            }`}>
+              <span className={`text-[10px] font-bold block mb-0.5 ${isBw ? 'text-black' : 'text-amber-900'}`}>
+                {isEn ? 'Amount in Words:' : 'المبلغ كتابة بالحروف:'}
+              </span>
+              <p className={`font-black text-[11px] leading-relaxed ${
+                isBw 
+                  ? 'text-black' 
+                  : (grandAmount === 0 || tafqeetText.includes('صفر') || tafqeetText.includes('Zero'))
+                  ? 'text-amber-600 font-black' 
+                  : 'text-slate-900'
+              }`}>
+                {data.amountInWords || tafqeetText}
+              </p>
+            </div>
+            <div></div>
+          </div>
+        )}
+
+        {/* Security & Verification Seal (Anti-Tamper & Barcode Verification) */}
+        {isVoucher && (
+          <VoucherSecuritySeal 
+            data={data} 
+            isBw={isBw} 
+            isEn={isEn} 
+            className="my-3" 
+          />
+        )}
 
         {/* Official Signatures & Stamp Block */}
         <div className="border-t-2 border-black pt-2.5 mt-3">

@@ -84,13 +84,13 @@ export function tafqeetArabic(amount: number, currencyName = 'ريال سعود�
   let text = parts.join(' و');
   if (!text) text = 'صفر';
 
-  let result = `فقط ${text} ${currencyName}`;
+  let result = `${text} ${currencyName}`;
 
   if (decimalPart > 0) {
     result += ` و${convertGroup(decimalPart)} ${subunitName}`;
   }
 
-  return `${result} لا غير`;
+  return `${result} فقط لا غير`;
 }
 
 const EN_ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];

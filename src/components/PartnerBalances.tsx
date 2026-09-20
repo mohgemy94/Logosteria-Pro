@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
   Users, 
   Truck, 
@@ -7,7 +7,6 @@ import {
   ArrowDownLeft, 
   Wallet, 
   Receipt, 
-  Download, 
   Eye, 
   CheckCircle2, 
   Printer, 
@@ -15,26 +14,56 @@ import {
   FileText, 
   Scale, 
   ShieldCheck, 
-  RefreshCw 
+  RefreshCw,
+  Clock,
+  Calendar,
+  AlertTriangle,
+  RotateCcw,
+  FileSpreadsheet,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  MessageSquare,
+  FileCheck,
+  Copy,
+  Check
 } from 'lucide-react';
 import PrintDropdown from './PrintDropdown';
 import PrintPreviewModal, { PrintPreviewData } from './PrintPreviewModal';
+import VouchersExportModal from './VouchersExportModal';
+import BalanceConfirmationModal from './BalanceConfirmationModal';
+import PartnerAgingReport from './PartnerAgingReport';
+import ExportButtonGroup from './ExportButtonGroup';
 import { getSystemSettings } from '../utils/settings';
 import { useSystemCurrency } from '../utils/currency';
+import { 
+  loadAllVouchers, 
+  setVoucherPostingStatus, 
+  StoredVoucherRecord,
+  getPartnerAccountStatement,
+  loadCustomers,
+  loadVendors
+} from '../utils/partnerLedger';
+import { VoucherType } from '../types/accounting';
+import ReportPrintPreviewToolbar from './ReportPrintPreviewToolbar';
 
 export interface PartnerBalanceItem {
   id: string;
   code: string;
   name: string;
   type: 'CUSTOMER' | 'VENDOR';
-  taxNumber?: string;
-  phone?: string;
+  taxNumber?: string | undefined;
+  phone?: string | undefined;
+  email?: string | undefined;
+  address?: string | undefined;
+  creditLimit?: number | undefined;
+  paymentTermsDays?: number | undefined;
   openingBalance: number; // Positive = Debit, Negative = Credit
   totalWithdrawals: number; // إجمالي المسحوبات (فواتير بيع للعملاء أو فواتير شراء مستلمة من الموردين)
   totalPayments: number; // إجمالي المدفوعات (سدادات نقدية/بنكية مقبوضة من العميل أو مسددة للمورد)
   lastTransactionDate: string;
-  category?: string;
-  notes?: string;
+  category?: string | undefined;
+  notes?: string | undefined;
   transactions?: {
     id: string;
     date: string;
@@ -43,196 +72,189 @@ export interface PartnerBalanceItem {
     description: string;
     debit: number;
     credit: number;
-  }[];
+  }[] | undefined;
+  calc: {
+    balanceType: 'DEBIT' | 'CREDIT' | 'ZERO';
+    balanceAmount: number;
+    paymentRatio: number;
+    isOverCreditLimit?: boolean;
+  };
 }
 
-// Initial rich realistic dataset
-const INITIAL_PARTNERS: PartnerBalanceItem[] = [
-  // عملاء مدينون (عليهم مبالغ لنا)
-  {
-    id: 'c-1',
-    code: 'CUST-1001',
-    name: 'شركة التقنية الحديثة المحدودة',
-    type: 'CUSTOMER',
-    taxNumber: '300000000000003',
-    phone: '0501112233',
-    openingBalance: 12500,
-    totalWithdrawals: 85400,
-    totalPayments: 64200,
-    lastTransactionDate: '2026-09-02',
-    category: 'شركات ومؤسسات',
-    transactions: [
-      { id: 'tx-1', date: '2026-01-01', type: 'OPENING', docNumber: 'OP-001', description: 'رصيد افتتاحي مرحل', debit: 12500, credit: 0 },
-      { id: 'tx-2', date: '2026-03-14', type: 'INVOICE', docNumber: 'INV-1042', description: 'فاتورة مبيعات أجهزة ومعدات', debit: 45000, credit: 0 },
-      { id: 'tx-3', date: '2026-04-01', type: 'PAYMENT', docNumber: 'RV-501', description: 'سند قبض نقدي تحويل بنكي', debit: 0, credit: 30000 },
-      { id: 'tx-4', date: '2026-06-20', type: 'INVOICE', docNumber: 'INV-1120', description: 'فاتورة مبيعات خدمات برمجية', debit: 40400, credit: 0 },
-      { id: 'tx-5', date: '2026-08-15', type: 'PAYMENT', docNumber: 'RV-640', description: 'سداد دفعة من الحساب', debit: 0, credit: 34200 },
-    ]
-  },
-  {
-    id: 'c-2',
-    code: 'CUST-1002',
-    name: 'مؤسسة البناء العمراني للمقاولات',
-    type: 'CUSTOMER',
-    taxNumber: '300000000000004',
-    phone: '0502223344',
-    openingBalance: 25000,
-    totalWithdrawals: 142000,
-    totalPayments: 110000,
-    lastTransactionDate: '2026-08-28',
-    category: 'مقاولات وإنشاءات',
-    transactions: [
-      { id: 'tx-6', date: '2026-01-01', type: 'OPENING', docNumber: 'OP-002', description: 'رصيد افتتاحي', debit: 25000, credit: 0 },
-      { id: 'tx-7', date: '2026-02-10', type: 'INVOICE', docNumber: 'INV-1015', description: 'توريد مواد بناء وإنشاءات', debit: 82000, credit: 0 },
-      { id: 'tx-8', date: '2026-03-05', type: 'PAYMENT', docNumber: 'RV-512', description: 'سند قبض - شيك مصرفي', debit: 0, credit: 60000 },
-      { id: 'tx-9', date: '2026-05-18', type: 'INVOICE', docNumber: 'INV-1098', description: 'توريد كابلات وتجهيزات', debit: 60000, credit: 0 },
-      { id: 'tx-10', date: '2026-07-22', type: 'PAYMENT', docNumber: 'RV-605', description: 'حوالة بنكية سريعة', debit: 0, credit: 50000 },
-    ]
-  },
-  {
-    id: 'c-3',
-    code: 'CUST-1003',
-    name: 'مجموعة المروج التجارية',
-    type: 'CUSTOMER',
-    taxNumber: '310987654300003',
-    phone: '0504445566',
-    openingBalance: 5000,
-    totalWithdrawals: 48600,
-    totalPayments: 32000,
-    lastTransactionDate: '2026-09-05',
-    category: 'تجارة تجزئة',
-    transactions: [
-      { id: 'tx-11', date: '2026-01-01', type: 'OPENING', docNumber: 'OP-003', description: 'رصيد افتتاحي', debit: 5000, credit: 0 },
-      { id: 'tx-12', date: '2026-04-12', type: 'INVOICE', docNumber: 'INV-1077', description: 'بضاعة ومنتجات استهلاكية', debit: 48600, credit: 0 },
-      { id: 'tx-13', date: '2026-05-30', type: 'PAYMENT', docNumber: 'RV-580', description: 'سداد نقدي من الصندوق', debit: 0, credit: 32000 },
-    ]
-  },
-  // عميل دائن (له رصيد عندنا كدفعة مقدمة)
-  {
-    id: 'c-4',
-    code: 'CUST-1004',
-    name: 'مؤسسة الأفق للاستيراد والتصدير',
-    type: 'CUSTOMER',
-    taxNumber: '300555666700003',
-    phone: '0506667788',
-    openingBalance: 0,
-    totalWithdrawals: 30000,
-    totalPayments: 45000, // سدد دفعات مقدمة أكثر من مسحوباته
-    lastTransactionDate: '2026-09-01',
-    category: 'استيراد وتوزيع',
-    transactions: [
-      { id: 'tx-14', date: '2026-07-01', type: 'PAYMENT', docNumber: 'RV-630', description: 'دفعة مقدمة لحجز طلبيات توريد', debit: 0, credit: 45000 },
-      { id: 'tx-15', date: '2026-08-12', type: 'INVOICE', docNumber: 'INV-1150', description: 'تسليم الدفعة الأولى من المنتجات', debit: 30000, credit: 0 },
-    ]
-  },
-
-  // موردون دائنون (لهم مبالغ علينا)
-  {
-    id: 'v-1',
-    code: 'VEND-2001',
-    name: 'شركة التوريدات العالمية للصناعة',
-    type: 'VENDOR',
-    taxNumber: '300000000000005',
-    phone: '0503334455',
-    openingBalance: -18000, // رصيد افتتاحي دائن
-    totalWithdrawals: 195000, // مشتريات/توريدات مستلمة
-    totalPayments: 135000, // سدادات نقدية مسددة للمورد
-    lastTransactionDate: '2026-09-04',
-    category: 'مواد خام وصناعة',
-    transactions: [
-      { id: 'tx-16', date: '2026-01-01', type: 'OPENING', docNumber: 'OP-V1', description: 'رصيد دائن افتتاحي', debit: 0, credit: 18000 },
-      { id: 'tx-17', date: '2026-02-15', type: 'INVOICE', docNumber: 'PO-201', description: 'فاتورة شراء بضائع مركزية', debit: 0, credit: 110000 },
-      { id: 'tx-18', date: '2026-03-20', type: 'PAYMENT', docNumber: 'PV-305', description: 'سند صرف حوالة بنكية', debit: 80000, credit: 0 },
-      { id: 'tx-19', date: '2026-06-10', type: 'INVOICE', docNumber: 'PO-245', description: 'شحنة إضافية مواد مصنعة', debit: 0, credit: 85000 },
-      { id: 'tx-20', date: '2026-08-01', type: 'PAYMENT', docNumber: 'PV-390', description: 'سداد دفعة للمورد شيك مصرفي', debit: 55000, credit: 0 },
-    ]
-  },
-  {
-    id: 'v-2',
-    code: 'VEND-2002',
-    name: 'مصنع الخليج للعبوات والكرتون',
-    type: 'VENDOR',
-    taxNumber: '300777888900003',
-    phone: '0507778899',
-    openingBalance: -6500,
-    totalWithdrawals: 62000,
-    totalPayments: 42000,
-    lastTransactionDate: '2026-08-30',
-    category: 'تغليف وتعبئة',
-    transactions: [
-      { id: 'tx-21', date: '2026-01-01', type: 'OPENING', docNumber: 'OP-V2', description: 'رصيد دائن سابق', debit: 0, credit: 6500 },
-      { id: 'tx-22', date: '2026-04-05', type: 'INVOICE', docNumber: 'PO-218', description: 'توريد كراتين وتغليف شيكارات', debit: 62000, credit: 0 },
-      { id: 'tx-23', date: '2026-05-15', type: 'PAYMENT', docNumber: 'PV-340', description: 'سداد نقدي من الصندوق', debit: 42000, credit: 0 },
-    ]
-  },
-  {
-    id: 'v-3',
-    code: 'VEND-2003',
-    name: 'شركة النقل واللوجستيات السريعة',
-    type: 'VENDOR',
-    taxNumber: '300999111200003',
-    phone: '0508889900',
-    openingBalance: 0,
-    totalWithdrawals: 28400,
-    totalPayments: 18000,
-    lastTransactionDate: '2026-09-03',
-    category: 'شحن ونقل',
-    transactions: [
-      { id: 'tx-24', date: '2026-03-01', type: 'INVOICE', docNumber: 'PO-230', description: 'خدمات شحن وتوزيع البضائع', debit: 0, credit: 28400 },
-      { id: 'tx-25', date: '2026-06-25', type: 'PAYMENT', docNumber: 'PV-370', description: 'سند صرف مصرفي', debit: 18000, credit: 0 },
-    ]
-  },
-  // مورد مدين (لنا عنده دفعة مقدمة)
-  {
-    id: 'v-4',
-    code: 'VEND-2004',
-    name: 'مؤسسة استيراد قطع الغيار الألمانية',
-    type: 'VENDOR',
-    taxNumber: '310444333200003',
-    phone: '0509990011',
-    openingBalance: 0,
-    totalWithdrawals: 20000,
-    totalPayments: 35000, // سددنا له دفعة مقدمة قبل وصول الشحنة
-    lastTransactionDate: '2026-08-25',
-    category: 'قطع غيار وصيانة',
-    transactions: [
-      { id: 'tx-26', date: '2026-07-15', type: 'PAYMENT', docNumber: 'PV-385', description: 'دفعة مقدمة اعتماد بنكي لقطع غيار', debit: 35000, credit: 0 },
-      { id: 'tx-27', date: '2026-08-20', type: 'INVOICE', docNumber: 'PO-250', description: 'فاتورة استلام جزئي للشحنة', debit: 0, credit: 20000 },
-    ]
-  },
-];
-
-const LOCAL_STORAGE_KEY = 'alpha_partner_balances_v2';
+// The list is dynamically loaded from actual ledger data.
 
 export default function PartnerBalances() {
   const { symbol: currencySymbol } = useSystemCurrency();
   const [systemSettings] = useState(() => getSystemSettings());
 
   // State
-  const [partners, setPartners] = useState<PartnerBalanceItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (saved) return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error loading partner balances', e);
-      }
-    }
-    return INITIAL_PARTNERS;
-  });
+  const [partners, setPartners] = useState<PartnerBalanceItem[]>([]);
+  const [showReportPrintPreview, setShowReportPrintPreview] = useState(false);
+
+  const loadLivePartners = () => {
+    const allCustomers = loadCustomers();
+    const allVendors = loadVendors();
+    const combined = [...allCustomers, ...allVendors];
+    
+    const livePartners: PartnerBalanceItem[] = combined.map(p => {
+      const stmt = getPartnerAccountStatement(p);
+      const creditLimit = (p as any).creditLimit || undefined;
+      const paymentTermsDays = (p as any).paymentTermsDays || undefined;
+      const email = (p as any).email || undefined;
+      const address = (p as any).address || undefined;
+
+      const item: PartnerBalanceItem = {
+        id: p.id,
+        code: p.code || '',
+        name: p.name,
+        type: (p.type as 'CUSTOMER' | 'VENDOR') || 'CUSTOMER',
+        taxNumber: p.taxNumber,
+        phone: p.phone,
+        email,
+        address,
+        creditLimit,
+        paymentTermsDays,
+        openingBalance: p.openingBalance || 0,
+        totalWithdrawals: stmt.totalWithdrawals,
+        totalPayments: stmt.totalPayments,
+        lastTransactionDate: (stmt.transactions && stmt.transactions.length > 0 && stmt.transactions[stmt.transactions.length - 1]) 
+          ? (stmt.transactions[stmt.transactions.length - 1]?.date || '') 
+          : '',
+        category: p.type === 'CUSTOMER' ? 'عميل' : 'مورد',
+        transactions: stmt.transactions as any,
+        calc: {
+          balanceType: 'ZERO',
+          balanceAmount: 0,
+          paymentRatio: 0,
+          isOverCreditLimit: false
+        }
+      };
+      return item;
+    });
+    setPartners(livePartners);
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [partnerTypeFilter, setPartnerTypeFilter] = useState<'ALL' | 'CUSTOMER' | 'VENDOR'>('ALL');
-  const [balanceFilter, setBalanceFilter] = useState<'ALL' | 'DEBIT' | 'CREDIT' | 'ZERO'>('ALL');
+  const [balanceFilter, setBalanceFilter] = useState<'ALL' | 'DEBIT' | 'CREDIT' | 'ZERO' | 'OVER_LIMIT'>('ALL');
   const [viewMode, setViewMode] = useState<'CARDS' | 'TABLE'>('CARDS');
   const [selectedPartnerForStatement, setSelectedPartnerForStatement] = useState<PartnerBalanceItem | null>(null);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [customPreviewData, setCustomPreviewData] = useState<PrintPreviewData | null>(null);
 
+  // Sorting state for table view
+  type SortField = 'code' | 'name' | 'type' | 'opening' | 'withdrawals' | 'payments' | 'ratio' | 'balance' | 'status';
+  const [sortField, setSortField] = useState<SortField>('balance');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+  // Confirmation letter & quick actions state
+  const [selectedPartnerForConfirmation, setSelectedPartnerForConfirmation] = useState<PartnerBalanceItem | null>(null);
+  const [phoneCopiedId, setPhoneCopiedId] = useState<string | null>(null);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection(field === 'name' || field === 'code' ? 'asc' : 'desc');
+    }
+  };
+
+  const handleQuickVoucher = (partner: PartnerBalanceItem, actionType: 'RECEIPT' | 'PAYMENT') => {
+    sessionStorage.setItem('alpha_pending_voucher_partner', partner.id);
+    const viewName = actionType === 'RECEIPT' ? 'externalReceipt' : 'externalPayment';
+    window.dispatchEvent(new CustomEvent('alpha-navigate', { detail: { view: viewName } }));
+  };
+
+  const handleSendWhatsAppNotice = (partner: PartnerBalanceItem) => {
+    if (!partner.phone) {
+      alert('لا يتوفر رقم هاتف مسجل لهذا الطرف.');
+      return;
+    }
+    const cleanPhone = partner.phone.replace(/[^\d]/g, '');
+    const isCustomer = partner.type === 'CUSTOMER';
+    const isDebit = partner.calc.balanceType === 'DEBIT';
+    const isCredit = partner.calc.balanceType === 'CREDIT';
+    const nature = isDebit 
+      ? (isCustomer ? 'مستحق لنا بذمتكم' : 'دفعة مقدمة لكم من طرفنا')
+      : isCredit 
+      ? (isCustomer ? 'دفعة مقدمة مسددة منكم' : 'مستحق لكم واجب السداد من طرفنا')
+      : 'متزن (صفر)';
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const msg = `السلام عليكم ورحمة الله وبركاته،
+السادة/ ${partner.name} المحترمين
+تحية طيبة وبعد،
+
+نحيطكم علماً بأن رصيد حسابكم المسجل لدينا في ${systemSettings.company.nameAr} حتى تاريخ ${todayStr} هو:
+${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} ${currencySymbol} (${nature}).
+
+شاكرين حسن تعاونكم الدائم.`;
+
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
+  const handleCopyPhone = (partnerId: string, phone: string) => {
+    navigator.clipboard.writeText(phone);
+    setPhoneCopiedId(partnerId);
+    setTimeout(() => setPhoneCopiedId(null), 2000);
+  };
+
+  // Dynamic statement containing all Sub-Ledger transactions (Invoices, Vouchers & Journal Entries)
+  const activeStatementData = useMemo(() => {
+    if (!selectedPartnerForStatement) return null;
+    return getPartnerAccountStatement({
+      id: selectedPartnerForStatement.id,
+      name: selectedPartnerForStatement.name,
+      type: selectedPartnerForStatement.type,
+      taxNumber: selectedPartnerForStatement.taxNumber ?? '',
+      phone: selectedPartnerForStatement.phone ?? '',
+      openingBalance: selectedPartnerForStatement.openingBalance
+    });
+  }, [selectedPartnerForStatement]);
+
+  // Tab State: Balances vs Aging Report vs Vouchers Ledger Report
+  const [activeMainTab, setActiveMainTab] = useState<'BALANCES' | 'AGING' | 'VOUCHERS_LEDGER'>('BALANCES');
+
+  // Vouchers state for the new report
+  const [vouchersList, setVouchersList] = useState<StoredVoucherRecord[]>(() => loadAllVouchers());
+  const [voucherSearchQuery, setVoucherSearchQuery] = useState('');
+  const [voucherStatusFilter, setVoucherStatusFilter] = useState<'ALL' | 'POSTED' | 'DRAFT'>('ALL');
+  const [voucherTypeFilter, setVoucherTypeFilter] = useState<'ALL' | 'RECEIPT' | 'PAYMENT'>('ALL');
+  const [voucherPartnerTypeFilter, setVoucherPartnerTypeFilter] = useState<'ALL' | 'CUSTOMER' | 'VENDOR'>('ALL');
+  const [voucherDateFrom, setVoucherDateFrom] = useState('');
+  const [voucherDateTo, setVoucherDateTo] = useState('');
+
+  const [showCreditorsModal, setShowCreditorsModal] = useState(false);
+  const [showDebtorsModal, setShowDebtorsModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+
+  // Reload vouchers from storage
+  const reloadVouchers = () => {
+    setVouchersList(loadAllVouchers());
+  };
+
+  useEffect(() => {
+    loadLivePartners(); // Initial load
+    const handleUpdate = () => {
+      reloadVouchers();
+      loadLivePartners();
+    };
+    window.addEventListener('alpha-partner-ledger-updated', handleUpdate);
+    window.addEventListener('alpha-system-reset-completed', handleUpdate);
+    window.addEventListener('alpha-data-changed', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('alpha-partner-ledger-updated', handleUpdate);
+      window.removeEventListener('alpha-system-reset-completed', handleUpdate);
+      window.removeEventListener('alpha-data-changed', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, []);
+
   const handleResetData = () => {
-    if (window.confirm('هل تريد إعادة تعيين الأرصدة إلى البيانات النموذجية الأولية؟')) {
-      setPartners(INITIAL_PARTNERS);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(INITIAL_PARTNERS));
+    if (window.confirm('لا يمكن إعادة التعيين هنا للبيانات المباشرة. يتم التحكم في العملاء والموردين من شاشاتهم المخصصة.')) {
+      // No-op for live data
     }
   };
 
@@ -285,10 +307,16 @@ export default function PartnerBalances() {
       ? Math.min(100, Math.round((p.totalPayments / p.totalWithdrawals) * 100))
       : (p.totalPayments > 0 ? 100 : 0);
 
+    const isOverCreditLimit = !!(p.creditLimit && p.creditLimit > 0 && balanceAmount > p.creditLimit && (
+      (p.type === 'CUSTOMER' && balanceType === 'DEBIT') ||
+      (p.type === 'VENDOR' && balanceType === 'CREDIT')
+    ));
+
     return {
       balanceType,
       balanceAmount,
-      paymentRatio
+      paymentRatio,
+      isOverCreditLimit
     };
   };
 
@@ -303,18 +331,26 @@ export default function PartnerBalances() {
     });
   }, [partners]);
 
-  // Grand Totals across all customers and suppliers (المطلوب: إجمالي مسحوبات الجميع وإجمالي مدفوعات الجميع)
+  // Grand Totals across all customers and suppliers
   const grandTotals = useMemo(() => {
-    let grandWithdrawals = 0; // إجمالي مسحوبات الجميع
-    let grandPayments = 0; // إجمالي مدفوعات الجميع
+    let totalSalesInvoices = 0;
+    let totalPurchaseInvoices = 0;
+    let totalCustomerReceipts = 0;
+    let totalVendorPayments = 0;
+
     let totalDebitSum = 0; // إجمالي أرصدة المدينين
     let totalCreditSum = 0; // إجمالي أرصدة الدائنين
     let debtorCount = 0;
     let creditorCount = 0;
 
     enrichedPartners.forEach(p => {
-      grandWithdrawals += p.totalWithdrawals;
-      grandPayments += p.totalPayments;
+      if (p.type === 'CUSTOMER') {
+        totalSalesInvoices += p.totalWithdrawals;
+        totalCustomerReceipts += p.totalPayments;
+      } else {
+        totalPurchaseInvoices += p.totalWithdrawals;
+        totalVendorPayments += p.totalPayments;
+      }
 
       if (p.calc.balanceType === 'DEBIT') {
         totalDebitSum += p.calc.balanceAmount;
@@ -325,9 +361,15 @@ export default function PartnerBalances() {
       }
     });
 
-    const netOverallPosition = totalDebitSum - totalCreditSum; // صافي الذمم (مستحقات - التزامات)
+    const grandWithdrawals = totalSalesInvoices + totalPurchaseInvoices;
+    const grandPayments = totalCustomerReceipts + totalVendorPayments;
+    const netOverallPosition = totalDebitSum - totalCreditSum;
 
     return {
+      totalSalesInvoices,
+      totalPurchaseInvoices,
+      totalCustomerReceipts,
+      totalVendorPayments,
       grandWithdrawals,
       grandPayments,
       totalDebitSum,
@@ -380,7 +422,11 @@ export default function PartnerBalances() {
       // Type filter
       if (partnerTypeFilter !== 'ALL' && p.type !== partnerTypeFilter) return false;
       // Balance filter
-      if (balanceFilter !== 'ALL' && p.calc.balanceType !== balanceFilter) return false;
+      if (balanceFilter === 'OVER_LIMIT') {
+        if (!p.calc.isOverCreditLimit) return false;
+      } else if (balanceFilter !== 'ALL' && p.calc.balanceType !== balanceFilter) {
+        return false;
+      }
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -394,52 +440,76 @@ export default function PartnerBalances() {
     });
   }, [enrichedPartners, partnerTypeFilter, balanceFilter, searchQuery]);
 
-  // Export to CSV
-  const handleExportCSV = () => {
-    const headers = [
-      'الكود',
-      'الاسم',
-      'النوع',
-      'الهاتف',
-      'الرقم الضريبي',
-      'إجمالي المسحوبات',
-      'إجمالي المدفوعات',
-      'حالة الرصيد',
-      'مبلغ الرصيد الصافي'
-    ];
-
-    const rows = filteredPartners.map(p => [
-      p.code,
-      `"${p.name}"`,
-      p.type === 'CUSTOMER' ? 'عميل' : 'مورد',
-      p.phone || '-',
-      p.taxNumber || '-',
-      p.totalWithdrawals.toFixed(2),
-      p.totalPayments.toFixed(2),
-      p.calc.balanceType === 'DEBIT' ? 'مدين (لنا)' : p.calc.balanceType === 'CREDIT' ? 'دائن (له)' : 'متزن',
-      p.calc.balanceAmount.toFixed(2)
-    ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + 
-      [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `ارصدة_العملاء_والموردين_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  // Sorted and Filtered partners for table and export
+  const sortedAndFilteredPartners = useMemo(() => {
+    const list = [...filteredPartners];
+    list.sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'code':
+          comparison = a.code.localeCompare(b.code);
+          break;
+        case 'name':
+          comparison = a.name.localeCompare(b.name, 'ar');
+          break;
+        case 'type':
+          comparison = a.type.localeCompare(b.type);
+          break;
+        case 'opening':
+          comparison = Math.abs(a.openingBalance) - Math.abs(b.openingBalance);
+          break;
+        case 'withdrawals':
+          comparison = a.totalWithdrawals - b.totalWithdrawals;
+          break;
+        case 'payments':
+          comparison = a.totalPayments - b.totalPayments;
+          break;
+        case 'ratio':
+          comparison = a.calc.paymentRatio - b.calc.paymentRatio;
+          break;
+        case 'balance':
+          comparison = a.calc.balanceAmount - b.calc.balanceAmount;
+          break;
+        case 'status':
+          comparison = a.calc.balanceType.localeCompare(b.calc.balanceType);
+          break;
+        default:
+          comparison = 0;
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+    return list;
+  }, [filteredPartners, sortField, sortDirection]);
 
   // Preview data builders
   const createPartnerStatementPreviewData = (partner: PartnerBalanceItem): PrintPreviewData => {
-    const calc = getPartnerCalculations(partner);
-    const isDebit = calc.balanceType === 'DEBIT';
-    const isCredit = calc.balanceType === 'CREDIT';
-    const balanceText = isDebit ? 'مدين (مستحق لنا)' : isCredit ? 'دائن (مستحق له)' : 'متزن';
+    // Generate full real-time statement with Sub-Ledger journal entries and control accounts
+    const stmt = getPartnerAccountStatement({
+      id: partner.id,
+      name: partner.name,
+      type: partner.type,
+      taxNumber: partner.taxNumber,
+      phone: partner.phone,
+      openingBalance: partner.openingBalance
+    });
 
-    const txItems = (partner.transactions && partner.transactions.length > 0)
+    const calc = getPartnerCalculations(partner);
+    const balanceText = stmt ? stmt.balanceLabel : (calc.balanceType === 'DEBIT' ? 'مدين (مستحق لنا)' : calc.balanceType === 'CREDIT' ? 'دائن (مستحق له)' : 'متزن');
+    const finalBalAmount = stmt ? stmt.netBalance : calc.balanceAmount;
+
+    const txItems = stmt && stmt.transactions.length > 0
+      ? stmt.transactions.map(tx => {
+          const isJournal = tx.type === 'JOURNAL_ENTRY' || tx.docNumber.startsWith('#JE-') || tx.docNumber.startsWith('JE-');
+          const typePrefix = isJournal ? '[قيد يومية Sub-Ledger] ' : '';
+          return {
+            description: `[${tx.date}] ${typePrefix}${tx.description} (${tx.docNumber})`,
+            quantity: 1,
+            unitPrice: tx.debit > 0 ? tx.debit : tx.credit,
+            taxRate: 0,
+            total: tx.debit > 0 ? tx.debit : -tx.credit
+          };
+        })
+      : (partner.transactions && partner.transactions.length > 0)
       ? partner.transactions.map(tx => ({
           description: `[${tx.date}] ${tx.description} (${tx.docNumber})`,
           quantity: 1,
@@ -450,9 +520,9 @@ export default function PartnerBalances() {
       : [{
           description: `الرصيد الافتتاحي: ${partner.openingBalance.toLocaleString()} ${currencySymbol} | إجمالي المسحوبات: ${partner.totalWithdrawals.toLocaleString()} ${currencySymbol} | إجمالي المدفوعات: ${partner.totalPayments.toLocaleString()} ${currencySymbol}`,
           quantity: 1,
-          unitPrice: calc.balanceAmount,
+          unitPrice: finalBalAmount,
           taxRate: 0,
-          total: calc.balanceAmount
+          total: finalBalAmount
         }];
 
     return {
@@ -463,13 +533,13 @@ export default function PartnerBalances() {
       partnerName: partner.name,
       partnerType: partner.type,
       partnerTaxNo: partner.taxNumber,
-      paymentMethod: `الرصيد الصافي: ${calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} ${currencySymbol} (${balanceText})`,
-      notes: `الرصيد الافتتاحي: ${partner.openingBalance.toLocaleString()} | إجمالي المسحوبات: ${partner.totalWithdrawals.toLocaleString()} | إجمالي المدفوعات: ${partner.totalPayments.toLocaleString()}`,
-      subtotal: partner.totalWithdrawals,
+      paymentMethod: `الرصيد الصافي: ${finalBalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} ${currencySymbol} (${balanceText})`,
+      notes: `الرصيد الافتتاحي: ${(stmt?.openingBalance ?? partner.openingBalance).toLocaleString()} | إجمالي المدين (المسحوبات): ${(stmt?.totalDebit ?? partner.totalWithdrawals).toLocaleString()} | إجمالي الدائن (المدفوعات): ${(stmt?.totalCredit ?? partner.totalPayments).toLocaleString()} | قيود اليومية: ${stmt?.totalJournalEntries ?? 0}`,
+      subtotal: stmt?.totalDebit ?? partner.totalWithdrawals,
       taxTotal: 0,
-      grandTotal: calc.balanceAmount,
-      paidAmount: partner.totalPayments,
-      remainingAmount: calc.balanceAmount,
+      grandTotal: finalBalAmount,
+      paidAmount: stmt?.totalCredit ?? partner.totalPayments,
+      remainingAmount: finalBalAmount,
       items: txItems
     };
   };
@@ -506,8 +576,251 @@ export default function PartnerBalances() {
     };
   };
 
+  // -------------------------------------------------------------
+  // 🌟 VOUCHERS LEDGER REPORT LOGIC & HELPERS (التقرير الجديد) 🌟
+  // -------------------------------------------------------------
+  
+  // Format DateTime in a clean Arabic display
+  const formatPostingDateTime = (isoString?: string) => {
+    if (!isoString) return '';
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return isoString;
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      let hours = d.getHours();
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'م' : 'ص';
+      hours = hours % 12;
+      hours = hours ? hours : 12; // 0 => 12
+      return `${year}/${month}/${day} ${hours}:${minutes} ${ampm}`;
+    } catch {
+      return isoString;
+    }
+  };
+
+  // Filtered Vouchers
+  const filteredVouchers = useMemo(() => {
+    return vouchersList.filter(v => {
+      const vStatus = v.status || 'POSTED';
+      const vType = v.type === VoucherType.Receipt ? 'RECEIPT' : 'PAYMENT';
+      const pType = v.partnerType || (v.type === VoucherType.Receipt ? 'CUSTOMER' : 'VENDOR');
+
+      // Status filter
+      if (voucherStatusFilter !== 'ALL' && vStatus !== voucherStatusFilter) return false;
+
+      // Type filter
+      if (voucherTypeFilter !== 'ALL' && vType !== voucherTypeFilter) return false;
+
+      // Partner Type filter
+      if (voucherPartnerTypeFilter !== 'ALL' && pType !== voucherPartnerTypeFilter) return false;
+
+      // Date Range filter
+      if (voucherDateFrom && v.date < voucherDateFrom) return false;
+      if (voucherDateTo && v.date > voucherDateTo) return false;
+
+      // Search query
+      if (voucherSearchQuery.trim()) {
+        const q = voucherSearchQuery.toLowerCase();
+        const numMatch = v.voucherNumber.toLowerCase().includes(q);
+        const nameMatch = v.partnerName.toLowerCase().includes(q);
+        const descMatch = (v.description || '').toLowerCase().includes(q);
+        const accMatch = (v.accountId || '').toLowerCase().includes(q);
+        return numMatch || nameMatch || descMatch || accMatch;
+      }
+
+      return true;
+    });
+  }, [vouchersList, voucherStatusFilter, voucherTypeFilter, voucherPartnerTypeFilter, voucherDateFrom, voucherDateTo, voucherSearchQuery]);
+
+  // Vouchers Stats
+  const voucherStats = useMemo(() => {
+    let totalReceiptsPosted = 0;
+    let countReceiptsPosted = 0;
+    let totalPaymentsPosted = 0;
+    let countPaymentsPosted = 0;
+    let totalDraftAmount = 0;
+    let countDraft = 0;
+
+    vouchersList.forEach(v => {
+      const isPosted = (v.status || 'POSTED') === 'POSTED';
+      if (isPosted) {
+        if (v.type === VoucherType.Receipt) {
+          totalReceiptsPosted += v.amount;
+          countReceiptsPosted++;
+        } else {
+          totalPaymentsPosted += v.amount;
+          countPaymentsPosted++;
+        }
+      } else {
+        totalDraftAmount += v.amount;
+        countDraft++;
+      }
+    });
+
+    const netCashFlowPosted = totalReceiptsPosted - totalPaymentsPosted;
+    const filteredTotalSum = filteredVouchers.reduce((sum, v) => sum + v.amount, 0);
+
+    return {
+      totalReceiptsPosted,
+      countReceiptsPosted,
+      totalPaymentsPosted,
+      countPaymentsPosted,
+      netCashFlowPosted,
+      totalDraftAmount,
+      countDraft,
+      totalCount: vouchersList.length,
+      filteredCount: filteredVouchers.length,
+      filteredTotalSum
+    };
+  }, [vouchersList, filteredVouchers]);
+
+  // Toggle Posting status directly from the report table
+  const handleToggleVoucherPosting = (voucher: StoredVoucherRecord) => {
+    const currentStatus: 'POSTED' | 'DRAFT' = voucher.status || 'POSTED';
+    const targetStatus: 'POSTED' | 'DRAFT' = currentStatus === 'POSTED' ? 'DRAFT' : 'POSTED';
+
+    if (currentStatus === 'POSTED') {
+      if (!confirm(`هل أنت متأكد من رغبتك في إلغاء ترحيل السند رقم (#${voucher.voucherNumber})؟\nسيتم إيقاف أثره المالي على حساب (${voucher.partnerName}) وإعادته كمسودة مؤقتة.`)) {
+        return;
+      }
+    }
+
+    const res = setVoucherPostingStatus(voucher.id, voucher.type, targetStatus);
+    if (res.success) {
+      reloadVouchers();
+      if (targetStatus === 'POSTED') {
+        alert(`✅ تم ترحيل السند رقم (#${voucher.voucherNumber}) بنجاح إلى حساب (${voucher.partnerName})!`);
+      } else {
+        alert(`📝 تم إلغاء ترحيل السند رقم (#${voucher.voucherNumber}) وتحويله إلى مسودة.`);
+      }
+    }
+  };
+
+  // Preview data builder for Vouchers Report
+  const createVouchersReportPreviewData = (): PrintPreviewData => {
+    const items = filteredVouchers.map(v => {
+      const isReceipt = v.type === VoucherType.Receipt;
+      const isPosted = (v.status || 'POSTED') === 'POSTED';
+      const statusText = isPosted ? 'مرحل بالحسابات' : 'مسودة غير مرحل';
+      const postingDateText = isPosted ? (v.postedAt ? `[تاريخ الترحيل: ${formatPostingDateTime(v.postedAt)}]` : `[تاريخ الترحيل: ${v.date}]`) : '[غير مرحل]';
+      const pType = (v.partnerType || (isReceipt ? 'CUSTOMER' : 'VENDOR')) === 'CUSTOMER' ? 'عميل' : 'مورد';
+
+      return {
+        description: `${isReceipt ? 'سند قبض' : 'سند صرف'} #${v.voucherNumber} - ${v.partnerName} (${pType}) [حالة السند: ${statusText}] ${postingDateText} - ${v.description || ''}`,
+        quantity: 1,
+        unitPrice: v.amount,
+        taxRate: 0,
+        total: v.amount
+      };
+    });
+
+    return {
+      title: 'تقرير كشف حركة السندات والترحيل (قبض وصرف)',
+      subtitle: 'كشف تحليلي تفصيلي لحركات السندات المرحلة وغير المرحلة بحسابات العملاء والموردين وتواريخ اعتمادها',
+      docNumber: `VREP-${new Date().getFullYear()}-${String(filteredVouchers.length).padStart(3, '0')}`,
+      date: new Date().toISOString().split('T')[0] as string,
+      partnerName: 'كافة العملاء والموردين - حركة السندات',
+      partnerType: 'CUSTOMER',
+      paymentMethod: 'سندات قبض وصرف معتمدة',
+      notes: `إجمالي المقبوضات المرحلة: ${voucherStats.totalReceiptsPosted.toLocaleString()} ${currencySymbol} | إجمالي المدفوعات المرحلة: ${voucherStats.totalPaymentsPosted.toLocaleString()} ${currencySymbol} | صافي الأثر: ${voucherStats.netCashFlowPosted.toLocaleString()} ${currencySymbol} | مسودات غير مرحلة: ${voucherStats.countDraft} بقيمة ${voucherStats.totalDraftAmount.toLocaleString()} ${currencySymbol}`,
+      subtotal: voucherStats.filteredTotalSum,
+      grandTotal: voucherStats.filteredTotalSum,
+      paidAmount: voucherStats.totalReceiptsPosted,
+      remainingAmount: voucherStats.totalPaymentsPosted,
+      items: items.length > 0 ? items : [{
+        description: 'لا توجد سندات مطابقة لمعايير البحث والتصفية المحددة',
+        quantity: 1,
+        unitPrice: 0,
+        taxRate: 0,
+        total: 0
+      }]
+    };
+  };
+
+  // Open Partner Statement modal directly from voucher row
+  const handleOpenPartnerStatementFromVoucher = (voucher: StoredVoucherRecord) => {
+    const found = enrichedPartners.find(p => 
+      (voucher.partnerId && p.id === voucher.partnerId) || 
+      p.name.trim().toLowerCase() === voucher.partnerName.trim().toLowerCase()
+    );
+
+    if (found) {
+      setSelectedPartnerForStatement(found);
+    } else {
+      const pType = voucher.partnerType || (voucher.type === VoucherType.Receipt ? 'CUSTOMER' : 'VENDOR');
+      const tempPartner: PartnerBalanceItem = {
+        id: voucher.partnerId || `p-${Date.now()}`,
+        code: voucher.partnerId || 'PRT-999',
+        name: voucher.partnerName,
+        type: pType,
+        openingBalance: 0,
+        totalWithdrawals: voucher.type === VoucherType.Receipt ? voucher.amount : 0,
+        totalPayments: voucher.amount,
+        lastTransactionDate: voucher.date,
+        transactions: [
+          {
+            id: voucher.id,
+            date: voucher.date,
+            type: 'PAYMENT',
+            docNumber: voucher.voucherNumber,
+            description: voucher.description || (voucher.type === VoucherType.Receipt ? 'سند قبض' : 'سند صرف'),
+            debit: voucher.type === VoucherType.Payment ? voucher.amount : 0,
+            credit: voucher.type === VoucherType.Receipt ? voucher.amount : 0
+          }
+        ],
+        calc: {
+          balanceType: 'ZERO',
+          balanceAmount: 0,
+          paymentRatio: 100,
+          isOverCreditLimit: false
+        }
+      };
+      setSelectedPartnerForStatement(tempPartner);
+    }
+  };
+
+  // Preview & print a single voucher receipt directly from the table
+  const handlePrintSingleVoucher = (voucher: StoredVoucherRecord) => {
+    const isReceipt = voucher.type === VoucherType.Receipt;
+    const pType = voucher.partnerType || (isReceipt ? 'CUSTOMER' : 'VENDOR');
+    const isPosted = (voucher.status || 'POSTED') === 'POSTED';
+    const voucherPrintData: PrintPreviewData = {
+      title: isReceipt ? 'سند قبض مالي' : 'سند صرف مالي',
+      subtitle: isReceipt ? 'إشعار استلام نقدية / تحويل بنكي معتمد' : 'إشعار سداد وصرف نقدية / بنكي معتمد',
+      docNumber: voucher.voucherNumber,
+      date: voucher.date,
+      partnerName: voucher.partnerName,
+      partnerType: pType,
+      paymentMethod: voucher.accountId === 'cash' ? 'نقداً (الصندوق الرئيسي)' : 'تحويل بنكي (البنك الأهلي)',
+      notes: `${voucher.description || ''} - [حالة السند: ${isPosted ? 'مرحل ومعتمد بالحسابات' : 'مسودة غير مرحل'}] ${voucher.postedAt ? `(تاريخ الترحيل: ${formatPostingDateTime(voucher.postedAt)})` : ''}`,
+      subtotal: voucher.amount,
+      taxTotal: 0,
+      grandTotal: voucher.amount,
+      paidAmount: voucher.amount,
+      remainingAmount: 0,
+      items: [{
+        description: `دفعة بموجب ${isReceipt ? 'سند قبض' : 'سند صرف'} رقم #${voucher.voucherNumber} لحساب (${voucher.partnerName}) - البيان: ${voucher.description || 'سداد دفعات متبادلة'}`,
+        quantity: 1,
+        unitPrice: voucher.amount,
+        taxRate: 0,
+        total: voucher.amount
+      }]
+    };
+    setCustomPreviewData(voucherPrintData);
+    setShowPrintPreview(true);
+  };
+
   return (
-    <div className="flex flex-col flex-1 pb-10">
+    <>
+      <ReportPrintPreviewToolbar
+        isOpen={showReportPrintPreview}
+        onClose={() => setShowReportPrintPreview(false)}
+        title="أرصدة العملاء والموردين"
+        targetId="partner-balances-export-area"
+      />
+      <div id="partner-balances-export-area" className="flex flex-col flex-1 pb-10 print-report-target bg-slate-50/50 min-h-screen">
       
       {/* Top Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 print:hidden">
@@ -515,16 +828,26 @@ export default function PartnerBalances() {
           <div className="flex items-center gap-2 mb-1 text-slate-500">
             <span className="text-xs uppercase font-bold tracking-tight">الحسابات والتقارير المالية</span>
             <span className="text-xs">/</span>
-            <span className="text-xs uppercase font-bold tracking-tight text-indigo-600">أرصدة العملاء والموردين</span>
+            <span className="text-xs uppercase font-bold tracking-tight text-indigo-600">
+              {activeMainTab === 'BALANCES' ? 'أرصدة العملاء والموردين' : 'تقرير حركة السندات والترحيل'}
+            </span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-500 text-white flex items-center justify-center shadow-md shadow-indigo-500/20">
-              <Scale size={22} />
+            <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center shadow-md ${
+              activeMainTab === 'BALANCES' 
+                ? 'bg-gradient-to-tr from-indigo-600 to-blue-500 shadow-indigo-500/20' 
+                : 'bg-gradient-to-tr from-emerald-600 to-teal-600 shadow-emerald-500/20'
+            }`}>
+              {activeMainTab === 'BALANCES' ? <Scale size={22} /> : <Receipt size={22} />}
             </div>
             <div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">أرصدة العملاء والموردين</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
+                {activeMainTab === 'BALANCES' ? 'أرصدة العملاء والموردين' : 'تقرير حركة السندات والترحيل (قبض وصرف)'}
+              </h2>
               <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
-                متابعة دقيقة للأرصدة الدائنة والمدينة، إجمالي المسحوبات، إجمالي المدفوعات، ومطابقة الحسابات.
+                {activeMainTab === 'BALANCES' 
+                  ? 'متابعة دقيقة للأرصدة الدائنة والمدينة، إجمالي المسحوبات، إجمالي المدفوعات، ومطابقة الحسابات.'
+                  : 'كشف تحليلي تفصيلي لحركات السندات المقيدة بحسابات العملاء والموردين، موضحاً حالة السند (مرحل/غير مرحل) وتاريخ الترحيل.'}
               </p>
             </div>
           </div>
@@ -532,72 +855,279 @@ export default function PartnerBalances() {
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => {
-              setCustomPreviewData(createOverallBalancesPreviewData());
-              setShowPrintPreview(true);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
-            title="معاينة كشف الأرصدة والتقرير الشامل قبل الطباعة"
-          >
-            <Eye size={15} />
-            <span>معاينة قبل الطباعة</span>
-          </button>
+          {activeMainTab === 'BALANCES' ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowReportPrintPreview(true);
+                }}
+                className="btn-3d btn-3d-blue flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold hover:scale-105 active:scale-95 transition-all"
+                title="طباعة تقرير أرصدة العملاء والموردين"
+              >
+                <Printer size={15} />
+                <span>طباعة التقرير</span>
+              </button>
 
-          <PrintDropdown 
-            onPreview={() => {
-              setCustomPreviewData(createOverallBalancesPreviewData());
-              setShowPrintPreview(true);
-            }}
-          />
-          
-          <button
-            type="button"
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-            title="تصدير جدول الأرصدة إلى Excel / CSV"
-          >
-            <Download size={15} className="text-emerald-600" />
-            <span>تصدير تقرير</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomPreviewData(createOverallBalancesPreviewData());
+                  setShowPrintPreview(true);
+                }}
+                className="btn-3d btn-3d-indigo flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold hover:scale-105 active:scale-95 transition-all"
+                title="معاينة كشف الأرصدة والتقرير الشامل قبل الطباعة"
+              >
+                <Eye size={15} />
+                <span>معاينة قبل الطباعة</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={handleResetData}
-            className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-            title="استعادة البيانات النموذجية الأولية"
-          >
-            <RefreshCw size={14} className="text-indigo-600" />
-            <span>تحديث وتعيين</span>
-          </button>
+              <PrintDropdown 
+                onPreview={() => {
+                  setCustomPreviewData(createOverallBalancesPreviewData());
+                  setShowPrintPreview(true);
+                }}
+              />
+              
+              <ExportButtonGroup
+                title="كشف أرصدة العملاء والموردين الشامل"
+                filename="ارصدة_العملاء_والموردين"
+                headers={[
+                  'الكود',
+                  'الاسم',
+                  'النوع',
+                  'الهاتف',
+                  'الرقم الضريبي',
+                  'إجمالي المسحوبات',
+                  'إجمالي المدفوعات',
+                  'حالة الرصيد',
+                  'مبلغ الرصيد الصافي'
+                ]}
+                rows={sortedAndFilteredPartners.map(p => [
+                  p.code,
+                  p.name,
+                  p.type === 'CUSTOMER' ? 'عميل' : 'مورد',
+                  p.phone || '-',
+                  p.taxNumber || '-',
+                  p.totalWithdrawals,
+                  p.totalPayments,
+                  p.calc.balanceType === 'DEBIT' ? 'مدين (لنا)' : p.calc.balanceType === 'CREDIT' ? 'دائن (له)' : 'متزن',
+                  p.calc.balanceAmount
+                ])}
+                size="sm"
+              />
 
-          <div className="flex items-center bg-slate-200/80 p-0.5 rounded-lg text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => setViewMode('CARDS')}
-              className={`px-3 py-1.5 rounded-md transition-all cursor-pointer ${
-                viewMode === 'CARDS' 
-                  ? 'bg-white text-slate-900 shadow-xs font-bold' 
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              عرض البطاقات
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('TABLE')}
-              className={`px-3 py-1.5 rounded-md transition-all cursor-pointer ${
-                viewMode === 'TABLE' 
-                  ? 'bg-white text-slate-900 shadow-xs font-bold' 
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              الجدول الشامل
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={handleResetData}
+                className="btn-3d btn-3d-white flex items-center gap-1.5 px-3.5 py-2 text-slate-700 text-xs font-bold hover:scale-105 active:scale-95 transition-all"
+                title="استعادة البيانات النموذجية الأولية"
+              >
+                <RefreshCw size={14} className="text-indigo-600" />
+                <span>تحديث وتعيين</span>
+              </button>
+
+              <div className="flex items-center gap-1.5 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('CARDS')}
+                  className={`px-3 py-1.5 text-xs rounded-xl transition-all cursor-pointer hover:scale-105 active:scale-95 ${
+                    viewMode === 'CARDS' 
+                      ? 'btn-3d btn-3d-blue text-white font-bold' 
+                      : 'btn-3d btn-3d-white text-slate-600'
+                  }`}
+                >
+                  عرض البطاقات
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('TABLE')}
+                  className={`px-3 py-1.5 text-xs rounded-xl transition-all cursor-pointer hover:scale-105 active:scale-95 ${
+                    viewMode === 'TABLE' 
+                      ? 'btn-3d btn-3d-blue text-white font-bold' 
+                      : 'btn-3d btn-3d-white text-slate-600'
+                  }`}
+                >
+                  الجدول الشامل
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomPreviewData(createVouchersReportPreviewData());
+                  setShowPrintPreview(true);
+                }}
+                className="btn-3d btn-3d-emerald flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold hover:scale-105 active:scale-95 transition-all"
+                title="معاينة كشف حركة السندات والترحيل قبل الطباعة"
+              >
+                <Eye size={15} />
+                <span>معاينة كشف السندات</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomPreviewData(createVouchersReportPreviewData());
+                  setShowPrintPreview(true);
+                }}
+                className="btn-3d btn-3d-slate flex items-center gap-1.5 px-3.5 py-2 text-white text-xs font-bold hover:scale-105 active:scale-95 transition-all"
+                title="طباعة التقرير"
+              >
+                <Printer size={15} />
+                <span>طباعة التقرير</span>
+              </button>
+
+              <ExportButtonGroup
+                title="كشف حركة السندات والترحيل المحاسبي"
+                filename="كشف_حركة_السندات_المرحلة"
+                headers={[
+                  'رقم السند',
+                  'نوع السند',
+                  'تاريخ السند',
+                  'اسم الطرف',
+                  'نوع الطرف',
+                  'الحساب / الخزينة',
+                  'المبلغ',
+                  'حالة السند',
+                  'تاريخ ووقت الترحيل',
+                  'البيان والشرح'
+                ]}
+                rows={filteredVouchers.map(v => {
+                  const isPosted = (v.status || 'POSTED') === 'POSTED';
+                  const typeLabel = v.type === VoucherType.Receipt ? 'سند قبض' : 'سند صرف';
+                  const pType = v.partnerType || (v.type === VoucherType.Receipt ? 'CUSTOMER' : 'VENDOR');
+                  const partnerTypeLabel = pType === 'CUSTOMER' ? 'عميل' : 'مورد';
+                  const accountLabel = v.accountId === 'cash' ? 'الصندوق الرئيسي (نقداً)' : 'البنك الأهلي (تحويل بنكي)';
+                  const statusLabel = isPosted ? 'مرحل بالحسابات' : 'مسودة (غير مرحل)';
+                  const postingDateLabel = isPosted ? (v.postedAt ? formatPostingDateTime(v.postedAt) : `${v.date} (معتمد)`) : 'غير مرحل';
+
+                  return [
+                    v.voucherNumber,
+                    typeLabel,
+                    v.date,
+                    v.partnerName,
+                    partnerTypeLabel,
+                    accountLabel,
+                    v.amount,
+                    statusLabel,
+                    postingDateLabel,
+                    v.description || ''
+                  ];
+                })}
+                filterSummary={`إجمالي السندات: ${filteredVouchers.length} | المقبوضات: ${voucherStats.totalReceiptsPosted.toLocaleString()} | المدفوعات: ${voucherStats.totalPaymentsPosted.toLocaleString()}`}
+                size="sm"
+              />
+
+              <button
+                type="button"
+                onClick={() => setShowExportModal(true)}
+                className="btn-3d btn-3d-indigo flex items-center gap-1.5 px-3.5 py-2 text-white text-xs font-bold hover:scale-105 active:scale-95 transition-all"
+                title="تصدير مخصص ومتقدم مع فلاتر زمنية"
+              >
+                <FileSpreadsheet size={15} />
+                <span>تصدير مخصص</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={reloadVouchers}
+                className="btn-3d btn-3d-white flex items-center gap-1.5 px-3.5 py-2 text-slate-700 text-xs font-bold hover:scale-105 active:scale-95 transition-all"
+                title="إعادة تحميل السندات من التخزين"
+              >
+                <RefreshCw size={14} className="text-emerald-600" />
+                <span>تحديث السندات</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Main Navigation Tabs */}
+      <div className="flex items-center gap-1.5 sm:gap-2 mb-6 border-b border-slate-200 pb-3 print:hidden overflow-x-auto no-scrollbar scroll-smooth py-1 -mx-1 px-1 sm:mx-0 sm:px-0 sm:flex-wrap">
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('BALANCES')}
+          className={`btn-3d flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0 ${
+            activeMainTab === 'BALANCES'
+              ? 'btn-3d-indigo text-white'
+              : 'btn-3d-white text-slate-700'
+          }`}
+        >
+          <Scale size={16} className="shrink-0" />
+          <span className="whitespace-nowrap">أرصدة العملاء والموردين</span>
+          <span className="hidden md:inline text-xs opacity-80 whitespace-nowrap">(الكشف الشامل)</span>
+          <span className={`text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full font-mono font-bold shrink-0 ${
+            activeMainTab === 'BALANCES' ? 'bg-indigo-800 text-white' : 'bg-slate-100 text-slate-600'
+          }`}>
+            {enrichedPartners.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('VOUCHERS_LEDGER')}
+          className={`btn-3d flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0 ${
+            activeMainTab === 'VOUCHERS_LEDGER'
+              ? 'btn-3d-success text-white'
+              : 'btn-3d-white text-slate-700'
+          }`}
+        >
+          <Receipt size={16} className={`shrink-0 ${activeMainTab === 'VOUCHERS_LEDGER' ? 'text-white' : 'text-emerald-600'}`} />
+          <span className="whitespace-nowrap">حركة السندات والترحيل</span>
+          <span className="hidden md:inline text-xs opacity-80 whitespace-nowrap">(قبض وصرف)</span>
+          <span className={`text-[10px] sm:text-[11px] px-2 sm:px-2.5 py-0.5 rounded-full font-mono font-bold shrink-0 ${
+            activeMainTab === 'VOUCHERS_LEDGER' ? 'bg-emerald-800 text-white' : 'bg-emerald-100 text-emerald-800'
+          }`}>
+            {voucherStats.countReceiptsPosted + voucherStats.countPaymentsPosted} <span className="hidden sm:inline">مرحل</span>
+          </span>
+          {voucherStats.countDraft > 0 && (
+            <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-mono font-bold shrink-0 ${
+              activeMainTab === 'VOUCHERS_LEDGER' ? 'bg-amber-400 text-slate-900' : 'bg-amber-100 text-amber-800'
+            }`}>
+              {voucherStats.countDraft} <span className="hidden sm:inline">مسودة</span>
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('AGING')}
+          className={`btn-3d flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0 ${
+            activeMainTab === 'AGING'
+              ? 'btn-3d-red text-white shadow-sm'
+              : 'btn-3d-white text-rose-700 border-rose-200 hover:border-rose-300 hover:bg-rose-50/50'
+          }`}
+          title="تحليل أعمار الديون والذمم"
+        >
+          <Clock size={16} className={`shrink-0 ${activeMainTab === 'AGING' ? 'text-white' : 'text-rose-600'}`} />
+          <span className="whitespace-nowrap">تحليل أعمار الديون والذمم</span>
+          <span className={`text-[10px] sm:text-[11px] px-2 sm:px-2.5 py-0.5 rounded-full font-mono font-bold shrink-0 ${
+            activeMainTab === 'AGING' ? 'bg-rose-950/60 text-white' : 'bg-rose-100 text-rose-800'
+          }`}>
+            {debtorsSummary.count + creditorsSummary.count} <span className="hidden sm:inline">رصيد نشط</span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('alpha-navigate', { detail: { view: 'trialBalance' } }));
+          }}
+          className="btn-3d btn-3d-slate flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0 sm:mr-auto"
+          title="الانتقال إلى ميزان المراجعة لمطابقة حسابات ذمم العملاء (1201) وذمم الموردين (2101)"
+        >
+          <Scale size={15} className="text-blue-400 shrink-0" />
+          <span className="whitespace-nowrap">ميزان المراجعة</span>
+          <span className="hidden lg:inline whitespace-nowrap"> والمطابقة المحاسبية</span>
+          <span className="text-xs">←</span>
+        </button>
+      </div>
+
+      {activeMainTab === 'BALANCES' && (
+        <>
 
       {/* 🌟 GRAND TOTALS PANEL: إجمالي مسحوبات الجميع وإجمالي مدفوعات الجميع والأرصدة الكلية 🌟 */}
       <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-5 sm:p-6 text-white shadow-xl mb-7 relative overflow-hidden border border-indigo-800/40">
@@ -624,76 +1154,110 @@ export default function PartnerBalances() {
             </div>
           </div>
 
-          {/* 4 Main Grand Metric Blocks */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 6 Main Grand Metric Blocks */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             
-            {/* 1. إجمالي مسحوبات الجميع */}
+            {/* 1. إجمالي المبيعات */}
             <div className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition-colors backdrop-blur-xs flex flex-col justify-between">
               <div className="flex items-center justify-between text-slate-300 mb-2">
-                <span className="text-xs font-semibold text-blue-200">إجمالي مسحوبات الجميع</span>
-                <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
-                  <Receipt size={17} />
+                <span className="text-xs font-semibold text-blue-200">إجمالي المبيعات</span>
+                <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                  <Receipt size={15} />
                 </div>
               </div>
-              <div className="text-2xl sm:text-3xl font-bold font-mono text-white tracking-tight">
-                {grandTotals.grandWithdrawals.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                <span className="text-xs font-normal text-slate-400 mr-1.5">{currencySymbol}</span>
+              <div className="text-xl sm:text-2xl font-bold font-mono text-white tracking-tight">
+                {grandTotals.totalSalesInvoices.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <span className="text-[10px] font-normal text-slate-400 mr-1.5">{currencySymbol}</span>
               </div>
-              <div className="text-[11px] text-slate-400 mt-2 flex items-center gap-1">
-                <span>كافة فواتير المبيعات + فواتير الشراء المستلمة</span>
+              <div className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+                <span>مسحوبات العملاء</span>
               </div>
             </div>
 
-            {/* 2. إجمالي مدفوعات الجميع */}
+            {/* 2. مقبوضات العملاء */}
             <div className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition-colors backdrop-blur-xs flex flex-col justify-between">
               <div className="flex items-center justify-between text-slate-300 mb-2">
-                <span className="text-xs font-semibold text-emerald-200">إجمالي مدفوعات الجميع</span>
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                  <Wallet size={17} />
+                <span className="text-xs font-semibold text-emerald-200">مقبوضات العملاء</span>
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <Wallet size={15} />
                 </div>
               </div>
-              <div className="text-2xl sm:text-3xl font-bold font-mono text-emerald-300 tracking-tight">
-                {grandTotals.grandPayments.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                <span className="text-xs font-normal text-slate-400 mr-1.5">{currencySymbol}</span>
+              <div className="text-xl sm:text-2xl font-bold font-mono text-emerald-300 tracking-tight">
+                {grandTotals.totalCustomerReceipts.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <span className="text-[10px] font-normal text-slate-400 mr-1.5">{currencySymbol}</span>
               </div>
-              <div className="text-[11px] text-slate-400 mt-2 flex items-center gap-1">
-                <span>سندات القبض الواردة + سندات الصرف المسددة</span>
+              <div className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+                <span>سندات قبض واردة</span>
               </div>
             </div>
 
-            {/* 3. إجمالي أرصدة المدينين (مستحقات لنا) */}
+            {/* 3. إجمالي المشتريات */}
             <div className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition-colors backdrop-blur-xs flex flex-col justify-between">
               <div className="flex items-center justify-between text-slate-300 mb-2">
-                <span className="text-xs font-semibold text-cyan-200">إجمالي أرصدة المدينين (لنا)</span>
-                <div className="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
-                  <ArrowUpRight size={17} />
+                <span className="text-xs font-semibold text-purple-200">إجمالي المشتريات</span>
+                <div className="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                  <Receipt size={15} />
                 </div>
               </div>
-              <div className="text-2xl sm:text-3xl font-bold font-mono text-cyan-300 tracking-tight">
+              <div className="text-xl sm:text-2xl font-bold font-mono text-purple-100 tracking-tight">
+                {grandTotals.totalPurchaseInvoices.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <span className="text-[10px] font-normal text-slate-400 mr-1.5">{currencySymbol}</span>
+              </div>
+              <div className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+                <span>مسحوبات الموردين</span>
+              </div>
+            </div>
+
+            {/* 4. مدفوعات الموردين */}
+            <div className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition-colors backdrop-blur-xs flex flex-col justify-between">
+              <div className="flex items-center justify-between text-slate-300 mb-2">
+                <span className="text-xs font-semibold text-orange-200">مدفوعات الموردين</span>
+                <div className="w-7 h-7 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center">
+                  <Wallet size={15} />
+                </div>
+              </div>
+              <div className="text-xl sm:text-2xl font-bold font-mono text-orange-300 tracking-tight">
+                {grandTotals.totalVendorPayments.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <span className="text-[10px] font-normal text-slate-400 mr-1.5">{currencySymbol}</span>
+              </div>
+              <div className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+                <span>سندات صرف مسددة</span>
+              </div>
+            </div>
+
+            {/* 5. إجمالي أرصدة المدينين (مستحقات لنا) */}
+            <div className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition-colors backdrop-blur-xs flex flex-col justify-between">
+              <div className="flex items-center justify-between text-slate-300 mb-2">
+                <span className="text-xs font-semibold text-cyan-200">أرصدة مدينين (لنا)</span>
+                <div className="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+                  <ArrowUpRight size={15} />
+                </div>
+              </div>
+              <div className="text-xl sm:text-2xl font-bold font-mono text-cyan-300 tracking-tight">
                 {grandTotals.totalDebitSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                <span className="text-xs font-normal text-slate-400 mr-1.5">{currencySymbol}</span>
+                <span className="text-[10px] font-normal text-slate-400 mr-1.5">{currencySymbol}</span>
               </div>
-              <div className="text-[11px] text-cyan-200/70 mt-2 flex items-center justify-between">
-                <span>مستحقات على العملاء والموردين</span>
+              <div className="text-[10px] text-cyan-200/70 mt-2 flex items-center justify-between">
+                <span>مستحقات لنا</span>
                 <span className="font-mono bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded text-[10px]">
                   {grandTotals.debtorCount} حساب
                 </span>
               </div>
             </div>
 
-            {/* 4. إجمالي أرصدة الدائنين (التزامات علينا) */}
+            {/* 6. إجمالي أرصدة الدائنين (التزامات علينا) */}
             <div className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition-colors backdrop-blur-xs flex flex-col justify-between">
               <div className="flex items-center justify-between text-slate-300 mb-2">
-                <span className="text-xs font-semibold text-amber-200">إجمالي أرصدة الدائنين (علينا)</span>
-                <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
-                  <ArrowDownLeft size={17} />
+                <span className="text-xs font-semibold text-amber-200">أرصدة دائنين (علينا)</span>
+                <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                  <ArrowDownLeft size={15} />
                 </div>
               </div>
-              <div className="text-2xl sm:text-3xl font-bold font-mono text-amber-300 tracking-tight">
+              <div className="text-xl sm:text-2xl font-bold font-mono text-amber-300 tracking-tight">
                 {grandTotals.totalCreditSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                <span className="text-xs font-normal text-slate-400 mr-1.5">{currencySymbol}</span>
+                <span className="text-[10px] font-normal text-slate-400 mr-1.5">{currencySymbol}</span>
               </div>
-              <div className="text-[11px] text-amber-200/70 mt-2 flex items-center justify-between">
+              <div className="text-[10px] text-amber-200/70 mt-2 flex items-center justify-between">
                 <span>التزامات للموردين وأرصدة مقدمة</span>
                 <span className="font-mono bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded text-[10px]">
                   {grandTotals.creditorCount} حساب
@@ -756,12 +1320,12 @@ export default function PartnerBalances() {
         <div className="flex flex-wrap items-center gap-2">
           
           {/* Partner Type Filter */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-lg text-xs font-semibold">
+          <div className="flex items-center gap-1.5 text-xs font-semibold">
             <button
               type="button"
               onClick={() => setPartnerTypeFilter('ALL')}
-              className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
-                partnerTypeFilter === 'ALL' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`px-2.5 py-1 text-xs rounded-xl transition-all cursor-pointer hover:scale-105 active:scale-95 ${
+                partnerTypeFilter === 'ALL' ? 'btn-3d btn-3d-blue text-white font-bold' : 'btn-3d btn-3d-white text-slate-600'
               }`}
             >
               الجميع
@@ -769,8 +1333,8 @@ export default function PartnerBalances() {
             <button
               type="button"
               onClick={() => setPartnerTypeFilter('CUSTOMER')}
-              className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer flex items-center gap-1 ${
-                partnerTypeFilter === 'CUSTOMER' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`px-2.5 py-1 text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1 hover:scale-105 active:scale-95 ${
+                partnerTypeFilter === 'CUSTOMER' ? 'btn-3d btn-3d-blue text-white font-bold' : 'btn-3d btn-3d-white text-slate-600'
               }`}
             >
               <Users size={12} /> العملاء فقط
@@ -778,8 +1342,8 @@ export default function PartnerBalances() {
             <button
               type="button"
               onClick={() => setPartnerTypeFilter('VENDOR')}
-              className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer flex items-center gap-1 ${
-                partnerTypeFilter === 'VENDOR' ? 'bg-white text-purple-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`px-2.5 py-1 text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1 hover:scale-105 active:scale-95 ${
+                partnerTypeFilter === 'VENDOR' ? 'btn-3d btn-3d-purple text-white font-bold' : 'btn-3d btn-3d-white text-slate-600'
               }`}
             >
               <Truck size={12} /> الموردون فقط
@@ -790,12 +1354,13 @@ export default function PartnerBalances() {
           <select
             value={balanceFilter}
             onChange={e => setBalanceFilter(e.target.value as any)}
-            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500"
+            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg px-3 py-2 focus:outline-hidden focus:border-indigo-500"
           >
             <option value="ALL">جميع الحالات (مدين ودائن)</option>
             <option value="DEBIT">المدينون فقط (لنا عندهم)</option>
             <option value="CREDIT">الدائنون فقط (لهم عندنا)</option>
             <option value="ZERO">الحسابات المصفّرة (رصيد صفر)</option>
+            <option value="OVER_LIMIT">⚠️ المتجاوزون للحد الائتماني فقط</option>
           </select>
 
         </div>
@@ -811,7 +1376,10 @@ export default function PartnerBalances() {
           {/* ============================================================ */}
           {/* 🔴 CARD 1: بطاقة أرصدة العملاء والموردين الدائنين (CREDITORS) */}
           {/* ============================================================ */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md">
+          <div 
+            onClick={() => setShowCreditorsModal(true)}
+            className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md cursor-pointer hover:border-amber-300"
+          >
             
             {/* Card Header */}
             <div className="p-5 bg-gradient-to-r from-amber-500/10 via-amber-50 to-orange-50/50 border-b border-amber-200/60 flex items-center justify-between">
@@ -842,7 +1410,6 @@ export default function PartnerBalances() {
                 </span>
                 <span className="text-[10px] text-slate-400">توريدات وفواتير</span>
               </div>
-
               <div className="px-2">
                 <span className="text-[11px] text-slate-500 font-medium block">إجمالي مدفوعاتهم</span>
                 <span className="text-sm sm:text-base font-bold font-mono text-emerald-600 mt-0.5 block">
@@ -850,7 +1417,6 @@ export default function PartnerBalances() {
                 </span>
                 <span className="text-[10px] text-slate-400">مبالغ مسددة</span>
               </div>
-
               <div className="px-2">
                 <span className="text-[11px] text-amber-700 font-bold block">صافي الرصيد الدائن</span>
                 <span className="text-sm sm:text-base font-bold font-mono text-amber-600 mt-0.5 block">
@@ -860,67 +1426,14 @@ export default function PartnerBalances() {
               </div>
             </div>
 
-            {/* Creditors List Table */}
-            <div className="flex-1 overflow-x-auto divide-y divide-slate-100">
-              {creditorsList.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-sm">
-                  لا توجد حسابات دائنة مطابقة للشروط الحالية.
-                </div>
-              ) : (
-                creditorsList.map(item => (
-                  <div 
-                    key={item.id}
-                    className="p-4 hover:bg-amber-50/30 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs ${
-                        item.type === 'CUSTOMER' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                      }`}>
-                        {item.type === 'CUSTOMER' ? <Users size={16} /> : <Truck size={16} />}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-slate-900 text-sm">{item.name}</span>
-                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
-                            item.type === 'CUSTOMER' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-purple-50 text-purple-700 border border-purple-200'
-                          }`}>
-                            {item.type === 'CUSTOMER' ? 'عميل (دفعة مقدمة)' : 'مورد'}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-slate-400 mt-0.5">
-                          <span className="font-mono">{item.code}</span>
-                          {item.phone && <span>هاتف: {item.phone}</span>}
-                          <span>آخر حركة: {item.lastTransactionDate}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Financial details per creditor */}
-                    <div className="flex items-center justify-between sm:justify-end gap-5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                      <div className="flex flex-col text-left">
-                        <span className="text-[10px] text-slate-400">إجمالي المسحوبات: <strong className="font-mono text-slate-700">{item.totalWithdrawals.toLocaleString()}</strong></span>
-                        <span className="text-[10px] text-slate-400">إجمالي المدفوعات: <strong className="font-mono text-emerald-600">{item.totalPayments.toLocaleString()}</strong></span>
-                      </div>
-
-                      <div className="flex flex-col items-end">
-                        <span className="text-xs font-bold text-amber-600 font-mono text-base">
-                          {item.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
-                        </span>
-                        <span className="text-[10px] text-amber-700 font-semibold">رصيد دائن (له)</span>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPartnerForStatement(item)}
-                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200 transition-colors cursor-pointer"
-                        title="عرض كشف الحساب التفصيلي"
-                      >
-                        <Eye size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
+            <div className="p-6 flex justify-center items-center flex-1 bg-white">
+               <button 
+                 onClick={() => setShowCreditorsModal(true)}
+                 className="px-6 py-2.5 bg-amber-50 text-amber-700 font-bold rounded-xl border border-amber-200 hover:bg-amber-100 hover:text-amber-800 transition-colors flex items-center gap-2 w-full justify-center sm:w-auto"
+               >
+                 <Eye size={18} />
+                 عرض قائمة الحسابات الدائنة ({creditorsSummary.count})
+               </button>
             </div>
 
             {/* Card Footer */}
@@ -939,7 +1452,10 @@ export default function PartnerBalances() {
           {/* ============================================================ */}
           {/* 🟢 CARD 2: بطاقة أرصدة العملاء والموردين المدينين (DEBTORS)   */}
           {/* ============================================================ */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md">
+          <div 
+            onClick={() => setShowDebtorsModal(true)}
+            className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md cursor-pointer hover:border-emerald-300"
+          >
             
             {/* Card Header */}
             <div className="p-5 bg-gradient-to-r from-emerald-500/10 via-emerald-50 to-teal-50/50 border-b border-emerald-200/60 flex items-center justify-between">
@@ -989,66 +1505,14 @@ export default function PartnerBalances() {
             </div>
 
             {/* Debtors List Table */}
-            <div className="flex-1 overflow-x-auto divide-y divide-slate-100">
-              {debtorsList.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-sm">
-                  لا توجد حسابات مدينة مطابقة للشروط الحالية.
-                </div>
-              ) : (
-                debtorsList.map(item => (
-                  <div 
-                    key={item.id}
-                    className="p-4 hover:bg-emerald-50/30 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs ${
-                        item.type === 'CUSTOMER' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                      }`}>
-                        {item.type === 'CUSTOMER' ? <Users size={16} /> : <Truck size={16} />}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-slate-900 text-sm">{item.name}</span>
-                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
-                            item.type === 'CUSTOMER' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-purple-50 text-purple-700 border border-purple-200'
-                          }`}>
-                            {item.type === 'CUSTOMER' ? 'عميل' : 'مورد (دفعة مقدمة)'}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-slate-400 mt-0.5">
-                          <span className="font-mono">{item.code}</span>
-                          {item.phone && <span>هاتف: {item.phone}</span>}
-                          <span>آخر حركة: {item.lastTransactionDate}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Financial details per debtor */}
-                    <div className="flex items-center justify-between sm:justify-end gap-5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                      <div className="flex flex-col text-left">
-                        <span className="text-[10px] text-slate-400">إجمالي المسحوبات: <strong className="font-mono text-slate-700">{item.totalWithdrawals.toLocaleString()}</strong></span>
-                        <span className="text-[10px] text-slate-400">إجمالي المدفوعات: <strong className="font-mono text-emerald-600">{item.totalPayments.toLocaleString()}</strong></span>
-                      </div>
-
-                      <div className="flex flex-col items-end">
-                        <span className="text-xs font-bold text-emerald-600 font-mono text-base">
-                          {item.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
-                        </span>
-                        <span className="text-[10px] text-emerald-700 font-semibold">رصيد مدين (عليه)</span>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPartnerForStatement(item)}
-                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200 transition-colors cursor-pointer"
-                        title="عرض كشف الحساب التفصيلي"
-                      >
-                        <Eye size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
+            <div className="p-6 flex justify-center items-center flex-1 bg-white">
+               <button 
+                 onClick={() => setShowDebtorsModal(true)}
+                 className="px-6 py-2.5 bg-emerald-50 text-emerald-700 font-bold rounded-xl border border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 transition-colors flex items-center gap-2 w-full justify-center sm:w-auto"
+               >
+                 <Eye size={18} />
+                 عرض قائمة الحسابات المدينة ({debtorsSummary.count})
+               </button>
             </div>
 
             {/* Card Footer */}
@@ -1100,20 +1564,137 @@ export default function PartnerBalances() {
           <table className="w-full text-right border-collapse text-xs">
             <thead>
               <tr className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
-                <th className="p-3.5 text-right">كود الحساب</th>
-                <th className="p-3.5 text-right">الاسم التجاري / الشركة</th>
-                <th className="p-3.5 text-center">النوع</th>
-                <th className="p-3.5 text-left font-mono">الرصيد الافتتاحي</th>
-                <th className="p-3.5 text-left font-mono text-blue-700 font-bold">إجمالي المسحوبات</th>
-                <th className="p-3.5 text-left font-mono text-emerald-700 font-bold">إجمالي المدفوعات</th>
-                <th className="p-3.5 text-center">نسبة السداد</th>
-                <th className="p-3.5 text-left font-mono text-slate-900 font-bold">الرصيد الصافي الحالي</th>
-                <th className="p-3.5 text-center">الحالة</th>
-                <th className="p-3.5 text-center print:hidden">كشف حساب</th>
+                <th className="p-3 text-right">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('code')}
+                    className="inline-flex items-center gap-1 font-bold text-slate-700 hover:text-indigo-600 transition-colors cursor-pointer"
+                  >
+                    <span>كود الحساب</span>
+                    {sortField === 'code' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-indigo-600" /> : <ArrowDown size={13} className="text-indigo-600" />
+                    ) : (
+                      <ArrowUpDown size={12} className="text-slate-400" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-3 text-right">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('name')}
+                    className="inline-flex items-center gap-1 font-bold text-slate-700 hover:text-indigo-600 transition-colors cursor-pointer"
+                  >
+                    <span>الاسم التجاري / الشركة</span>
+                    {sortField === 'name' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-indigo-600" /> : <ArrowDown size={13} className="text-indigo-600" />
+                    ) : (
+                      <ArrowUpDown size={12} className="text-slate-400" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-3 text-center">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('type')}
+                    className="inline-flex items-center gap-1 font-bold text-slate-700 hover:text-indigo-600 transition-colors cursor-pointer"
+                  >
+                    <span>النوع</span>
+                    {sortField === 'type' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-indigo-600" /> : <ArrowDown size={13} className="text-indigo-600" />
+                    ) : (
+                      <ArrowUpDown size={12} className="text-slate-400" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-3 text-left font-mono">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('opening')}
+                    className="inline-flex items-center gap-1 font-bold text-slate-700 hover:text-indigo-600 transition-colors cursor-pointer"
+                  >
+                    <span>الرصيد الافتتاحي</span>
+                    {sortField === 'opening' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-indigo-600" /> : <ArrowDown size={13} className="text-indigo-600" />
+                    ) : (
+                      <ArrowUpDown size={12} className="text-slate-400" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-3 text-left font-mono text-blue-700 font-bold">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('withdrawals')}
+                    className="inline-flex items-center gap-1 font-bold text-blue-700 hover:text-blue-900 transition-colors cursor-pointer"
+                  >
+                    <span>إجمالي المسحوبات</span>
+                    {sortField === 'withdrawals' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-blue-600" /> : <ArrowDown size={13} className="text-blue-600" />
+                    ) : (
+                      <ArrowUpDown size={12} className="text-slate-400" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-3 text-left font-mono text-emerald-700 font-bold">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('payments')}
+                    className="inline-flex items-center gap-1 font-bold text-emerald-700 hover:text-emerald-900 transition-colors cursor-pointer"
+                  >
+                    <span>إجمالي المدفوعات</span>
+                    {sortField === 'payments' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-emerald-600" /> : <ArrowDown size={13} className="text-emerald-600" />
+                    ) : (
+                      <ArrowUpDown size={12} className="text-slate-400" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-3 text-center">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('ratio')}
+                    className="inline-flex items-center gap-1 font-bold text-slate-700 hover:text-indigo-600 transition-colors cursor-pointer"
+                  >
+                    <span>نسبة السداد</span>
+                    {sortField === 'ratio' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-indigo-600" /> : <ArrowDown size={13} className="text-indigo-600" />
+                    ) : (
+                      <ArrowUpDown size={12} className="text-slate-400" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-3 text-left font-mono text-slate-900 font-bold">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('balance')}
+                    className="inline-flex items-center gap-1 font-bold text-slate-900 hover:text-indigo-600 transition-colors cursor-pointer"
+                  >
+                    <span>الرصيد الصافي الحالي</span>
+                    {sortField === 'balance' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-indigo-600" /> : <ArrowDown size={13} className="text-indigo-600" />
+                    ) : (
+                      <ArrowUpDown size={12} className="text-slate-400" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-3 text-center">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('status')}
+                    className="inline-flex items-center gap-1 font-bold text-slate-700 hover:text-indigo-600 transition-colors cursor-pointer"
+                  >
+                    <span>الحالة</span>
+                    {sortField === 'status' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-indigo-600" /> : <ArrowDown size={13} className="text-indigo-600" />
+                    ) : (
+                      <ArrowUpDown size={12} className="text-slate-400" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-3 text-center print:hidden">إجراءات المتابعة والعمليات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredPartners.map(p => {
+              {sortedAndFilteredPartners.map(p => {
                 const isDebit = p.calc.balanceType === 'DEBIT';
                 const isCredit = p.calc.balanceType === 'CREDIT';
                 return (
@@ -1123,10 +1704,30 @@ export default function PartnerBalances() {
                   >
                     <td className="p-3.5 font-mono text-slate-500 font-semibold">{p.code}</td>
                     <td className="p-3.5">
-                      <div className="font-bold text-slate-900">{p.name}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
-                        {p.phone && <span className="mr-2">هاتف: {p.phone}</span>}
-                        {p.taxNumber && <span>ضريبي: {p.taxNumber}</span>}
+                      <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                        <span>{p.name}</span>
+                        {p.calc.isOverCreditLimit && (
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-black bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded border border-rose-200">
+                            <AlertTriangle size={10} /> تجاوز الحد
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                        {p.phone && (
+                          <span className="flex items-center gap-1 font-mono">
+                            <span>هاتف:</span>
+                            <span dir="ltr">{p.phone}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyPhone(p.id, p.phone!)}
+                              className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                              title="نسخ رقم الهاتف"
+                            >
+                              {phoneCopiedId === p.id ? <Check size={11} className="text-emerald-600" /> : <Copy size={11} />}
+                            </button>
+                          </span>
+                        )}
+                        {p.taxNumber && <span>ضريبي: <span className="font-mono">{p.taxNumber}</span></span>}
                       </div>
                     </td>
                     <td className="p-3.5 text-center">
@@ -1181,20 +1782,69 @@ export default function PartnerBalances() {
                         {isDebit ? 'مدين (لنا)' : isCredit ? 'دائن (له)' : 'متزن'}
                       </span>
                     </td>
-                    <td className="p-3.5 text-center print:hidden">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPartnerForStatement(p)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-200 transition-colors cursor-pointer"
-                      >
-                        <Eye size={12} /> كشف
-                      </button>
+                    <td className="p-3.5 text-center print:hidden whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1">
+                        
+                        {/* Quick Receipt (if Debit) or Quick Payment (if Credit) */}
+                        {isDebit && p.calc.balanceAmount > 0.01 ? (
+                          <button
+                            type="button"
+                            onClick={() => handleQuickVoucher(p, 'RECEIPT')}
+                            className="btn-3d btn-3d-success-soft px-2 py-1 text-[11px] font-black flex items-center gap-0.5 hover:scale-105 active:scale-95 transition-all"
+                            title="تحصيل وقبض فوري لحساب هذا الطرف"
+                          >
+                            <ArrowDownLeft size={12} /> قبض
+                          </button>
+                        ) : isCredit && p.calc.balanceAmount > 0.01 ? (
+                          <button
+                            type="button"
+                            onClick={() => handleQuickVoucher(p, 'PAYMENT')}
+                            className="btn-3d btn-3d-warning-soft px-2 py-1 text-[11px] font-black flex items-center gap-0.5 hover:scale-105 active:scale-95 transition-all"
+                            title="سداد وصرف فوري لحساب هذا الطرف"
+                          >
+                            <ArrowUpRight size={12} /> صرف
+                          </button>
+                        ) : null}
+
+                        {/* WhatsApp Balance Notification */}
+                        {p.phone && (
+                          <button
+                            type="button"
+                            onClick={() => handleSendWhatsAppNotice(p)}
+                            className="btn-3d btn-3d-white p-1 text-emerald-600 hover:text-emerald-700 hover:scale-105 active:scale-95 transition-all"
+                            title="إرسال إشعار رصيد عبر واتساب"
+                          >
+                            <MessageSquare size={13} />
+                          </button>
+                        )}
+
+                        {/* Balance Confirmation Letter */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPartnerForConfirmation(p)}
+                          className="btn-3d btn-3d-white p-1 text-indigo-600 hover:text-indigo-800 hover:scale-105 active:scale-95 transition-all"
+                          title="إصدار خطاب مصادقة وتأكيد رصيد رسمي"
+                        >
+                          <FileCheck size={13} />
+                        </button>
+
+                        {/* Detailed Statement View */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPartnerForStatement(p)}
+                          className="btn-3d btn-3d-blue px-2.5 py-1 text-xs font-bold flex items-center gap-1 hover:scale-105 active:scale-95 transition-all"
+                          title="عرض كشف الحساب التفصيلي"
+                        >
+                          <Eye size={12} /> كشف
+                        </button>
+
+                      </div>
                     </td>
                   </tr>
                 );
               })}
 
-              {filteredPartners.length === 0 && (
+              {sortedAndFilteredPartners.length === 0 && (
                 <tr>
                   <td colSpan={10} className="p-8 text-center text-slate-400 text-sm">
                     لا توجد بيانات مطابقة لمعايير البحث.
@@ -1205,17 +1855,17 @@ export default function PartnerBalances() {
             <tfoot className="bg-slate-100 border-t-2 border-slate-300 font-bold text-slate-900">
               <tr>
                 <td colSpan={4} className="p-3.5 text-right font-bold text-sm">
-                  المجموع الكلي ({filteredPartners.length} طرف تعامل):
+                  المجموع الكلي ({sortedAndFilteredPartners.length} طرف تعامل):
                 </td>
                 <td className="p-3.5 text-left font-mono text-blue-700 text-sm">
-                  {filteredPartners.reduce((acc, p) => acc + p.totalWithdrawals, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  {sortedAndFilteredPartners.reduce((acc, p) => acc + p.totalWithdrawals, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </td>
                 <td className="p-3.5 text-left font-mono text-emerald-700 text-sm">
-                  {filteredPartners.reduce((acc, p) => acc + p.totalPayments, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  {sortedAndFilteredPartners.reduce((acc, p) => acc + p.totalPayments, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </td>
                 <td></td>
                 <td className="p-3.5 text-left font-mono text-slate-900 text-sm">
-                  {filteredPartners.reduce((acc, p) => acc + p.calc.balanceAmount, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
+                  {sortedAndFilteredPartners.reduce((acc, p) => acc + p.calc.balanceAmount, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
                 </td>
                 <td colSpan={2}></td>
               </tr>
@@ -1224,6 +1874,690 @@ export default function PartnerBalances() {
         </div>
 
       </div>
+      </>
+      )}
+
+      {/* ============================================================ */}
+      {/* 🌟 NEW REPORT: كشف حركة السندات التفصيلي وحالة الترحيل         */}
+      {/* ============================================================ */}
+      {activeMainTab === 'VOUCHERS_LEDGER' && (
+        <div className="flex flex-col gap-6">
+
+          {/* 1. Summary Cards for Vouchers Movement */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            {/* Total Posted Receipts */}
+            <div className="bg-white rounded-2xl border border-emerald-100 p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-slate-500">إجمالي سندات القبض المرحلة</span>
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <ArrowDownLeft size={18} />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold font-mono text-emerald-700">
+                  {voucherStats.totalReceiptsPosted.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <span className="text-xs font-normal text-slate-400 mr-1.5">{currencySymbol}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2">
+                  <span>عدد السندات المعتمدة:</span>
+                  <span className="font-bold font-mono bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">
+                    {voucherStats.countReceiptsPosted} سند
+                  </span>
+                </div>
+              </div>
+              <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center gap-1">
+                <CheckCircle2 size={12} className="text-emerald-500" />
+                <span>مبالغ مقبوضة خفضت مديونيات العملاء</span>
+              </div>
+            </div>
+
+            {/* Total Posted Payments */}
+            <div className="bg-white rounded-2xl border border-rose-100 p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-slate-500">إجمالي سندات الصرف المرحلة</span>
+                <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                  <ArrowUpRight size={18} />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold font-mono text-rose-700">
+                  {voucherStats.totalPaymentsPosted.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <span className="text-xs font-normal text-slate-400 mr-1.5">{currencySymbol}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2">
+                  <span>عدد السندات المعتمدة:</span>
+                  <span className="font-bold font-mono bg-rose-50 text-rose-700 px-2 py-0.5 rounded">
+                    {voucherStats.countPaymentsPosted} سند
+                  </span>
+                </div>
+              </div>
+              <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center gap-1">
+                <CheckCircle2 size={12} className="text-rose-500" />
+                <span>مدفوعات خفضت مستحقات الموردين</span>
+              </div>
+            </div>
+
+            {/* Net Cash Flow from Posted Vouchers */}
+            <div className="bg-white rounded-2xl border border-blue-100 p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-slate-500">صافي التدفق النقدي المرحل</span>
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Wallet size={18} />
+                </div>
+              </div>
+              <div>
+                <div className={`text-2xl font-bold font-mono ${voucherStats.netCashFlowPosted >= 0 ? 'text-blue-700' : 'text-amber-700'}`}>
+                  {Math.abs(voucherStats.netCashFlowPosted).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <span className="text-xs font-normal text-slate-400 mr-1.5">{currencySymbol}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2">
+                  <span>طبيعة التدفق:</span>
+                  <span className={`font-bold px-2 py-0.5 rounded ${
+                    voucherStats.netCashFlowPosted >= 0 ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'
+                  }`}>
+                    {voucherStats.netCashFlowPosted >= 0 ? 'فائض نقدي مقبوض' : 'صافي تدفق منصرف'}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center gap-1">
+                <Scale size={12} className="text-blue-500" />
+                <span>الفارق = المقبوضات المرحلة - المدفوعات المرحلة</span>
+              </div>
+            </div>
+
+            {/* Pending / Draft Vouchers */}
+            <div className="bg-white rounded-2xl border border-amber-200 p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-slate-500">سندات غير مرحلة (مسودات)</span>
+                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Clock size={18} />
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold font-mono text-amber-700">
+                  {voucherStats.totalDraftAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <span className="text-xs font-normal text-slate-400 mr-1.5">{currencySymbol}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2">
+                  <span>سندات قيد الانتظار:</span>
+                  <span className="font-bold font-mono bg-amber-100 text-amber-800 px-2 py-0.5 rounded">
+                    {voucherStats.countDraft} مسودة
+                  </span>
+                </div>
+              </div>
+              <div className="mt-2 pt-2 border-t border-amber-100 text-[10px] text-amber-700 font-semibold flex items-center gap-1">
+                <AlertTriangle size={12} className="text-amber-500" />
+                <span>غير مؤثرة محاسبياً حتى يتم ترحيلها</span>
+              </div>
+            </div>
+
+          </div>
+
+          {/* 2. Filters & Search Controls Bar */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-3">
+            
+            {/* Search Input */}
+            <div className="relative w-full lg:w-80">
+              <input
+                type="text"
+                value={voucherSearchQuery}
+                onChange={e => setVoucherSearchQuery(e.target.value)}
+                placeholder="بحث برقم السند، الطرف، البيان..."
+                className="w-full pr-9 pl-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-slate-400"
+              />
+              <Search className="absolute right-3 top-2.5 text-slate-400" size={15} />
+              {voucherSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setVoucherSearchQuery('')}
+                  className="absolute left-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Quick Filters */}
+            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+              
+              {/* Status Filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-slate-500 font-semibold">الحالة:</span>
+                <select
+                  value={voucherStatusFilter}
+                  onChange={e => setVoucherStatusFilter(e.target.value as any)}
+                  className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-hidden focus:border-emerald-500"
+                >
+                  <option value="ALL">كافة السندات ({vouchersList.length})</option>
+                  <option value="POSTED">المرحلة بالحسابات فقط ({voucherStats.countReceiptsPosted + voucherStats.countPaymentsPosted})</option>
+                  <option value="DRAFT">غير المرحلة - مسودات ({voucherStats.countDraft})</option>
+                </select>
+              </div>
+
+              {/* Voucher Type Filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-slate-500 font-semibold">نوع السند:</span>
+                <select
+                  value={voucherTypeFilter}
+                  onChange={e => setVoucherTypeFilter(e.target.value as any)}
+                  className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-hidden focus:border-emerald-500"
+                >
+                  <option value="ALL">الكل (قبض وصرف)</option>
+                  <option value="RECEIPT">سندات قبض</option>
+                  <option value="PAYMENT">سندات صرف</option>
+                </select>
+              </div>
+
+              {/* Partner Type Filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-slate-500 font-semibold">الطرف:</span>
+                <select
+                  value={voucherPartnerTypeFilter}
+                  onChange={e => setVoucherPartnerTypeFilter(e.target.value as any)}
+                  className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-hidden focus:border-emerald-500"
+                >
+                  <option value="ALL">كافة الأطراف</option>
+                  <option value="CUSTOMER">العملاء</option>
+                  <option value="VENDOR">الموردين</option>
+                </select>
+              </div>
+
+              {/* Date Filters */}
+              <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200 text-xs">
+                <Calendar size={13} className="text-slate-400" />
+                <input
+                  type="date"
+                  value={voucherDateFrom}
+                  onChange={e => setVoucherDateFrom(e.target.value)}
+                  className="bg-transparent text-slate-700 focus:outline-hidden text-xs"
+                  title="من تاريخ"
+                />
+                <span className="text-slate-400">إلى</span>
+                <input
+                  type="date"
+                  value={voucherDateTo}
+                  onChange={e => setVoucherDateTo(e.target.value)}
+                  className="bg-transparent text-slate-700 focus:outline-hidden text-xs"
+                  title="إلى تاريخ"
+                />
+                {(voucherDateFrom || voucherDateTo) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVoucherDateFrom('');
+                      setVoucherDateTo('');
+                    }}
+                    className="text-slate-400 hover:text-slate-600 mr-1"
+                    title="مسح التاريخ"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* 3. Detailed Vouchers Movement Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-4 bg-slate-50/70 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Receipt size={17} className="text-emerald-600" />
+                <h3 className="font-bold text-sm text-slate-800">
+                  كشف حركة تفصيلي لكل سند (قبض أو صرف) وحالة الترحيل وتاريخه
+                </h3>
+                <span className="text-xs bg-slate-200 text-slate-700 font-mono px-2 py-0.5 rounded-full font-bold">
+                  {filteredVouchers.length} سند
+                </span>
+              </div>
+              <div className="text-xs text-slate-500 flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  <CheckCircle2 size={12} /> مرحل بالحسابات
+                </span>
+                <span className="inline-flex items-center gap-1 text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                  <AlertTriangle size={12} /> مسودة معلقة
+                </span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead>
+                  <tr className="bg-slate-100/70 text-slate-700 font-bold border-b border-slate-200">
+                    <th className="p-3.5 text-right whitespace-nowrap"># رقم السند</th>
+                    <th className="p-3.5 text-right whitespace-nowrap">تاريخ التحرير</th>
+                    <th className="p-3.5 text-right whitespace-nowrap">الطرف (العميل / المورد)</th>
+                    <th className="p-3.5 text-right whitespace-nowrap">نوع الحركة والخزينة</th>
+                    <th className="p-3.5 text-left font-mono whitespace-nowrap">المبلغ</th>
+                    <th className="p-3.5 text-center whitespace-nowrap">حالة السند</th>
+                    <th className="p-3.5 text-center whitespace-nowrap">تاريخ ووقت الترحيل</th>
+                    <th className="p-3.5 text-right min-w-[180px]">البيان والشرح المحاسبي</th>
+                    <th className="p-3.5 text-center whitespace-nowrap">الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredVouchers.map(v => {
+                    const isReceipt = v.type === VoucherType.Receipt;
+                    const isPosted = (v.status || 'POSTED') === 'POSTED';
+                    const pType = v.partnerType || (isReceipt ? 'CUSTOMER' : 'VENDOR');
+
+                    return (
+                      <tr key={v.id} className="hover:bg-slate-50/70 transition-colors">
+                        
+                        {/* 1. Voucher Number & Type Badge */}
+                        <td className="p-3.5 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold ${
+                              isReceipt 
+                                ? 'bg-emerald-100 text-emerald-800' 
+                                : 'bg-rose-100 text-rose-800'
+                            }`} title={isReceipt ? 'سند قبض' : 'سند صرف'}>
+                              {isReceipt ? <ArrowDownLeft size={13} /> : <ArrowUpRight size={13} />}
+                            </span>
+                            <div>
+                              <span className="font-mono font-bold text-slate-900 block">{v.voucherNumber}</span>
+                              <span className="text-[10px] text-slate-400 font-medium">
+                                {isReceipt ? 'سند قبض' : 'سند صرف'}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* 2. Date */}
+                        <td className="p-3.5 whitespace-nowrap font-mono text-slate-600">
+                          {v.date}
+                        </td>
+
+                        {/* 3. Partner Name & Type */}
+                        <td className="p-3.5 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-slate-800">{v.partnerName}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                              pType === 'CUSTOMER' 
+                                ? 'bg-blue-50 text-blue-700 border border-blue-100' 
+                                : 'bg-purple-50 text-purple-700 border border-purple-100'
+                            }`}>
+                              {pType === 'CUSTOMER' ? 'عميل' : 'مورد'}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* 4. Movement Type & Treasury */}
+                        <td className="p-3.5 whitespace-nowrap">
+                          <div className="text-slate-600">
+                            {isReceipt ? (
+                              <span className="text-emerald-700 font-medium">قبض من عميل</span>
+                            ) : (
+                              <span className="text-rose-700 font-medium">سداد لمورد</span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            {v.accountId === 'cash' ? 'الصندوق الرئيسي (نقداً)' : 'البنك الأهلي (تحويل بنكي)'}
+                          </div>
+                        </td>
+
+                        {/* 5. Amount */}
+                        <td className="p-3.5 text-left font-mono font-bold whitespace-nowrap">
+                          <span className={`text-sm ${isReceipt ? 'text-emerald-700' : 'text-rose-700'}`}>
+                            {v.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                          <span className="text-[10px] text-slate-400 mr-1">{currencySymbol}</span>
+                        </td>
+
+                        {/* 6. Voucher Status (مرحل / غير مرحل) */}
+                        <td className="p-3.5 text-center whitespace-nowrap">
+                          {isPosted ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100/80 text-emerald-800 border border-emerald-200">
+                              <CheckCircle2 size={13} className="text-emerald-600" />
+                              <span>مرحل بالحسابات</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100/90 text-amber-800 border border-amber-300">
+                              <AlertTriangle size={13} className="text-amber-600" />
+                              <span>مسودة (غير مرحل)</span>
+                            </span>
+                          )}
+                        </td>
+
+                        {/* 7. Posting Date (تاريخ ووقت الترحيل) */}
+                        <td className="p-3.5 text-center whitespace-nowrap">
+                          {isPosted ? (
+                            <div className="flex flex-col items-center">
+                              <div className="flex items-center gap-1 font-mono text-slate-700 font-semibold text-[11px]">
+                                <Clock size={12} className="text-emerald-600" />
+                                <span>{v.postedAt ? formatPostingDateTime(v.postedAt) : `${v.date} (معتمد)`}</span>
+                              </div>
+                              <span className="text-[9px] text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded mt-0.5">
+                                مقيد بالحسابات
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">
+                              غير مرحل (معلق)
+                            </span>
+                          )}
+                        </td>
+
+                        {/* 8. Description */}
+                        <td className="p-3.5 text-slate-600 max-w-xs truncate" title={v.description || ''}>
+                          {v.description || '-'}
+                        </td>
+
+                        {/* 9. Action Buttons */}
+                        <td className="p-3.5 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1.5">
+                            
+                            {/* Open Statement */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPartnerStatementFromVoucher(v)}
+                              className="px-2 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer border border-slate-200"
+                              title="عرض كشف حساب هذا الطرف ومطابقة السند"
+                            >
+                              <FileText size={13} />
+                              <span className="hidden sm:inline">كشف حساب</span>
+                            </button>
+
+                            {/* Toggle Posting Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleVoucherPosting(v)}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-colors flex items-center gap-1 cursor-pointer shadow-2xs ${
+                                isPosted 
+                                  ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300' 
+                                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                              }`}
+                              title={isPosted ? 'إلغاء ترحيل السند فوراً وإعادته كمسودة (إيقاف الأثر المحاسبي)' : 'ترحيل السند واعتماده في كشف الحساب'}
+                            >
+                              {isPosted ? (
+                                <>
+                                  <RotateCcw size={12} className="text-amber-700" />
+                                  <span>إلغاء الترحيل</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 size={12} />
+                                  <span>ترحيل الآن</span>
+                                </>
+                              )}
+                            </button>
+
+                            {/* Print Voucher Receipt */}
+                            <button
+                              type="button"
+                              onClick={() => handlePrintSingleVoucher(v)}
+                              className="p-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors cursor-pointer border border-slate-200"
+                              title="معاينة وطباعة السند"
+                            >
+                              <Printer size={13} />
+                            </button>
+
+                          </div>
+                        </td>
+
+                      </tr>
+                    );
+                  })}
+
+                  {filteredVouchers.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="p-12 text-center text-slate-400">
+                        <Receipt size={32} className="mx-auto mb-2 text-slate-300" />
+                        <p className="font-semibold text-sm text-slate-600">لا توجد سندات مطابقة لمعايير البحث</p>
+                        <p className="text-xs text-slate-400 mt-1">جرّب تغيير فلاتر الحالة أو نوع السند أو مسح حقل البحث</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot className="bg-slate-100/80 border-t-2 border-slate-300 font-bold text-slate-900">
+                  <tr>
+                    <td colSpan={4} className="p-3.5 text-right font-bold text-sm">
+                      إجمالي السندات المعروضة ({filteredVouchers.length} سند):
+                    </td>
+                    <td className="p-3.5 text-left font-mono text-emerald-800 text-sm">
+                      {filteredVouchers.reduce((acc, v) => acc + v.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
+                    </td>
+                    <td colSpan={4} className="p-3.5 text-left text-xs text-slate-500">
+                      مقبوضات مرحلة: <strong className="text-emerald-700 font-mono">{filteredVouchers.filter(v => v.type === VoucherType.Receipt && (v.status || 'POSTED') === 'POSTED').reduce((acc, v) => acc + v.amount, 0).toLocaleString()} {currencySymbol}</strong> | 
+                      مدفوعات مرحلة: <strong className="text-rose-700 font-mono mr-1">{filteredVouchers.filter(v => v.type === VoucherType.Payment && (v.status || 'POSTED') === 'POSTED').reduce((acc, v) => acc + v.amount, 0).toLocaleString()} {currencySymbol}</strong>
+                    </td>
+                  </tr>
+                </tfoot>
+                            </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* ⏳ TAB 3: تقرير أعمار الديون والذمم (AGING SCHEDULE REPORT)   */}
+      {/* ============================================================ */}
+      {activeMainTab === 'AGING' && (
+        <PartnerAgingReport
+          partners={enrichedPartners}
+          currencySymbol={currencySymbol}
+          onOpenStatement={(partner) => setSelectedPartnerForStatement(partner)}
+          onOpenConfirmation={(partner) => setSelectedPartnerForConfirmation(partner)}
+          onQuickVoucher={(partner, type) => handleQuickVoucher(partner, type)}
+        />
+      )}
+
+      {/* ============================================================ */}
+      {/* 📄 MODAL: قائمة الحسابات الدائنة                                */}
+      {/* ============================================================ */}
+      {showCreditorsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div 
+            className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="bg-amber-500 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center border border-white/30">
+                  <ArrowDownLeft size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">قائمة أرصدة العملاء والموردين الدائنين</h3>
+                  <p className="text-amber-100 text-sm opacity-90 font-medium mt-0.5">
+                    إجمالي {creditorsSummary.count} حساب بقيمة {creditorsSummary.totalCredit.toLocaleString()} {currencySymbol}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowCreditorsModal(false)}
+                className="w-10 h-10 flex items-center justify-center rounded-xl bg-amber-600/50 hover:bg-red-500 hover:text-white transition-colors"
+                title="إغلاق النافذة"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto bg-slate-50/50 p-4">
+              <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 shadow-sm">
+                {creditorsList.length === 0 ? (
+                  <div className="p-12 text-center text-slate-400">
+                    لا توجد حسابات دائنة مطابقة للشروط الحالية.
+                  </div>
+                ) : (
+                  creditorsList.map(item => (
+                    <div 
+                      key={item.id}
+                      className="p-4 hover:bg-amber-50/30 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm ${
+                          item.type === 'CUSTOMER' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                        }`}>
+                          {item.type === 'CUSTOMER' ? <Users size={18} /> : <Truck size={18} />}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 text-base">{item.name}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                              item.type === 'CUSTOMER' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-purple-50 text-purple-700 border border-purple-200'
+                            }`}>
+                              {item.type === 'CUSTOMER' ? 'عميل (دفعة مقدمة)' : 'مورد'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                            <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">{item.code}</span>
+                            {item.phone && <span className="flex items-center gap-1"><span className="w-1 h-1 bg-slate-300 rounded-full"></span>{item.phone}</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Financial details per creditor */}
+                      <div className="flex items-center justify-between sm:justify-end gap-6 shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100 w-full sm:w-auto mt-2 sm:mt-0">
+                        <div className="flex flex-col text-left gap-1">
+                          <div className="flex justify-between items-center sm:justify-start gap-2">
+                            <span className="text-[10px] text-slate-500">المسحوبات:</span>
+                            <strong className="font-mono text-slate-700 text-xs">{item.totalWithdrawals.toLocaleString()}</strong>
+                          </div>
+                          <div className="flex justify-between items-center sm:justify-start gap-2">
+                            <span className="text-[10px] text-slate-500">المدفوعات:</span>
+                            <strong className="font-mono text-emerald-600 text-xs">{item.totalPayments.toLocaleString()}</strong>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end min-w-[120px]">
+                          <span className="text-sm font-black text-amber-600 font-mono">
+                            {item.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
+                          </span>
+                          <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded mt-1">رصيد دائن (له)</span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowCreditorsModal(false);
+                            setSelectedPartnerForStatement(item);
+                          }}
+                          className="p-2.5 rounded-xl bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200 shadow-sm transition-all hover:shadow cursor-pointer shrink-0"
+                          title="عرض كشف الحساب التفصيلي"
+                        >
+                          <Eye size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* 📄 MODAL: قائمة الحسابات المدينة                                */}
+      {/* ============================================================ */}
+      {showDebtorsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div 
+            className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="bg-emerald-600 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center border border-white/30">
+                  <CheckCircle2 size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">قائمة أرصدة العملاء والموردين المدينين</h3>
+                  <p className="text-emerald-100 text-sm opacity-90 font-medium mt-0.5">
+                    إجمالي {debtorsSummary.count} حساب بقيمة {debtorsSummary.totalDebit.toLocaleString()} {currencySymbol}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowDebtorsModal(false)}
+                className="w-10 h-10 flex items-center justify-center rounded-xl bg-emerald-700/50 hover:bg-red-500 hover:text-white transition-colors"
+                title="إغلاق النافذة"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto bg-slate-50/50 p-4">
+              <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 shadow-sm">
+                {debtorsList.length === 0 ? (
+                  <div className="p-12 text-center text-slate-400">
+                    لا توجد حسابات مدينة مطابقة للشروط الحالية.
+                  </div>
+                ) : (
+                  debtorsList.map(item => (
+                    <div 
+                      key={item.id}
+                      className="p-4 hover:bg-emerald-50/30 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm ${
+                          item.type === 'CUSTOMER' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                        }`}>
+                          {item.type === 'CUSTOMER' ? <Users size={18} /> : <Truck size={18} />}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 text-base">{item.name}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                              item.type === 'CUSTOMER' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-purple-50 text-purple-700 border border-purple-200'
+                            }`}>
+                              {item.type === 'CUSTOMER' ? 'عميل' : 'مورد (دفعة مقدمة)'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                            <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">{item.code}</span>
+                            {item.phone && <span className="flex items-center gap-1"><span className="w-1 h-1 bg-slate-300 rounded-full"></span>{item.phone}</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Financial details per debtor */}
+                      <div className="flex items-center justify-between sm:justify-end gap-6 shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100 w-full sm:w-auto mt-2 sm:mt-0">
+                        <div className="flex flex-col text-left gap-1">
+                          <div className="flex justify-between items-center sm:justify-start gap-2">
+                            <span className="text-[10px] text-slate-500">المسحوبات:</span>
+                            <strong className="font-mono text-slate-700 text-xs">{item.totalWithdrawals.toLocaleString()}</strong>
+                          </div>
+                          <div className="flex justify-between items-center sm:justify-start gap-2">
+                            <span className="text-[10px] text-slate-500">المدفوعات:</span>
+                            <strong className="font-mono text-emerald-600 text-xs">{item.totalPayments.toLocaleString()}</strong>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end min-w-[120px]">
+                          <span className="text-sm font-black text-emerald-600 font-mono">
+                            {item.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
+                          </span>
+                          <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded mt-1">رصيد مدين (عليه)</span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowDebtorsModal(false);
+                            setSelectedPartnerForStatement(item);
+                          }}
+                          className="p-2.5 rounded-xl bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200 shadow-sm transition-all hover:shadow cursor-pointer shrink-0"
+                          title="عرض كشف الحساب التفصيلي"
+                        >
+                          <Eye size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* ============================================================ */}
       {/* 📄 MODAL: كشف الحساب التفصيلي للطرف المحدد                    */}
@@ -1290,64 +2624,102 @@ export default function PartnerBalances() {
                 <div className="flex flex-col">
                   <span className="text-slate-400 text-[11px]">الرصيد الافتتاحي:</span>
                   <span className="font-bold font-mono text-slate-800 mt-0.5">
-                    {Math.abs(selectedPartnerForStatement.openingBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
+                    {Math.abs(activeStatementData?.openingBalance ?? selectedPartnerForStatement.openingBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
                   </span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-blue-600 text-[11px] font-semibold">إجمالي المسحوبات:</span>
+                  <span className="text-blue-600 text-[11px] font-semibold">إجمالي المسحوبات (مدين):</span>
                   <span className="font-bold font-mono text-blue-700 mt-0.5">
-                    {selectedPartnerForStatement.totalWithdrawals.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
+                    {(activeStatementData?.totalDebit ?? selectedPartnerForStatement.totalWithdrawals).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
                   </span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-emerald-600 text-[11px] font-semibold">إجمالي المدفوعات:</span>
+                  <span className="text-emerald-600 text-[11px] font-semibold">إجمالي المدفوعات (دائن):</span>
                   <span className="font-bold font-mono text-emerald-700 mt-0.5">
-                    {selectedPartnerForStatement.totalPayments.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
+                    {(activeStatementData?.totalCredit ?? selectedPartnerForStatement.totalPayments).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
                   </span>
                 </div>
                 <div className="flex flex-col bg-slate-50 p-2 rounded-lg border border-slate-100">
                   <span className="text-slate-500 text-[11px] font-bold">الرصيد الصافي المستحق:</span>
                   <span className="font-bold font-mono text-base text-indigo-700 mt-0.5">
-                    {getPartnerCalculations(selectedPartnerForStatement).balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
+                    {(activeStatementData?.netBalance ?? getPartnerCalculations(selectedPartnerForStatement).balanceAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
                   </span>
                   <span className="text-[10px] text-slate-500 font-semibold">
-                    {getPartnerCalculations(selectedPartnerForStatement).balanceType === 'DEBIT' ? 'مدين (مستحق لنا)' : 'دائن (مستحق له)'}
+                    {activeStatementData ? activeStatementData.balanceLabel : (getPartnerCalculations(selectedPartnerForStatement).balanceType === 'DEBIT' ? 'مدين (مستحق لنا)' : 'دائن (مستحق له)')}
                   </span>
                 </div>
               </div>
 
               {/* Transactions Ledger Table */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
-                <div className="p-3 bg-slate-100/70 border-b border-slate-200 font-bold text-xs text-slate-800">
-                  حركات المسحوبات والمدفوعات المسجلة
+                <div className="p-3 bg-slate-100/70 border-b border-slate-200 font-bold text-xs text-slate-800 flex items-center justify-between">
+                  <span>حركات المسحوبات والمدفوعات وقيود الأستاذ المساعد (Sub-Ledger)</span>
+                  <span className="text-[11px] text-slate-500 font-normal">
+                    إجمالي الحركات: {activeStatementData ? activeStatementData.transactions.length : (selectedPartnerForStatement.transactions?.length || 0)}
+                  </span>
                 </div>
                 <table className="w-full text-right text-xs">
                   <thead>
                     <tr className="bg-slate-50 text-slate-600 border-b border-slate-200">
                       <th className="p-3 text-right">التاريخ</th>
-                      <th className="p-3 text-right">رقم المستند</th>
-                      <th className="p-3 text-right">البيان / الحركة</th>
-                      <th className="p-3 text-left font-mono text-blue-700">مسحوبات (مدين)</th>
-                      <th className="p-3 text-left font-mono text-emerald-700">مدفوعات (دائن)</th>
+                      <th className="p-3 text-right">رقم المستند / القيد</th>
+                      <th className="p-3 text-right">نوع الحركة</th>
+                      <th className="p-3 text-right">البيان / الشرح</th>
+                      <th className="p-3 text-left font-mono text-blue-700">مدين (+)</th>
+                      <th className="p-3 text-left font-mono text-emerald-700">دائن (-)</th>
+                      <th className="p-3 text-left font-mono text-slate-700">الرصيد التراكمي</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {selectedPartnerForStatement.transactions?.map(tx => (
-                      <tr key={tx.id} className="hover:bg-slate-50/60">
-                        <td className="p-3 font-mono text-slate-600">{tx.date}</td>
-                        <td className="p-3 font-mono font-bold text-slate-800">{tx.docNumber}</td>
-                        <td className="p-3 text-slate-700">{tx.description}</td>
-                        <td className="p-3 text-left font-mono font-bold text-blue-700">
-                          {tx.debit > 0 ? tx.debit.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
-                        </td>
-                        <td className="p-3 text-left font-mono font-bold text-emerald-700">
-                          {tx.credit > 0 ? tx.credit.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
-                        </td>
-                      </tr>
-                    ))}
-                    {(!selectedPartnerForStatement.transactions || selectedPartnerForStatement.transactions.length === 0) && (
+                    {(activeStatementData ? activeStatementData.transactions : (selectedPartnerForStatement.transactions || [])).map(tx => {
+                      const isJournal = tx.type === 'JOURNAL_ENTRY' || ('docNumber' in tx && (tx.docNumber.startsWith('#JE-') || tx.docNumber.startsWith('JE-')));
+                      const docTypeLabel = ('docTypeLabel' in tx && tx.docTypeLabel) 
+                        ? tx.docTypeLabel 
+                        : (isJournal ? 'قيد يومية (Sub-Ledger)' : ('type' in tx && tx.type === 'INVOICE' ? 'فاتورة' : 'سند مالي'));
+
+                      const runningBal = 'runningBalance' in tx ? (tx as any).runningBalance : undefined;
+                      const runningBalType = 'runningBalanceType' in tx ? (tx as any).runningBalanceType : undefined;
+
+                      return (
+                        <tr key={tx.id} className={`hover:bg-slate-50/60 ${isJournal ? 'bg-amber-50/40' : ''}`}>
+                          <td className="p-3 font-mono text-slate-600 whitespace-nowrap">{tx.date}</td>
+                          <td className="p-3 font-mono font-bold text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
+                            <span>{tx.docNumber}</span>
+                          </td>
+                          <td className="p-3 whitespace-nowrap">
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                              isJournal 
+                                ? 'bg-amber-100 text-amber-900 border-amber-300' 
+                                : docTypeLabel.includes('فاتورة')
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}>
+                              {docTypeLabel}
+                            </span>
+                          </td>
+                          <td className="p-3 text-slate-700 max-w-xs">{tx.description}</td>
+                          <td className="p-3 text-left font-mono font-bold text-blue-700">
+                            {tx.debit > 0 ? tx.debit.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
+                          </td>
+                          <td className="p-3 text-left font-mono font-bold text-emerald-700">
+                            {tx.credit > 0 ? tx.credit.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
+                          </td>
+                          <td className="p-3 text-left font-mono font-semibold text-slate-800">
+                            {runningBal !== undefined ? (
+                              <span>
+                                {runningBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}{' '}
+                                <span className="text-[10px] text-slate-400 font-normal">
+                                  {runningBalType === 'DEBIT' ? '(مدين)' : runningBalType === 'CREDIT' ? '(دائن)' : ''}
+                                </span>
+                              </span>
+                            ) : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {(!activeStatementData || activeStatementData.transactions.length === 0) && (!selectedPartnerForStatement.transactions || selectedPartnerForStatement.transactions.length === 0) && (
                       <tr>
-                        <td colSpan={5} className="p-6 text-center text-slate-400">
+                        <td colSpan={7} className="p-6 text-center text-slate-400">
                           لا توجد حركات تفصيلية مسجلة في كشف الحساب.
                         </td>
                       </tr>
@@ -1374,6 +2746,16 @@ export default function PartnerBalances() {
         </div>
       )}
 
+      {/* Balance Confirmation Letter Modal */}
+      {selectedPartnerForConfirmation && (
+        <BalanceConfirmationModal
+          isOpen={!!selectedPartnerForConfirmation}
+          onClose={() => setSelectedPartnerForConfirmation(null)}
+          partner={selectedPartnerForConfirmation}
+          currencySymbol={currencySymbol}
+        />
+      )}
+
       {/* Universal Print Preview Modal */}
       <PrintPreviewModal
         isOpen={showPrintPreview}
@@ -1384,6 +2766,15 @@ export default function PartnerBalances() {
         data={customPreviewData || createOverallBalancesPreviewData()}
       />
 
+      {/* Advanced Vouchers Export Modal */}
+      <VouchersExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        initialCategory="EXTERNAL"
+        title="تصدير كشوفات السندات والعمليات (Excel .xlsx / CSV / PDF)"
+      />
+
     </div>
+    </>
   );
 }

@@ -11,13 +11,17 @@ export enum BalanceType {
   Credit = 'CREDIT'
 }
 
+export type AccountControlType = 'CUSTOMER' | 'VENDOR' | 'EMPLOYEE' | 'NONE';
+
 export interface Account {
   id: string;
   code: string;
   name: string;
   type: AccountType;
   balanceType: BalanceType;
-  parentId?: string;
+  parentId?: string | undefined;
+  isControlAccount?: boolean | undefined;
+  controlType?: AccountControlType | undefined;
 }
 
 /**
@@ -29,7 +33,11 @@ export type PositiveNumber = number;
 export interface JournalItem {
   id: string;
   accountId: string;
-  partnerId?: string;
+  partnerId?: string | undefined;
+  partnerName?: string | undefined;
+  partnerType?: 'CUSTOMER' | 'VENDOR' | 'EMPLOYEE' | undefined;
+  costCenterId?: string | undefined;
+  costCenterName?: string | undefined;
   debit: PositiveNumber;
   credit: PositiveNumber;
 }
@@ -66,14 +74,19 @@ export interface Invoice {
 
 export interface Partner {
   id: string;
+  code?: string | undefined;
   name: string;
   type: 'CUSTOMER' | 'VENDOR' | 'EMPLOYEE';
-  taxNumber?: string;
-  phone?: string;
-  address?: string;
-  email?: string;
-  openingBalance?: number;
-  openingBalanceDate?: string;
+  taxNumber?: string | undefined;
+  phone?: string | undefined;
+  address?: string | undefined;
+  email?: string | undefined;
+  creditLimit?: number | undefined;
+  paymentTermsDays?: number | undefined;
+  openingBalance?: number | undefined;
+  openingBalanceDate?: string | undefined;
+  openingBalanceType?: 'DEBIT' | 'CREDIT' | undefined;
+  isActive?: boolean | undefined;
 }
 
 export enum VoucherType {
@@ -90,11 +103,68 @@ export interface Voucher {
   partnerId?: string;
   fromAccountId: string;
   toAccountId: string;
+  costCenterId?: string | undefined;
+  costCenterName?: string | undefined;
   amount: PositiveNumber;
   description: string;
 }
 
 import type { PrintPaperFormat, PrintColorMode } from '../utils/printPaperFormats';
+
+export type VoucherApprovalStatus = 'NOT_REQUIRED' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+
+export interface ApprovalWorkflowSettings {
+  enabled: boolean;
+  minAmountThreshold: number;
+  requireGeneralManagerForVeryLarge: boolean;
+  veryLargeThreshold: number;
+  defaultApproverName: string;
+  defaultApproverRole: string;
+  generalManagerName: string;
+  blockPostingWithoutApproval: boolean;
+  enableForInternalVouchers: boolean;
+}
+
+export interface CurrencySetting {
+  code: string;
+  nameAr: string;
+  symbol: string;
+  rateAgainstBase: number;
+  isBase: boolean;
+  isEnabled: boolean;
+}
+
+export interface UserPermission {
+  id: string;
+  username: string;
+  displayName: string;
+  role: 'ADMIN' | 'ACCOUNTANT' | 'CASHIER' | 'STOREKEEPER' | 'AUDITOR';
+  branch: string;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canPost: boolean;
+  canPrint: boolean;
+  canExport: boolean;
+  isActive: boolean;
+}
+
+export interface CreditAndStockControlSettings {
+  enforceCreditLimit: boolean;
+  creditLimitAction: 'BLOCK' | 'WARN';
+  preventNegativeStock: boolean;
+  warnLowStock: boolean;
+  lowStockThreshold: number;
+}
+
+export interface BrandingSettings {
+  primaryColor: string;
+  fontFamily: 'Tajawal' | 'Cairo' | 'Arial' | 'Amiri';
+  showTermsAndConditions: boolean;
+  termsText: string;
+  stampUrl?: string;
+  invoiceTitleAr?: string;
+}
 
 export interface SystemSettings {
   company: {
@@ -110,6 +180,7 @@ export interface SystemSettings {
     city: string;
     postalCode: string;
     logoUrl?: string;
+    stampUrl?: string;
   };
   financial: {
     currency: string;
@@ -122,6 +193,10 @@ export interface SystemSettings {
     decimalPlaces: number;
     allowNegativeStock: boolean;
   };
+  currencies?: CurrencySetting[];
+  controlAndLimits?: CreditAndStockControlSettings;
+  branding?: BrandingSettings;
+  users?: UserPermission[];
   taxAndInvoice: {
     enableVat: boolean;
     defaultVatRate: number;
@@ -140,5 +215,18 @@ export interface SystemSettings {
     footerNotes: string;
     showCompanyLogo: boolean;
     showSignatures: boolean;
+  };
+  approvalWorkflow?: ApprovalWorkflowSettings;
+  invoiceDefaults?: {
+    salesTransactionType?: string; // 'CASH_SALES' | 'CREDIT_SALES' | 'PARTIAL_SALES' | 'CASH_RETURN' | 'CREDIT_RETURN' | 'QUOTATION'
+    salesClassification?: 'TAX' | 'NORMAL';
+    salesWarehouse?: string; // 'MAIN_WAREHOUSE' | 'SHOWROOM' | 'BRANCH_1'
+    salesSafe?: string; // 'MAIN_SAFE' | 'BANK_AHLI' | 'BANK_RAJHI'
+    salesServiceType?: string; // '' | 'استشارات' | 'تصميم' | 'برمجة' | 'صيانة' | 'تركيب' | 'دعم فني' | 'خدمات عامة'
+    purchasesTransactionType?: string; // 'CASH_PURCHASE' | 'CREDIT_PURCHASE' | 'PARTIAL_PURCHASE' | 'CASH_RETURN' | 'CREDIT_RETURN'
+    purchasesClassification?: 'TAX' | 'NORMAL';
+    purchasesWarehouse?: string; // 'MAIN_WAREHOUSE' | 'SHOWROOM' | 'BRANCH_1'
+    purchasesSafe?: string; // 'MAIN_SAFE' | 'BANK_AHLI' | 'BANK_RAJHI'
+    purchasesServiceType?: string;
   };
 }

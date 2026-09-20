@@ -1,10 +1,21 @@
-import { useState, useMemo, type FormEvent } from 'react';
+import { useState, useMemo, useEffect, type FormEvent } from 'react';
 import { 
   Save, ArrowRightLeft, Plus, History, AlertTriangle, Edit3, Trash2, X, Eye,
-  Building2, Wallet, Sparkles, ShieldCheck, ArrowLeft
+  Building2, Wallet, Sparkles, ShieldCheck, ArrowLeft, CheckCircle2, RotateCcw,
+  ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft,
+  FileSpreadsheet, UserCheck
 } from 'lucide-react';
+import { SystemSettings } from '../types/accounting';
 import PrintDropdown from './PrintDropdown';
 import PrintPreviewModal, { PrintPreviewData } from './PrintPreviewModal';
+import VouchersExportModal from './VouchersExportModal';
+import VoucherApprovalStepper from './VoucherApprovalStepper';
+import VouchersApprovalCenterModal from './VouchersApprovalCenterModal';
+import { 
+  isApprovalRequired, 
+  canVoucherBePosted 
+} from '../utils/voucherApproval';
+import { getSystemSettings } from '../utils/settings';
 import { 
   getNextSequentialNumber, 
   isCodeOrNumberDuplicated, 
@@ -21,6 +32,19 @@ export interface StoredInternalVoucher {
   amount: number;
   description: string;
   createdAt: string;
+  status?: 'DRAFT' | 'POSTED' | undefined;
+  postedAt?: string | undefined;
+  // دورة الاعتماد الهرمية (Approval Hierarchy)
+  requiresApproval?: boolean | undefined;
+  approvalStatus?: 'NOT_REQUIRED' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | undefined;
+  approvedBy?: string | undefined;
+  approvedAt?: string | undefined;
+  approvalRole?: string | undefined;
+  approvalNotes?: string | undefined;
+  rejectedBy?: string | undefined;
+  rejectedAt?: string | undefined;
+  rejectionReason?: string | undefined;
+  preparedBy?: string | undefined;
 }
 
 const ACCOUNTS = [
@@ -50,8 +74,21 @@ export default function InternalVouchers() {
   const [savedVouchers, setSavedVouchers] = useState<StoredInternalVoucher[]>(() => loadStoredInternalVouchers());
   const [showHistory, setShowHistory] = useState(false);
   const [editingVoucherId, setEditingVoucherId] = useState<string | null>(null);
+  const [voucherStatus, setVoucherStatus] = useState<'DRAFT' | 'POSTED'>('DRAFT');
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<'ALL' | 'POSTED' | 'DRAFT'>('ALL');
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [customPreviewData, setCustomPreviewData] = useState<PrintPreviewData | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showApprovalCenterModal, setShowApprovalCenterModal] = useState(false);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => getSystemSettings());
+
+  useEffect(() => {
+    const handleSettingsUpdate = () => {
+      setSystemSettings(getSystemSettings());
+    };
+    window.addEventListener('alpha-system-settings-updated', handleSettingsUpdate);
+    return () => window.removeEventListener('alpha-system-settings-updated', handleSettingsUpdate);
+  }, []);
 
   // Derive next sequential voucher number
   const nextCalculatedVoucherNum = useMemo(() => {
@@ -74,6 +111,15 @@ export default function InternalVouchers() {
     return isCodeOrNumberDuplicated(voucherNumber, 'internalVoucher', listToCheck.map(v => v.voucherNumber));
   }, [voucherNumber, savedVouchers, editingVoucherId]);
 
+  const activeVoucher = useMemo(() => {
+    if (editingVoucherId) return savedVouchers.find(v => v.id === editingVoucherId);
+    return savedVouchers.find(v => v.voucherNumber === voucherNumber);
+  }, [editingVoucherId, voucherNumber, savedVouchers]);
+
+  const pendingApprovalsCount = useMemo(() => {
+    return savedVouchers.filter(v => v.approvalStatus === 'PENDING_APPROVAL' && v.status !== 'POSTED').length;
+  }, [savedVouchers]);
+
   const handleNewVoucher = () => {
     setEditingVoucherId(null);
     const nextSeq = getNextSequentialNumber('internalVoucher', savedVouchers.map(v => v.voucherNumber)).formatted;
@@ -82,7 +128,39 @@ export default function InternalVouchers() {
     setDescription('');
     setFromAccountId('');
     setToAccountId('');
+    setVoucherStatus('DRAFT');
   };
+
+  useEffect(() => {
+    const handleSync = () => {
+      const updated = loadStoredInternalVouchers();
+      setSavedVouchers(updated);
+      setEditingVoucherId(null);
+      const nextSeq = getNextSequentialNumber('internalVoucher', updated.map(v => v.voucherNumber)).formatted;
+      setVoucherNumber(nextSeq);
+      setAmount('');
+      setDescription('');
+      setFromAccountId('');
+      setToAccountId('');
+      setVoucherStatus('DRAFT');
+    };
+
+    window.addEventListener('alpha-vouchers-updated', handleSync);
+    window.addEventListener('alpha-system-reset-completed', handleSync);
+    window.addEventListener('alpha-data-changed', handleSync);
+    window.addEventListener('alpha-device-id-changed', handleSync);
+    window.addEventListener('alpha-sequences-updated', handleSync);
+    window.addEventListener('storage', handleSync);
+
+    return () => {
+      window.removeEventListener('alpha-vouchers-updated', handleSync);
+      window.removeEventListener('alpha-system-reset-completed', handleSync);
+      window.removeEventListener('alpha-data-changed', handleSync);
+      window.removeEventListener('alpha-device-id-changed', handleSync);
+      window.removeEventListener('alpha-sequences-updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, []);
 
   const handleEdit = (v: StoredInternalVoucher) => {
     setEditingVoucherId(v.id);
@@ -92,15 +170,82 @@ export default function InternalVouchers() {
     setToAccountId(v.toAccountId);
     setAmount(v.amount.toString());
     setDescription(v.description);
+    setVoucherStatus(v.status || 'DRAFT');
     setShowHistory(false);
   };
 
+  // Chronologically sorted list of vouchers for sequential ERP browsing
+  const chronologicallyOrderedVouchers = useMemo(() => {
+    if (!Array.isArray(savedVouchers)) return [];
+    return [...savedVouchers].sort((a, b) => {
+      const dateCmp = (a.date || '').localeCompare(b.date || '');
+      if (dateCmp !== 0) return dateCmp;
+      return (a.voucherNumber || '').localeCompare(b.voucherNumber || '', undefined, { numeric: true });
+    });
+  }, [savedVouchers]);
+
+  const currentVoucherIndex = useMemo(() => {
+    if (!editingVoucherId) return -1;
+    return chronologicallyOrderedVouchers.findIndex(v => v.id === editingVoucherId);
+  }, [editingVoucherId, chronologicallyOrderedVouchers]);
+
+  const handleNavigatePrevious = () => {
+    if (chronologicallyOrderedVouchers.length === 0) return;
+    if (currentVoucherIndex === -1) {
+      const target = chronologicallyOrderedVouchers[chronologicallyOrderedVouchers.length - 1];
+      if (target) handleEdit(target);
+    } else if (currentVoucherIndex > 0) {
+      const target = chronologicallyOrderedVouchers[currentVoucherIndex - 1];
+      if (target) handleEdit(target);
+    }
+  };
+
+  const handleNavigateNext = () => {
+    if (chronologicallyOrderedVouchers.length === 0) return;
+    if (currentVoucherIndex >= 0 && currentVoucherIndex < chronologicallyOrderedVouchers.length - 1) {
+      const target = chronologicallyOrderedVouchers[currentVoucherIndex + 1];
+      if (target) handleEdit(target);
+    } else if (currentVoucherIndex === chronologicallyOrderedVouchers.length - 1) {
+      handleNewVoucher();
+    }
+  };
+
+  const handleNavigateFirst = () => {
+    if (chronologicallyOrderedVouchers.length > 0) {
+      const first = chronologicallyOrderedVouchers[0];
+      if (first) handleEdit(first);
+    }
+  };
+
+  const handleNavigateLast = () => {
+    if (chronologicallyOrderedVouchers.length > 0) {
+      const last = chronologicallyOrderedVouchers[chronologicallyOrderedVouchers.length - 1];
+      if (last) handleEdit(last);
+    }
+  };
+
+  const canGoPrevious = chronologicallyOrderedVouchers.length > 0 && (currentVoucherIndex === -1 || currentVoucherIndex > 0);
+  const canGoNext = chronologicallyOrderedVouchers.length > 0 && currentVoucherIndex !== -1;
+  const canGoFirst = chronologicallyOrderedVouchers.length > 0 && currentVoucherIndex !== 0;
+  const canGoLast = chronologicallyOrderedVouchers.length > 0 && (currentVoucherIndex === -1 || currentVoucherIndex < chronologicallyOrderedVouchers.length - 1);
+
   const handleDelete = (id: string, vNum: string) => {
+    const targetVoucher = savedVouchers.find(v => v.id === id);
+    if (targetVoucher && targetVoucher.status === 'POSTED') {
+      alert(`⚠️ لا يمكن حذف سند التحويل الداخلي رقم (${vNum}) لأنه مرحل ومعتمد بالحسابات!\n\nيجب أولاً الضغط على زر [إلغاء الترحيل] لتحويل السند إلى مسودة، ثم يمكنك حذفه.`);
+      return;
+    }
+
     if (confirm(`هل أنت متأكد من رغبتك في حذف سند التحويل الداخلي رقم (${vNum}) نهائياً؟`)) {
       const updated = savedVouchers.filter(v => v.id !== id);
       setSavedVouchers(updated);
       try {
         localStorage.setItem(DB_INTERNAL_VOUCHERS_KEY, JSON.stringify(updated));
+        window.dispatchEvent(new Event('alpha-chart-of-accounts-updated'));
+        window.dispatchEvent(new Event('alpha-journal-entries-updated'));
+        window.dispatchEvent(new Event('alpha-vouchers-updated'));
+        window.dispatchEvent(new Event('alpha-trial-balance-updated'));
+        window.dispatchEvent(new Event('storage'));
       } catch (err) {
         console.error(err);
       }
@@ -110,24 +255,79 @@ export default function InternalVouchers() {
     }
   };
 
-  const handleSave = (e: FormEvent) => {
-    e.preventDefault();
-    if (!fromAccountId || !toAccountId || !amount) return;
+  const saveVoucherWithStatus = (targetStatus: 'POSTED' | 'DRAFT'): boolean => {
+    if (!fromAccountId || !toAccountId) {
+      alert("يرجى تحديد حساب المصدر وحساب المستلم!");
+      return false;
+    }
     if (fromAccountId === toAccountId) {
       alert("لا يمكن التحويل لنفس الحساب!");
-      return;
+      return false;
+    }
+    const numAmount = Number(amount);
+    if (!amount || isNaN(numAmount) || numAmount <= 0) {
+      alert("يرجى إدخال مبلغ تحويل صحيح أكبر من الصفر!");
+      return false;
     }
 
     const finalNumber = voucherNumber.trim() || nextCalculatedVoucherNum;
+    let isPost = targetStatus === 'POSTED';
+    const prevVoucher = editingVoucherId ? savedVouchers.find(v => v.id === editingVoucherId) : undefined;
+    const nowIso = new Date().toISOString();
+
+    // Verification against Approval Workflow (دورة الاعتماد الهرمية)
+    const approvalCheck = isApprovalRequired(numAmount, systemSettings);
+    let finalRequiresApproval = approvalCheck.required;
+    let finalApprovalStatus: 'NOT_REQUIRED' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' = 
+      prevVoucher?.approvalStatus || (approvalCheck.required ? 'PENDING_APPROVAL' : 'NOT_REQUIRED');
+
+    if (!approvalCheck.required) {
+      finalRequiresApproval = false;
+      finalApprovalStatus = 'NOT_REQUIRED';
+    } else if (prevVoucher && prevVoucher.approvalStatus === 'APPROVED' && prevVoucher.amount === numAmount) {
+      finalApprovalStatus = 'APPROVED';
+    } else if (!prevVoucher?.approvalStatus || prevVoucher.approvalStatus === 'NOT_REQUIRED') {
+      finalApprovalStatus = 'PENDING_APPROVAL';
+    }
+
+    if (isPost) {
+      const postValidation = canVoucherBePosted({
+        id: editingVoucherId || 'new',
+        type: 'INTERNAL_TRANSFER',
+        amount: numAmount,
+        approvalStatus: finalApprovalStatus,
+        status: 'DRAFT',
+        requiresApproval: finalRequiresApproval
+      }, systemSettings);
+
+      if (!postValidation.canPost) {
+        alert(`⚠️ تنبيه دورة الاعتماد الهرمية:\n\n${postValidation.reason}\n\nتم حفظ سند التحويل كمسودة بانتظار اعتماد الإدارة المالية ولن يتم ترحيله حتى يُعتمد رسمياً.`);
+        targetStatus = 'DRAFT';
+        isPost = false;
+      }
+    }
+
     const voucherData: StoredInternalVoucher = {
       id: editingVoucherId || Date.now().toString(),
       voucherNumber: finalNumber,
       date,
       fromAccountId,
       toAccountId,
-      amount: Number(amount) || 0,
-      description: description.trim() || 'سند تحويل داخلي',
-      createdAt: new Date().toISOString()
+      amount: numAmount,
+      status: targetStatus,
+      postedAt: isPost ? (prevVoucher?.postedAt || nowIso) : undefined,
+      description: description.trim() || 'سند تحويل ومناقلة داخلية',
+      createdAt: prevVoucher?.createdAt || nowIso,
+      requiresApproval: finalRequiresApproval,
+      approvalStatus: finalApprovalStatus,
+      approvedBy: finalApprovalStatus === 'APPROVED' ? prevVoucher?.approvedBy : undefined,
+      approvedAt: finalApprovalStatus === 'APPROVED' ? prevVoucher?.approvedAt : undefined,
+      approvalRole: finalApprovalStatus === 'APPROVED' ? prevVoucher?.approvalRole : undefined,
+      approvalNotes: finalApprovalStatus === 'APPROVED' ? prevVoucher?.approvalNotes : undefined,
+      rejectedBy: finalApprovalStatus === 'REJECTED' ? prevVoucher?.rejectedBy : undefined,
+      rejectedAt: finalApprovalStatus === 'REJECTED' ? prevVoucher?.rejectedAt : undefined,
+      rejectionReason: finalApprovalStatus === 'REJECTED' ? prevVoucher?.rejectionReason : undefined,
+      preparedBy: prevVoucher?.preparedBy || 'المحاسب'
     };
 
     let updated: StoredInternalVoucher[];
@@ -144,192 +344,508 @@ export default function InternalVouchers() {
     setSavedVouchers(updated);
     try {
       localStorage.setItem(DB_INTERNAL_VOUCHERS_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new Event('alpha-chart-of-accounts-updated'));
+      window.dispatchEvent(new Event('alpha-journal-entries-updated'));
+      window.dispatchEvent(new Event('alpha-vouchers-updated'));
+      window.dispatchEvent(new Event('alpha-trial-balance-updated'));
+      window.dispatchEvent(new Event('storage'));
     } catch (err) {
       console.error(err);
     }
 
-    alert(`تم ${editingVoucherId ? 'تعديل وحفظ' : 'إنشاء'} سند التحويل الداخلي رقم (${finalNumber}) بنجاح بقيمة ${amount} ريال!`);
-    
-    setEditingVoucherId(null);
-    // Prep next voucher
-    const nextSeq = getNextSequentialNumber('internalVoucher', updated.map(v => v.voucherNumber)).formatted;
-    setVoucherNumber(nextSeq);
-    setAmount('');
-    setDescription('');
+    setEditingVoucherId(voucherData.id);
+    setVoucherStatus(targetStatus);
+
+    const fromAccName = getAccountName(fromAccountId);
+    const toAccName = getAccountName(toAccountId);
+
+    if (isPost) {
+      alert(`✅ تم ترحيل سند التحويل الداخلي رقم (${finalNumber}) بنجاح في الحسابات!\n\nتم قيد وتأثير المبلغ (${numAmount.toLocaleString()} ريال) في حركة الحسابات من (${fromAccName}) إلى (${toAccName}) وميزان المراجعة.`);
+    } else {
+      alert(`📝 تم حفظ سند التحويل الداخلي رقم (${finalNumber}) كمسودة (غير مرحل) بنجاح!\n\nلم يتم إثبات أي أثر في الحسابات حتى تضغط على زر [ترحيل السند في الحسابات].`);
+    }
+
+    return true;
+  };
+
+  const handlePostCurrentVoucher = () => {
+    saveVoucherWithStatus('POSTED');
+  };
+
+  const handleUnpostCurrentVoucher = () => {
+    const finalNumber = voucherNumber.trim() || nextCalculatedVoucherNum;
+    if (confirm(`هل أنت متأكد من رغبتك في إلغاء ترحيل سند التحويل الداخلي رقم (${finalNumber})؟\n\nسيتم إعادته كمسودة مؤقتة وإيقاف أثره المحاسبي في الحسابات العامة وميزان المراجعة.`)) {
+      saveVoucherWithStatus('DRAFT');
+    }
+  };
+
+  const handleTogglePostingFromList = (v: StoredInternalVoucher) => {
+    const isCurrentlyPosted = v.status === 'POSTED';
+    const newStatus: 'DRAFT' | 'POSTED' = isCurrentlyPosted ? 'DRAFT' : 'POSTED';
+    if (isCurrentlyPosted && !confirm(`هل أنت متأكد من إلغاء ترحيل سند التحويل الداخلي رقم (${v.voucherNumber})؟`)) {
+      return;
+    }
+
+    if (!isCurrentlyPosted) {
+      const postValidation = canVoucherBePosted({
+        id: v.id,
+        type: 'INTERNAL_TRANSFER',
+        amount: v.amount,
+        approvalStatus: v.approvalStatus,
+        status: 'DRAFT',
+        requiresApproval: v.requiresApproval
+      }, systemSettings);
+
+      if (!postValidation.canPost) {
+        alert(`⚠️ لا يمكن ترحيل سند التحويل الداخلي رقم (${v.voucherNumber}):\n\n${postValidation.reason}`);
+        return;
+      }
+    }
+
+    const updated = savedVouchers.map(item => {
+      if (item.id === v.id) {
+        return {
+          ...item,
+          status: newStatus,
+          postedAt: newStatus === 'POSTED' ? new Date().toISOString() : undefined
+        };
+      }
+      return item;
+    });
+    setSavedVouchers(updated);
+    try {
+      localStorage.setItem(DB_INTERNAL_VOUCHERS_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new Event('alpha-chart-of-accounts-updated'));
+      window.dispatchEvent(new Event('alpha-journal-entries-updated'));
+      window.dispatchEvent(new Event('alpha-vouchers-updated'));
+      window.dispatchEvent(new Event('alpha-trial-balance-updated'));
+      window.dispatchEvent(new Event('storage'));
+    } catch (e) {
+      console.error(e);
+    }
+    if (editingVoucherId === v.id) {
+      setVoucherStatus(newStatus);
+    }
+  };
+
+  const handleSave = (e: FormEvent) => {
+    e.preventDefault();
+    saveVoucherWithStatus(voucherStatus || 'DRAFT');
   };
 
   const getAccountName = (id: string) => ACCOUNTS.find(a => a.id === id)?.name || id;
 
   return (
     <div className="flex flex-col flex-1">
-      <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 mb-6 print:hidden">
-        <div>
-          <div className="flex items-center gap-2 mb-1 text-slate-500">
-            <span className="text-xs uppercase font-bold tracking-tight">الخزينة والبنوك</span>
-            <span className="text-xs">/</span>
-            <span className="text-xs uppercase font-bold tracking-tight">سندات داخلية</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-800">سند تحويل داخلي</h2>
-            <span className="text-xs sm:text-sm font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md font-mono border border-blue-200">
-              سند رقم: #{voucherNumber}
-            </span>
-            {editingVoucherId && (
-              <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold border border-amber-300 flex items-center gap-1">
-                <Edit3 size={12} /> وضع التعديل
+      {/* Top Application Bar */}
+      <div className="flex flex-col gap-3 mb-4 print:hidden">
+        {/* Breadcrumb & Title */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div>
+            <div className="flex items-center gap-2 mb-1 text-slate-500 text-xs font-bold">
+              <span>الخزينة والبنوك</span>
+              <span>/</span>
+              <span className="text-slate-800 font-extrabold">سندات داخلية</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-800">سند تحويل داخلي</h2>
+              <span className="text-xs sm:text-sm font-black text-blue-950 bg-blue-50 px-2.5 py-1 rounded-lg font-mono border border-blue-200 shadow-2xs">
+                سند رقم: #{voucherNumber}
               </span>
+              {editingVoucherId && (
+                <span className="text-xs bg-amber-50 text-amber-950 px-2.5 py-1 rounded-lg font-black border border-amber-300 flex items-center gap-1 shadow-2xs">
+                  <Edit3 size={12} className="text-amber-700" /> وضع التعديل
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Global 3D Responsive Internal Voucher Actions Toolbar */}
+        <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
+          {/* Cluster 1: Sequential Navigation & History */}
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            {/* 3D Navigation Bar */}
+            <div className="nav-3d-segment">
+              <button
+                type="button"
+                onClick={handleNavigateFirst}
+                disabled={!canGoFirst}
+                className="p-1.5 text-slate-600 hover:text-blue-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
+                title="السند الأول (الأقدم)"
+              >
+                <ChevronsRight size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={handleNavigatePrevious}
+                disabled={!canGoPrevious}
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                title="تراجع للخلف - السند السابق"
+              >
+                <ChevronRight size={14} className="text-slate-700" />
+                <span className="hidden sm:inline">تراجع للخلف</span>
+                <span className="sm:hidden">السابق</span>
+              </button>
+
+              <div className="px-2 sm:px-2.5 py-1 text-[11px] font-mono font-black text-slate-800 bg-slate-100 rounded-lg mx-0.5 select-none border border-slate-200 whitespace-nowrap">
+                {currentVoucherIndex >= 0 ? (
+                  <span>{currentVoucherIndex + 1} / {chronologicallyOrderedVouchers.length}</span>
+                ) : (
+                  <span className="text-blue-700 font-sans font-bold">سند جديد +</span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleNavigateNext}
+                disabled={!canGoNext}
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                title="تقديم للأمام - السند التالي"
+              >
+                <span className="hidden sm:inline">تقديم للأمام</span>
+                <span className="sm:hidden">التالي</span>
+                <ChevronLeft size={14} className="text-slate-700" />
+              </button>
+              <button
+                type="button"
+                onClick={handleNavigateLast}
+                disabled={!canGoLast}
+                className="p-1.5 text-slate-600 hover:text-blue-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
+                title="السند الأخير (الأحدث)"
+              >
+                <ChevronsLeft size={15} />
+              </button>
+            </div>
+
+            {/* 3D History Button */}
+            <button 
+              type="button" 
+              onClick={() => setShowHistory(!showHistory)} 
+              className={`btn-3d h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black ${
+                showHistory ? 'btn-3d-active' : 'btn-3d-white'
+              }`}
+            >
+              <History size={14} className={showHistory ? 'text-indigo-200' : 'text-indigo-600'} />
+              <span>سجل السندات ({savedVouchers.length})</span>
+            </button>
+
+            {editingVoucherId && (
+              <button
+                type="button"
+                onClick={handleNewVoucher}
+                className="btn-3d btn-3d-white h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black text-slate-700 hover:text-slate-900"
+              >
+                <X size={14} /> <span>إلغاء التعديل</span>
+              </button>
             )}
           </div>
-          <p className="text-slate-500 mt-1 text-xs sm:text-sm">تحويل الأموال بين الخزائن والحسابات البنكية مع إمكانية التعديل والحذف.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {editingVoucherId && (
+
+          {/* Cluster 2: New, Print & Preview Controls */}
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            {/* 3D New Voucher Button */}
+            <button 
+              type="button" 
+              onClick={handleNewVoucher} 
+              className="btn-3d btn-3d-blue h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black"
+            >
+              <Plus size={15} />
+              <span>سند جديد #{nextCalculatedVoucherNum}</span>
+            </button>
+
+            {/* Print & Preview Group */}
+            <div className="flex items-center gap-1.5 border-r border-slate-300/80 pr-2 mr-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomPreviewData(null);
+                  setShowPrintPreview(true);
+                }}
+                className="btn-3d btn-3d-slate h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black"
+                title="معاينة سند التحويل الداخلي قبل الطباعة"
+              >
+                <Eye size={14} />
+                <span className="hidden sm:inline">معاينة قبل الطباعة</span>
+                <span className="sm:hidden">معاينة</span>
+              </button>
+              <PrintDropdown 
+                onPreview={() => {
+                  setCustomPreviewData(null);
+                  setShowPrintPreview(true);
+                }}
+              />
+            </div>
+
+            {/* 3D Export Vouchers Button */}
             <button
               type="button"
-              onClick={handleNewVoucher}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-200 transition-colors cursor-pointer"
+              onClick={() => setShowExportModal(true)}
+              className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black flex items-center gap-1.5 shadow-sm"
+              title="تصدير كشوفات السندات والعمليات إلى Excel (.xlsx) و CSV و PDF"
             >
-              <X size={14} /> إلغاء التعديل
+              <FileSpreadsheet size={15} className="text-emerald-200" />
+              <span className="hidden sm:inline">تصدير الكشوفات (Excel/PDF)</span>
+              <span className="sm:hidden">تصدير</span>
             </button>
-          )}
-          <button 
-            type="button" 
-            onClick={() => setShowHistory(!showHistory)} 
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-xs text-xs font-medium border transition-colors cursor-pointer ${showHistory ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
-          >
-            <History size={15} /> سجل السندات ({savedVouchers.length})
-          </button>
-          <button 
-            type="button" 
-            onClick={handleNewVoucher} 
-            className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg shadow-xs text-xs font-medium hover:bg-blue-100 transition-colors cursor-pointer"
-          >
-            <Plus size={15} /> سند جديد #{nextCalculatedVoucherNum}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setCustomPreviewData(null);
-              setShowPrintPreview(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg shadow-xs text-xs font-bold transition-colors cursor-pointer"
-            title="معاينة سند التحويل الداخلي قبل الطباعة"
-          >
-            <Eye size={14} />
-            <span>معاينة قبل الطباعة</span>
-          </button>
-          <PrintDropdown 
-            onPreview={() => {
-              setCustomPreviewData(null);
-              setShowPrintPreview(true);
-            }}
-          />
+
+            {/* Approval Center Button */}
+            {systemSettings?.approvalWorkflow?.enabled && (
+              <button
+                type="button"
+                onClick={() => setShowApprovalCenterModal(true)}
+                className="btn-3d btn-3d-amber h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black flex items-center gap-1.5 shadow-sm relative"
+                title="مركز اعتمادات وموافقات الإدارة المالية"
+              >
+                <UserCheck size={15} className="text-amber-200" />
+                <span className="hidden sm:inline">مركز الاعتماد</span>
+                {pendingApprovalsCount > 0 && (
+                  <span className="px-1.5 py-0.2 bg-red-600 text-white rounded-full text-[10px] font-mono font-bold animate-bounce">
+                    {pendingApprovalsCount}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Collapsible History Drawer */}
       {showHistory && (
-        <div className="mb-6 bg-white border border-slate-200 rounded-xl p-4 shadow-sm animate-in fade-in duration-150 print:hidden">
-          <div className="flex items-center justify-between mb-3">
+        <div className="mb-6 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm animate-in fade-in duration-150 print:hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
             <div className="flex items-center gap-2">
               <History size={16} className="text-indigo-600" />
               <h3 className="font-bold text-slate-800 text-sm">سجل سندات التحويل الداخلي المسجلة بقاعدة البيانات</h3>
               <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono">{savedVouchers.length} سندات</span>
             </div>
-            <button 
-              type="button" 
-              onClick={() => setShowHistory(false)}
-              className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
-            >
-              إغلاق
-            </button>
-          </div>
-          {savedVouchers.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-4">لا توجد سندات داخلية محفوظة بعد. السند القادم سيبدأ برقم #{nextCalculatedVoucherNum}.</p>
-          ) : (
-            <div className="overflow-x-auto max-h-56">
-              <table className="w-full text-right text-xs">
-                <thead>
-                  <tr className="border-b border-slate-100 text-slate-400">
-                    <th className="pb-2 font-semibold">رقم السند</th>
-                    <th className="pb-2 font-semibold">من حساب</th>
-                    <th className="pb-2 font-semibold">إلى حساب</th>
-                    <th className="pb-2 font-semibold">المبلغ</th>
-                    <th className="pb-2 font-semibold">التاريخ</th>
-                    <th className="pb-2 font-semibold">البيان</th>
-                    <th className="pb-2 font-semibold text-center">إجراءات</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {savedVouchers.map(v => (
-                    <tr key={v.id} className={`hover:bg-slate-50 transition-colors ${editingVoucherId === v.id ? 'bg-blue-50/60' : ''}`}>
-                      <td className="py-2 font-mono font-bold text-blue-600">#{v.voucherNumber}</td>
-                      <td className="py-2 text-slate-700 font-medium">{getAccountName(v.fromAccountId)}</td>
-                      <td className="py-2 text-slate-700 font-medium">{getAccountName(v.toAccountId)}</td>
-                      <td className="py-2 font-mono font-bold text-slate-800">{v.amount.toLocaleString()} ريال</td>
-                      <td className="py-2 text-slate-500">{v.date}</td>
-                      <td className="py-2 text-slate-500 truncate max-w-xs">{v.description}</td>
-                      <td className="py-2 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCustomPreviewData({
-                                title: 'سند تحويل ومناقلة داخلية',
-                                subtitle: 'سند تسوية ونقل أموال بين الحسابات والخزائن',
-                                docNumber: v.voucherNumber,
-                                date: v.date,
-                                partnerName: `من: ${getAccountName(v.fromAccountId)} ⬅️ إلى: ${getAccountName(v.toAccountId)}`,
-                                paymentMethod: 'مناقلة داخلية',
-                                notes: v.description,
-                                grandTotal: v.amount,
-                                subtotal: v.amount,
-                                amount: v.amount,
-                                paidAmount: v.amount,
-                                voucherType: 'INTERNAL',
-                                amountInWords: tafqeet(v.amount),
-                                items: [{
-                                  description: `تحويل من (${getAccountName(v.fromAccountId)}) إلى (${getAccountName(v.toAccountId)}) - ${v.description || 'مناقلة مالية'}`,
-                                  quantity: 1,
-                                  unitPrice: v.amount,
-                                  taxRate: 0,
-                                  total: v.amount
-                                }]
-                              });
-                              setShowPrintPreview(true);
-                            }}
-                            className="flex items-center gap-0.5 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[11px] font-semibold transition-colors cursor-pointer"
-                            title="معاينة السند الداخلي"
-                          >
-                            <Eye size={12} />
-                            <span>معاينة</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleEdit(v)}
-                            className="flex items-center gap-0.5 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-semibold transition-colors cursor-pointer"
-                            title="تعديل السند"
-                          >
-                            <Edit3 size={12} />
-                            <span>تعديل</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(v.id, v.voucherNumber)}
-                            className="flex items-center gap-0.5 px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[11px] font-semibold transition-colors cursor-pointer"
-                            title="حذف السند"
-                          >
-                            <Trash2 size={12} />
-                            <span>حذف</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+            <div className="flex items-center gap-2">
+              {/* Filter Tabs */}
+              <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setHistoryStatusFilter('ALL')}
+                  className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                    historyStatusFilter === 'ALL'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  الكل ({savedVouchers.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistoryStatusFilter('POSTED')}
+                  className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 ${
+                    historyStatusFilter === 'POSTED'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'text-emerald-700 hover:text-emerald-900'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  مرحلة ({savedVouchers.filter(v => v.status === 'POSTED').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistoryStatusFilter('DRAFT')}
+                  className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 ${
+                    historyStatusFilter === 'DRAFT'
+                      ? 'bg-amber-500 text-white shadow-2xs'
+                      : 'text-amber-700 hover:text-amber-900'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                  مسودات ({savedVouchers.filter(v => v.status !== 'POSTED').length})
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowExportModal(true)}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 flex items-center gap-1 transition-colors cursor-pointer"
+                  title="تصدير كشف سندات التحويل الداخلي إلى Excel (.xlsx) أو CSV أو PDF"
+                >
+                  <FileSpreadsheet size={13} className="text-emerald-600" />
+                  <span>تصدير كشف السندات</span>
+                </button>
+
+                <button 
+                  type="button" 
+                  onClick={() => setShowHistory(false)}
+                  className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer px-2 py-1"
+                >
+                  إغلاق
+                </button>
+              </div>
             </div>
-          )}
+          </div>
+
+          {(() => {
+            const filteredList = savedVouchers.filter(v => {
+              if (historyStatusFilter === 'POSTED') return v.status === 'POSTED';
+              if (historyStatusFilter === 'DRAFT') return v.status !== 'POSTED';
+              return true;
+            });
+
+            if (filteredList.length === 0) {
+              return (
+                <p className="text-xs text-slate-400 text-center py-6">
+                  {savedVouchers.length === 0 
+                    ? `لا توجد سندات داخلية محفوظة بعد. السند القادم سيبدأ برقم #${nextCalculatedVoucherNum}.`
+                    : 'لا توجد سندات تطابق الفلتر المحدد حالياً.'}
+                </p>
+              );
+            }
+
+            return (
+              <div className="overflow-x-auto max-h-64">
+                <table className="w-full text-right text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-slate-400">
+                      <th className="pb-2 font-semibold">رقم السند</th>
+                      <th className="pb-2 font-semibold text-center">الحالة</th>
+                      <th className="pb-2 font-semibold">من حساب</th>
+                      <th className="pb-2 font-semibold">إلى حساب</th>
+                      <th className="pb-2 font-semibold">المبلغ</th>
+                      <th className="pb-2 font-semibold">التاريخ</th>
+                      <th className="pb-2 font-semibold">البيان</th>
+                      <th className="pb-2 font-semibold text-center">إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {filteredList.map(v => {
+                      const isPosted = v.status === 'POSTED';
+                      return (
+                        <tr key={v.id} className={`hover:bg-slate-50 transition-colors ${editingVoucherId === v.id ? 'bg-blue-50/60' : ''}`}>
+                          <td className="py-2.5 font-mono font-bold text-blue-600">#{v.voucherNumber}</td>
+                          <td className="py-2.5 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                              isPosted 
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
+                                : 'bg-amber-50 text-amber-700 border-amber-300'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${isPosted ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                              {isPosted ? 'مرحل' : 'مسودة'}
+                            </span>
+
+                            {systemSettings?.approvalWorkflow?.enabled && (
+                              <div className="mt-1">
+                                {v.approvalStatus === 'APPROVED' ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <span>معتمد ({v.approvalRole || 'الإدارة'})</span>
+                                  </span>
+                                ) : v.approvalStatus === 'REJECTED' ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                    <span>مرفوض</span>
+                                  </span>
+                                ) : v.approvalStatus === 'PENDING_APPROVAL' ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200 animate-pulse">
+                                    <span>بانتظار الاعتماد</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] text-slate-400">لا يتطلب</span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-2.5 text-slate-700 font-medium">{getAccountName(v.fromAccountId)}</td>
+                          <td className="py-2.5 text-slate-700 font-medium">{getAccountName(v.toAccountId)}</td>
+                          <td className="py-2.5 font-mono font-bold text-slate-800">{v.amount.toLocaleString()} ريال</td>
+                          <td className="py-2.5 text-slate-500">{v.date}</td>
+                          <td className="py-2.5 text-slate-500 truncate max-w-xs">{v.description}</td>
+                          <td className="py-2.5 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              {/* Post/Unpost toggle button */}
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePostingFromList(v)}
+                                className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold border transition-colors cursor-pointer ${
+                                  isPosted
+                                    ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300'
+                                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-300'
+                                }`}
+                                title={isPosted ? 'إلغاء الترحيل وإعادته لمسودة' : 'ترحيل السند في الحسابات العامة وميزان المراجعة'}
+                              >
+                                {isPosted ? (
+                                  <>
+                                    <RotateCcw size={11} />
+                                    <span>إلغاء</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 size={11} />
+                                    <span>ترحيل</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCustomPreviewData({
+                                    title: 'سند تحويل ومناقلة داخلية',
+                                    subtitle: 'سند تسوية ونقل أموال بين الحسابات والخزائن',
+                                    docNumber: v.voucherNumber,
+                                    date: v.date,
+                                    partnerName: `من: ${getAccountName(v.fromAccountId)} ⬅️ إلى: ${getAccountName(v.toAccountId)}`,
+                                    paymentMethod: 'مناقلة داخلية',
+                                    notes: v.description,
+                                    grandTotal: v.amount,
+                                    subtotal: v.amount,
+                                    amount: v.amount,
+                                    paidAmount: v.amount,
+                                    voucherType: 'INTERNAL',
+                                    amountInWords: tafqeet(v.amount),
+                                    items: [{
+                                      description: `تحويل من (${getAccountName(v.fromAccountId)}) إلى (${getAccountName(v.toAccountId)}) - ${v.description || 'مناقلة مالية'}`,
+                                      quantity: 1,
+                                      unitPrice: v.amount,
+                                      taxRate: 0,
+                                      total: v.amount
+                                    }]
+                                  });
+                                  setShowPrintPreview(true);
+                                }}
+                                className="flex items-center gap-0.5 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[11px] font-semibold transition-colors cursor-pointer"
+                                title="معاينة السند الداخلي"
+                              >
+                                <Eye size={12} />
+                                <span>معاينة</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleEdit(v)}
+                                className="flex items-center gap-0.5 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-semibold transition-colors cursor-pointer"
+                                title="تعديل السند"
+                              >
+                                <Edit3 size={12} />
+                                <span>تعديل</span>
+                              </button>
+                              <button
+                                type="button"
+                                disabled={v.status === 'POSTED'}
+                                onClick={() => handleDelete(v.id, v.voucherNumber)}
+                                className={`flex items-center gap-0.5 px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
+                                  v.status === 'POSTED'
+                                    ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-50'
+                                    : 'bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer'
+                                }`}
+                                title={v.status === 'POSTED' ? 'السند مرحل بالحسابات. يجب إلغاء الترحيل أولاً لحذفه' : 'حذف السند'}
+                              >
+                                <Trash2 size={12} />
+                                <span>حذف</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -342,6 +858,64 @@ export default function InternalVouchers() {
           <span className="font-bold font-mono">رقم السند: #{voucherNumber}</span>
           <span>التاريخ: {date}</span>
           <span>تاريخ الطباعة: {new Date().toLocaleDateString('ar-SA')}</span>
+        </div>
+      </div>
+
+      {/* Prominent Posting Status Banner */}
+      <div className={`p-4 rounded-2xl border mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs print:hidden ${
+        voucherStatus === 'POSTED' 
+          ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950' 
+          : 'bg-amber-50/90 border-amber-300 text-amber-950'
+      }`}>
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+            voucherStatus === 'POSTED' 
+              ? 'bg-emerald-100 text-emerald-700 border-emerald-300' 
+              : 'bg-amber-100 text-amber-700 border-amber-300'
+          }`}>
+            {voucherStatus === 'POSTED' ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-black text-sm">
+                {voucherStatus === 'POSTED' ? 'سند تحويل مرحّل في الحسابات العامة' : 'سند تحويل مؤقت - مسودة (غير مرحل)'}
+              </span>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                voucherStatus === 'POSTED'
+                  ? 'bg-emerald-200 text-emerald-900 border-emerald-300'
+                  : 'bg-amber-200 text-amber-900 border-amber-300'
+              }`}>
+                {voucherStatus === 'POSTED' ? 'مرحل ومقيد' : 'مسودة غير مرحلة'}
+              </span>
+            </div>
+            <p className="text-xs mt-0.5 opacity-90 leading-relaxed">
+              {voucherStatus === 'POSTED' 
+                ? 'تم إثبات أثر المناقلة في دفاتر الحسابات وميزان المراجعة. لإلغاء القيد اضغط على زر [إلغاء الترحيل].' 
+                : 'تم إيقاف الترحيل التلقائي - هذا السند لا يؤثر على أرصدة الصناديق أو البنوك أو ميزان المراجعة حتى تضغط على زر [ترحيل السند في الحسابات].'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+          {voucherStatus === 'POSTED' ? (
+            <button
+              type="button"
+              onClick={handleUnpostCurrentVoucher}
+              className="px-4 py-2 bg-white hover:bg-amber-50 text-amber-800 border-2 border-amber-300 rounded-xl text-xs font-black transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+            >
+              <RotateCcw size={14} />
+              <span>إلغاء الترحيل</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handlePostCurrentVoucher}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-colors cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-700/20"
+            >
+              <CheckCircle2 size={14} />
+              <span>ترحيل السند في الحسابات الآن</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -557,7 +1131,7 @@ export default function InternalVouchers() {
                 <div className="md:col-span-7 bg-amber-50/90 border border-amber-200/90 p-3.5 rounded-2xl">
                   <span className="text-[10px] text-amber-900 font-bold block mb-0.5">المبلغ كتابة بالحروف وفقط:</span>
                   <p className="font-black text-amber-950 font-sans text-xs sm:text-sm leading-relaxed">
-                    {amount && Number(amount) > 0 ? tafqeet(Number(amount)) : `فقط صفر ${currencyFullNameAr} لا غير`}
+                    {amount && Number(amount) > 0 ? tafqeet(Number(amount)) : `صفر ${currencyFullNameAr} فقط لا غير`}
                   </p>
                 </div>
               </div>
@@ -612,6 +1186,39 @@ export default function InternalVouchers() {
             </div>
           </div>
 
+          {/* Approval Hierarchy Stepper */}
+          {systemSettings?.approvalWorkflow?.enabled && (
+            <div className="p-4 bg-slate-50 border-t border-slate-200">
+              <VoucherApprovalStepper
+                voucher={activeVoucher}
+                voucherId={editingVoucherId}
+                voucherNumber={voucherNumber || nextCalculatedVoucherNum}
+                voucherType="INTERNAL_TRANSFER"
+                amount={Number(amount) || 0}
+                date={date}
+                isPosted={voucherStatus === 'POSTED'}
+                postedAt={activeVoucher?.postedAt}
+                approvalStatus={activeVoucher?.approvalStatus}
+                approvedBy={activeVoucher?.approvedBy}
+                approvedAt={activeVoucher?.approvedAt}
+                approvalRole={activeVoucher?.approvalRole}
+                approvalNotes={activeVoucher?.approvalNotes}
+                rejectedBy={activeVoucher?.rejectedBy}
+                rejectedAt={activeVoucher?.rejectedAt}
+                rejectionReason={activeVoucher?.rejectionReason}
+                preparedBy={activeVoucher?.preparedBy}
+                systemSettings={systemSettings}
+                onApprovalChanged={() => {
+                  const fresh = loadStoredInternalVouchers();
+                  setSavedVouchers(fresh);
+                }}
+                onOpenApprovalCenter={() => setShowApprovalCenterModal(true)}
+                onPost={handlePostCurrentVoucher}
+                onUnpost={handleUnpostCurrentVoucher}
+              />
+            </div>
+          )}
+
           {/* Action Bar */}
           <div className="bg-slate-900 text-white p-5 sm:p-6 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0 print:hidden border-t-2 border-slate-800">
             <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
@@ -637,13 +1244,34 @@ export default function InternalVouchers() {
                 <span>معاينة الطباعة</span>
               </button>
 
-              <button 
-                type="submit" 
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 via-sky-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white rounded-xl shadow-lg shadow-blue-950/40 text-sm font-black transition-all cursor-pointer border border-blue-400/30"
+              <button
+                type="button"
+                onClick={() => saveVoucherWithStatus('DRAFT')}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-xs border border-slate-700 transition-colors cursor-pointer"
               >
-                <Save size={17} /> 
-                <span>{editingVoucherId ? 'حفظ تعديلات السند' : 'حفظ وترحيل سند التحويل'}</span>
+                <Save size={15} />
+                <span>حفظ كمسودة (غير مرحل)</span>
               </button>
+
+              {voucherStatus === 'POSTED' ? (
+                <button
+                  type="button"
+                  onClick={handleUnpostCurrentVoucher}
+                  className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-xl font-bold text-xs border border-amber-500/40 transition-colors cursor-pointer"
+                >
+                  <RotateCcw size={15} />
+                  <span>إلغاء الترحيل</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handlePostCurrentVoucher}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 text-white rounded-xl shadow-lg shadow-emerald-950/40 text-sm font-black transition-all cursor-pointer border border-emerald-400/30"
+                >
+                  <CheckCircle2 size={16} />
+                  <span>ترحيل السند في الحسابات</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -696,6 +1324,29 @@ export default function InternalVouchers() {
             }]
           }
         }
+      />
+
+      {/* Export Modal */}
+      <VouchersExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        initialCategory="INTERNAL"
+        initialType="INTERNAL_TRANSFER"
+        title="تصدير كشوفات سندات التحويل الداخلي بين الخزائن والبنوك (Excel / CSV / PDF)"
+      />
+
+      {/* Vouchers Approval Center Modal */}
+      <VouchersApprovalCenterModal
+        isOpen={showApprovalCenterModal}
+        onClose={() => setShowApprovalCenterModal(false)}
+        systemSettings={systemSettings}
+        onSelectVoucher={(voucher) => {
+          setShowApprovalCenterModal(false);
+          const found = savedVouchers.find(v => v.id === voucher.id || v.voucherNumber === voucher.voucherNumber);
+          if (found) {
+            handleEdit(found);
+          }
+        }}
       />
     </div>
   );

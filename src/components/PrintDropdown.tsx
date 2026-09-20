@@ -37,7 +37,7 @@ export default function PrintDropdown({
   onPrint,
   onPreview,
   onExportPdf,
-  previewLabel = 'معاينة قبل الطباعة'
+  
 }: PrintDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeFormat, setActiveFormat] = useState<PrintPaperFormat>('A4');
@@ -169,44 +169,28 @@ export default function PrintDropdown({
         </div>
       )}
 
-      {/* Dedicated Preview Button (if provided) */}
-      {onPreview && (
-        <button
-          type="button"
-          onClick={onPreview}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer shrink-0"
-          title="معاينة المستند قبل الطباعة"
-        >
-          <Eye size={14} className="text-blue-600 shrink-0" />
-          <span className="hidden sm:inline">{previewLabel}</span>
-          <span className="sm:hidden">معاينة</span>
-        </button>
-      )}
-
       {/* Main Print Options Dropdown Trigger */}
       <div className="relative">
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer border ${
-            isOpen 
-              ? 'bg-slate-900 text-white border-slate-800 ring-2 ring-blue-500/20' 
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
+          className={`btn-3d h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black shrink-0 hover:scale-105 active:scale-95 transition-all ${
+            isOpen ? 'btn-3d-active' : 'btn-3d-white'
           }`}
           title="خيارات ومقاسات الطباعة وتثبيت المقاس الافتراضي"
         >
-          <Printer size={15} className={isOpen ? 'text-blue-400' : 'text-slate-700'} />
+          <Printer size={14} className={isOpen ? 'text-blue-300' : 'text-slate-700'} />
           <span className="hidden md:inline">خيارات الطبعات</span>
           <span className="md:hidden">الطبعات</span>
           
           {/* Active pinned paper size badge */}
           <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold flex items-center gap-1 border ${
             isOpen
-              ? 'bg-blue-600/30 text-blue-300 border-blue-500/40'
-              : 'bg-slate-100 text-slate-700 border-slate-200'
+              ? 'bg-blue-600/40 text-blue-200 border-blue-400/40'
+              : 'bg-slate-100 text-slate-700 border-slate-300'
           }`}>
-            <Pin size={10} className="text-emerald-500" />
-            <span className="truncate max-w-[85px] sm:max-w-[120px]">
+            <Pin size={9} className="text-emerald-500" />
+            <span className="truncate max-w-[80px] sm:max-w-[110px]">
               {activeFormat === 'CUSTOM'
                 ? `${customSize.widthCm}×${customSize.heightCm}سم`
                 : activeDef.shortName}
@@ -214,8 +198,8 @@ export default function PrintDropdown({
           </span>
 
           <ChevronDown 
-            size={13} 
-            className={`transition-transform duration-200 text-slate-400 ${isOpen ? 'rotate-180 text-blue-400' : ''}`} 
+            size={12} 
+            className={`transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-300' : 'text-slate-400'}`} 
           />
         </button>
 
@@ -257,7 +241,7 @@ export default function PrintDropdown({
                 <button
                   type="button"
                   onClick={handlePrintCurrent}
-                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold shadow-xs transition-colors shrink-0 flex items-center gap-1"
+                  className="btn-3d btn-3d-success px-2.5 py-1 text-white rounded-lg text-[11px] font-bold shrink-0 flex items-center gap-1 hover:scale-105 active:scale-95 transition-all"
                 >
                   <Printer size={12} />
                   <span>طباعة الآن</span>
@@ -523,7 +507,7 @@ export default function PrintDropdown({
                     setIsOpen(false);
                     onExportPdf();
                   }}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-100 text-rose-700 border border-rose-200 rounded-xl font-bold transition-colors cursor-pointer shadow-2xs"
+                  className="btn-3d btn-3d-white flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-rose-700 font-bold hover:scale-105 active:scale-95 transition-all"
                 >
                   <Download size={13} />
                   <span>تصدير PDF</span>
@@ -537,7 +521,7 @@ export default function PrintDropdown({
                     setIsOpen(false);
                     onPreview();
                   }}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl font-bold transition-colors cursor-pointer shadow-2xs"
+                  className="btn-3d btn-3d-white flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-blue-700 font-bold hover:scale-105 active:scale-95 transition-all"
                 >
                   <Eye size={13} />
                   <span>معاينة المستند</span>
@@ -568,7 +552,8 @@ export default function PrintDropdown({
               <button
                 type="button"
                 onClick={() => setShowCustomModal(false)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                className="btn-3d btn-3d-slate p-1.5 text-slate-300 hover:text-white rounded-xl hover:scale-105 active:scale-95 transition-all"
+                title="إغلاق"
               >
                 <X size={18} />
               </button>
@@ -665,13 +650,13 @@ export default function PrintDropdown({
                 <button
                   type="button"
                   onClick={() => setShowCustomModal(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="btn-3d btn-3d-white px-4 py-2 text-xs font-bold text-slate-700 hover:scale-105 active:scale-95 transition-all"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-bold shadow-md transition-colors cursor-pointer"
+                  className="btn-3d btn-3d-purple flex items-center gap-1.5 px-4 py-2 text-white rounded-xl text-xs font-bold hover:scale-105 active:scale-95 transition-all"
                 >
                   <Pin size={14} />
                   <span>تثبيت وحفظ المقاس</span>

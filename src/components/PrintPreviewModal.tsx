@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Printer, 
   X, 
@@ -14,10 +15,11 @@ import {
   Sliders,
   Palette,
   CheckCircle2,
-  Globe
+  Globe,
+  Scan
 } from 'lucide-react';
 import { CertifiedInvoiceDocument } from './CertifiedInvoiceDocument';
-import { exportElementToPdf } from '../utils/pdfExport';
+import { exportElementToPdf, printElementDirectly } from '../utils/pdfExport';
 import {
   PAPER_FORMAT_LIST,
   getSavedPrintPaperFormat,
@@ -48,6 +50,7 @@ export interface PrintPreviewData {
   
   // Financials & details
   classification?: 'NORMAL' | 'TAX' | undefined;
+  taxRate?: number | undefined;
   currency?: string | undefined;
   items?: Array<{
     id?: string | undefined;
@@ -79,6 +82,14 @@ export interface PrintPreviewData {
   paymentMethod?: string | undefined;
   serviceType?: string | undefined;
   receivedFromOrPaidTo?: string | undefined;
+  allocatedInvoices?: Array<{
+    invoiceNumber: string;
+    allocatedAmount: number;
+    invoiceTotal?: number | undefined;
+    remainingBalance?: number | undefined;
+    date?: string | undefined;
+    dueDate?: string | undefined;
+  }> | undefined;
   
   // For Statement of Account
   statementPeriod?: { from?: string | undefined; to?: string | undefined } | undefined;
@@ -151,12 +162,12 @@ export default function PrintPreviewModal({
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
 
   const printAreaRef = useRef<HTMLDivElement>(null);
-  const pdfExportRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Sync when opened
   useEffect(() => {
     if (isOpen) {
+      document.body.classList.add('print-preview-active');
       const saved = getSavedPrintPaperFormat();
       if (!initialFormat) {
         setFormat(saved.format);
@@ -165,7 +176,12 @@ export default function PrintPreviewModal({
       setTempWidthCm(saved.customSize.widthCm.toString());
       setTempHeightCm(saved.customSize.heightCm.toString());
       setColorMode(getSavedPrintColorMode());
+    } else {
+      document.body.classList.remove('print-preview-active');
     }
+    return () => {
+      document.body.classList.remove('print-preview-active');
+    };
   }, [isOpen, initialFormat]);
 
   const activeDef = getPaperFormatDef(format, customSize);
@@ -175,18 +191,23 @@ export default function PrintPreviewModal({
     const def = getPaperFormatDef(fmt, cSize);
     const baseW = def.baseWidthPx;
 
-    if (!scrollContainerRef.current) {
-      if (typeof window !== 'undefined') {
-        const availableWidth = window.innerWidth - 32;
-        if (availableWidth < baseW) {
-          return Math.min(100, Math.max(30, Math.floor((availableWidth / baseW) * 100)));
-        }
-      }
-      return 100;
+    // Determine available width from container or viewport
+    let containerWidth = 0;
+    if (scrollContainerRef.current && scrollContainerRef.current.clientWidth > 0) {
+      // On mobile screens p-1 or p-2 leaves ~12-16px margin, on larger screens 24-48px
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+      const paddingAllowance = isMobile ? 16 : 36;
+      containerWidth = scrollContainerRef.current.clientWidth - paddingAllowance;
+    } else if (typeof window !== 'undefined') {
+      const isMobile = window.innerWidth < 640;
+      containerWidth = window.innerWidth - (isMobile ? 16 : 40);
     }
-    const containerWidth = scrollContainerRef.current.clientWidth - 32;
-    if (containerWidth < baseW + 20) {
-      return Math.min(100, Math.max(25, Math.floor((containerWidth / baseW) * 100)));
+
+    if (containerWidth > 0 && containerWidth < baseW + 10) {
+      // Calculate exact fit percentage so document shrinks smoothly to screen width
+      const fitPercent = Math.floor((containerWidth / baseW) * 100);
+      // Clamp between 15% (for huge poster formats on narrow phones) and 100%
+      return Math.min(100, Math.max(15, fitPercent));
     }
     return 100;
   }, []);
@@ -267,7 +288,7 @@ export default function PrintPreviewModal({
 
   const handlePrint = () => {
     applyPrintPageStyle(format, customSize, colorMode);
-    window.print();
+    printElementDirectly(printAreaRef.current, format, customSize, colorMode);
   };
 
   const handleFitWidth = () => {
@@ -276,25 +297,32 @@ export default function PrintPreviewModal({
   };
 
   const handleExportPdf = async () => {
-    if (!pdfExportRef.current || isExportingPdf) return;
     try {
       setIsExportingPdf(true);
       const safeTitle = (data.title || 'document').replace(/\s+/g, '_');
       const safeNumber = data.docNumber ? `_${data.docNumber}` : '';
       const filename = `${safeTitle}${safeNumber}.pdf`;
 
-      await exportElementToPdf(pdfExportRef.current, {
+      setFeedbackToast('جاري إنشاء وتنزيل ملف الـ PDF مباشرة على جهازك...');
+
+      await exportElementToPdf(printAreaRef.current, {
         filename,
         format,
         customSize,
-        scale: 2,
+        colorMode,
       });
 
       setIsExportSuccess(true);
-      setTimeout(() => setIsExportSuccess(false), 3000);
+      setFeedbackToast(`تم تنزيل ملف PDF (${filename}) بنجاح!`);
+      setTimeout(() => {
+        setIsExportSuccess(false);
+        setFeedbackToast(null);
+      }, 3500);
     } catch (err) {
       console.error('PDF Export error:', err);
-      alert('⚠️ حدث خطأ غير متوقع أثناء إنشاء ملف الـ PDF. يمكنك استخدام زر [طباعة الآن] واختيار "حفظ بتنسيق PDF" كبديل مباشر.');
+      setFeedbackToast('حدث تنبيه أثناء التصدير المباشر، جاري فتح نافذة الطباعة...');
+      setTimeout(() => setFeedbackToast(null), 3000);
+      printElementDirectly(printAreaRef.current, format, customSize, colorMode);
     } finally {
       setIsExportingPdf(false);
     }
@@ -302,18 +330,20 @@ export default function PrintPreviewModal({
 
   const scaledWidth = Math.round(baseWidth * (zoom / 100));
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-900/90 backdrop-blur-xs overflow-hidden animate-fadeIn">
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-900/90 backdrop-blur-xs overflow-hidden animate-fadeIn print:static print:inset-auto print:bg-white print:overflow-visible print:p-0 print:m-0 print:z-auto print-preview-modal-root">
       {/* Toast Feedback */}
       {feedbackToast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-60 bg-emerald-900/95 text-emerald-100 text-xs px-4 py-2 rounded-xl shadow-2xl flex items-center gap-2 border border-emerald-500/40 pointer-events-none animate-fadeIn">
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-60 bg-emerald-900/95 text-emerald-100 text-xs px-4 py-2 rounded-xl shadow-2xl flex items-center gap-2 border border-emerald-500/40 pointer-events-none animate-fadeIn print:hidden">
           <Pin size={13} className="text-emerald-400" />
           <span className="font-bold">{feedbackToast}</span>
         </div>
       )}
 
       {/* Top Floating Control Bar */}
-      <div className="bg-slate-900 text-white px-3 sm:px-6 py-2.5 sm:py-3 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3 shadow-lg shrink-0 print:hidden">
+      <div className="bg-slate-900 text-white px-3 sm:px-6 py-2.5 sm:py-3 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3 shadow-lg shrink-0 print:hidden print-controls-bar">
         
         {/* Row 1: Document Title & Close Button */}
         <div className="flex items-center justify-between gap-2 w-full lg:w-auto">
@@ -328,6 +358,10 @@ export default function PrintPreviewModal({
                 </h2>
                 <span className="text-[10px] sm:text-xs bg-blue-500/20 text-blue-300 px-1.5 sm:px-2 py-0.5 rounded font-mono font-bold border border-blue-500/30 shrink-0">
                   #{data.docNumber || '0000'}
+                </span>
+                <span className="text-[10px] bg-purple-900/60 text-purple-200 px-1.5 py-0.5 rounded font-bold border border-purple-500/40 flex items-center gap-1 shrink-0" title="مزود بباركود ورمز QR ضوئي لمنع التلاعب">
+                  <Scan size={11} className="text-purple-300" />
+                  <span>باركود & QR</span>
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 hidden xl:block">
@@ -492,7 +526,7 @@ export default function PrintPreviewModal({
           <button
             type="button"
             onClick={handlePrint}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-colors cursor-pointer"
+            className="flex-1 lg:flex-none btn-3d btn-3d-emerald px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-black"
           >
             <Printer size={15} />
             <span>طباعة الآن ({activeDef.shortName})</span>
@@ -502,11 +536,11 @@ export default function PrintPreviewModal({
             type="button"
             onClick={handleExportPdf}
             disabled={isExportingPdf}
-            className={`flex-1 lg:flex-none flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 border rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm ${
+            className={`flex-1 lg:flex-none btn-3d ${
               isExportSuccess 
-                ? 'bg-emerald-700 border-emerald-600 text-white' 
-                : 'bg-rose-600 hover:bg-rose-700 active:bg-rose-800 border-rose-500 text-white'
-            } disabled:opacity-75 disabled:cursor-wait`}
+                ? 'btn-3d-emerald' 
+                : 'btn-3d-rose'
+            } px-3 sm:px-3.5 py-2 text-xs font-black disabled:opacity-75 disabled:cursor-wait`}
             title="تصدير المستند كملف PDF معتمد بالمقاس المختار"
           >
             {isExportingPdf ? (
@@ -530,7 +564,7 @@ export default function PrintPreviewModal({
           <button
             type="button"
             onClick={onClose}
-            className="hidden lg:block p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer shrink-0"
+            className="hidden lg:flex btn-3d btn-3d-slate p-2 text-slate-200 hover:text-white shrink-0"
             title="إغلاق المعاينة"
           >
             <X size={18} />
@@ -541,10 +575,10 @@ export default function PrintPreviewModal({
       {/* Main Preview Viewing Canvas Area */}
       <div 
         ref={scrollContainerRef}
-        className="flex-1 overflow-auto p-2 sm:p-6 md:p-8 flex justify-center items-start bg-slate-950/70 custom-scrollbar w-full"
+        className="flex-1 overflow-auto p-1.5 sm:p-6 md:p-8 flex justify-center items-start bg-slate-950/70 custom-scrollbar w-full max-w-full -webkit-overflow-scrolling-touch print:overflow-visible print:bg-white print:p-0 print:m-0 print:static print:block"
       >
         <div 
-          className="relative transition-all duration-150 flex justify-center shrink-0 my-auto"
+          className="relative transition-all duration-150 flex justify-center shrink-0 my-auto print:static print:m-0 print:w-full print:block max-w-full"
           style={{ 
             width: `${scaledWidth}px`,
           }}
@@ -555,7 +589,7 @@ export default function PrintPreviewModal({
               transform: `scale(${zoom / 100})`, 
               transformOrigin: 'top center' 
             }}
-            className="transition-transform duration-150 shrink-0 shadow-2xl"
+            className="transition-transform duration-150 shrink-0 shadow-2xl print:shadow-none print:transform-none print:w-full print:m-0 print-document-scaler"
           >
             <CertifiedInvoiceDocument
               ref={printAreaRef}
@@ -567,19 +601,6 @@ export default function PrintPreviewModal({
             />
           </div>
         </div>
-      </div>
-
-      
-      {/* Hidden Unscaled Copy for PDF Export */}
-      <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', pointerEvents: 'none' }}>
-        <CertifiedInvoiceDocument
-          ref={pdfExportRef}
-          data={data}
-          format={format}
-          customSize={customSize}
-          colorMode={colorMode}
-          language={language}
-        />
       </div>
 
       {/* Custom Size Configuration Dialog */}
@@ -676,6 +697,7 @@ export default function PrintPreviewModal({
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

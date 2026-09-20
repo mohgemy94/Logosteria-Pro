@@ -151,6 +151,22 @@ export const translations: TranslationDictionary = {
     ar: 'الخزينة والبنوك',
     en: 'Treasury & Cash Vouchers',
   },
+  nav_externalReceipt: {
+    ar: 'سند قبض خارجي',
+    en: 'External Receipt Voucher',
+  },
+  nav_externalPayment: {
+    ar: 'سند صرف خارجي',
+    en: 'External Payment Voucher',
+  },
+  nav_internalReceipt: {
+    ar: 'سند قبض داخلي',
+    en: 'Internal Receipt Voucher',
+  },
+  nav_internalPayment: {
+    ar: 'سند صرف داخلي',
+    en: 'Internal Payment Voucher',
+  },
   nav_external: {
     ar: 'سندات خارجية (قبض/صرف)',
     en: 'Receipt & Payment Vouchers',

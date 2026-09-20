@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { 
   Building2, 
   MapPin, 
@@ -13,7 +14,9 @@ import {
   LayoutDashboard
 } from 'lucide-react';
 import { SystemSettings } from '../types/accounting';
+import { saveSystemSettings } from '../utils/settings';
 import { useLanguage } from '../i18n/LanguageContext';
+import CompanyLogoUploader from './CompanyLogoUploader';
 
 interface CompanyProfileScreenProps {
   systemSettings: SystemSettings;
@@ -22,12 +25,37 @@ interface CompanyProfileScreenProps {
 }
 
 export default function CompanyProfileScreen({
-  systemSettings,
+  systemSettings: initialSettings,
   onNavigateToSettings,
   onNavigateToDashboard,
 }: CompanyProfileScreenProps) {
-  const { company, financial } = systemSettings;
+  const [settings, setSettings] = useState<SystemSettings>(initialSettings);
+  const { company, financial } = settings;
   const { language, dir } = useLanguage();
+
+  const handleLogoChange = (newLogoUrl: string) => {
+    const updated = {
+      ...settings,
+      company: {
+        ...settings.company,
+        logoUrl: newLogoUrl
+      }
+    };
+    setSettings(updated);
+    saveSystemSettings(updated);
+  };
+
+  const handleStampChange = (newStampUrl: string) => {
+    const updated = {
+      ...settings,
+      company: {
+        ...settings.company,
+        stampUrl: newStampUrl
+      }
+    };
+    setSettings(updated);
+    saveSystemSettings(updated);
+  };
 
   return (
     <div className="w-full flex flex-col gap-6 print:p-0" dir={dir}>
@@ -135,6 +163,16 @@ export default function CompanyProfileScreen({
           </div>
         </div>
       </div>
+
+      {/* Company Logo & Stamp Uploader Section */}
+      <CompanyLogoUploader
+        logoUrl={company.logoUrl || ''}
+        onLogoChange={handleLogoChange}
+        stampUrl={company.stampUrl || ''}
+        onStampChange={handleStampChange}
+        title="شعار وختم الشركة المعتمد المطبوع"
+        mode="both"
+      />
 
       {/* Structured Company Details Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">

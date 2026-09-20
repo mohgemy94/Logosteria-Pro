@@ -33,11 +33,17 @@ export default function DashboardAlertsCenter({ onNavigate }: DashboardAlertsCen
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('accounting-data-changed', handleStorageChange);
     window.addEventListener('alpha-settings-updated', handleStorageChange);
+    window.addEventListener('alpha-data-changed', handleStorageChange);
+    window.addEventListener('alpha-system-reset-completed', handleStorageChange);
+    window.addEventListener('alpha-items-updated', handleStorageChange);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('accounting-data-changed', handleStorageChange);
       window.removeEventListener('alpha-settings-updated', handleStorageChange);
+      window.removeEventListener('alpha-data-changed', handleStorageChange);
+      window.removeEventListener('alpha-system-reset-completed', handleStorageChange);
+      window.removeEventListener('alpha-items-updated', handleStorageChange);
     };
   }, []);
 

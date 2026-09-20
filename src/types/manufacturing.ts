@@ -26,6 +26,8 @@ export interface BillOfMaterials {
   costPerUnit: number;
   isActive: boolean;
   version: string;
+  sourceWarehouse?: string | undefined;
+  targetWarehouse?: string | undefined;
   notes?: string | undefined;
 }
 
@@ -77,6 +79,13 @@ export interface ManufacturingOrder {
   totalProductionCost: number;
   actualCostPerUnit: number;
   inventoryTransferred: boolean; // هل تم توريد المنتج لمخزن البضاعة التامة
+  materialsDeducted?: boolean | undefined;
+  finishedGoodsAdded?: boolean | undefined;
+  consumptionJournalEntryId?: string | undefined;
+  completionJournalEntryId?: string | undefined;
+  sourceWarehouse?: string | undefined;
+  targetWarehouse?: string | undefined;
+  scrapCost?: number | undefined;
   stages: ProductionStageItem[];
   notes?: string | undefined;
 }

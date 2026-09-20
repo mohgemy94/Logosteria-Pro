@@ -1,14 +1,14 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
   Save, Plus, Trash2, CheckCircle2, RotateCcw, 
   History, Printer, Calendar, Truck, X, Edit3, Eye, Lock,
-  FileDown, Loader2, Keyboard, FileText, CreditCard
+  FileDown, Loader2, Keyboard, FileText, CreditCard, BarChart3,
+  ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft
 } from 'lucide-react';
 import PrintDropdown from './PrintDropdown';
 import PrintPreviewModal, { PrintPreviewData } from './PrintPreviewModal';
 import PartnerStatementModal from './PartnerStatementModal';
-import { CertifiedInvoiceDocument } from './CertifiedInvoiceDocument';
-import { exportElementToPdf } from '../utils/pdfExport';
+import ItemAnalyticsModal from './ItemAnalyticsModal';
 import { 
   getNextSequentialNumber, 
   advanceSequenceAfterSave, 
@@ -27,6 +27,14 @@ import {
   calculateInvoicePartnerImpact,
   dispatchPartnerLedgerUpdated 
 } from '../utils/partnerLedger';
+
+import { 
+  loadStoredPurchaseInvoices, 
+  saveStoredPurchaseInvoices, 
+  type StoredPurchaseInvoice 
+} from '../utils/purchasesStore';
+import { getSystemSettings } from '../utils/settings';
+export type { StoredPurchaseInvoice };
 
 export interface InvoiceItem {
   id: string;
@@ -162,45 +170,6 @@ function deductItemsStockOnPurchaseUnpost(purchaseItems: InvoiceItem[]): Item[] 
   return [];
 }
 
-export interface StoredPurchaseInvoice {
-  id: string;
-  invoiceNumber: string;
-  supplierRef?: string;
-  date: string;
-  dueDate: string;
-  partnerId: string;
-  partnerName: string;
-  classification: 'NORMAL' | 'TAX';
-  invoiceType: string;
-  source: string;
-  safe: string;
-  items: InvoiceItem[];
-  totals: {
-    subtotal: number;
-    taxTotal: number;
-    grandTotal: number;
-    cashPaid?: number;
-    remainingBalance?: number;
-  };
-  status: 'DRAFT' | 'POSTED';
-  notes?: string;
-  createdAt: string;
-}
-
-function loadStoredPurchaseInvoices(): StoredPurchaseInvoice[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(DB_PURCHASES_INVOICES_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch (e) {
-    console.error('Failed to load purchase invoices:', e);
-  }
-  return [];
-}
-
 function getInvoiceTypeName(type: string): string {
   switch(type) {
     case 'CASH_PURCHASE': return 'مشتريات نقدية';
@@ -258,14 +227,26 @@ export default function Purchases() {
       try {
         setVendors(loadVendors());
         setSavedInvoices(loadStoredPurchaseInvoices());
+        setItemsCatalog(loadStoredItems());
+        setAnalyticItemId(null);
       } catch (err) {
         console.error(err);
       }
     };
     window.addEventListener('alpha-partner-ledger-updated', handleSync);
+    window.addEventListener('alpha-system-reset-completed', handleSync);
+    window.addEventListener('alpha-purchases-invoices-updated', handleSync);
+    window.addEventListener('alpha-items-updated', handleSync);
+    window.addEventListener('alpha-device-id-changed', handleSync);
+    window.addEventListener('alpha-sequences-updated', handleSync);
     window.addEventListener('storage', handleSync);
     return () => {
       window.removeEventListener('alpha-partner-ledger-updated', handleSync);
+      window.removeEventListener('alpha-system-reset-completed', handleSync);
+      window.removeEventListener('alpha-purchases-invoices-updated', handleSync);
+      window.removeEventListener('alpha-items-updated', handleSync);
+      window.removeEventListener('alpha-device-id-changed', handleSync);
+      window.removeEventListener('alpha-sequences-updated', handleSync);
       window.removeEventListener('storage', handleSync);
     };
   }, []);
@@ -287,19 +268,35 @@ export default function Purchases() {
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [customPreviewData, setCustomPreviewData] = useState<PrintPreviewData | null>(null);
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const pdfInvoiceDocRef = useRef<HTMLDivElement>(null);
+  const [analyticItemId, setAnalyticItemId] = useState<string | null>(null);
+
+  // In-App Toast & Confirmation Modal States
+  const [toast, setToast] = useState<{ id: number; type: 'success' | 'error' | 'warning' | 'info'; title: string; message?: string } | null>(null);
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; invoiceId?: string | null | undefined; invoiceNumber: string; isNewDraft?: boolean } | null>(null);
+
+  const showToast = (t: { type: 'success' | 'error' | 'warning' | 'info'; title: string; message?: string }) => {
+    const toastId = Date.now();
+    setToast({ id: toastId, ...t });
+    setTimeout(() => {
+      setToast(prev => (prev?.id === toastId ? null : prev));
+    }, 4000);
+  };
   
-  // Classification and categorization
-  const [classification, setClassification] = useState<'NORMAL' | 'TAX'>('TAX');
-  const [invoiceType, setInvoiceType] = useState<string>('CASH_PURCHASE');
+  // Classification and categorization (initialized with system default settings)
+  const systemSettings = getSystemSettings();
+  const defaultInvoiceSettings = systemSettings.invoiceDefaults || {};
+  const defaultSysTaxRate = systemSettings.taxAndInvoice?.defaultVatRate !== undefined ? systemSettings.taxAndInvoice.defaultVatRate : 15;
+  const [classification, setClassification] = useState<'NORMAL' | 'TAX'>((defaultInvoiceSettings.purchasesClassification as 'NORMAL' | 'TAX') || 'TAX');
+  const [taxRate, setTaxRate] = useState<number>(defaultSysTaxRate);
+  const [discount, setDiscount] = useState<number>(0);
+  const [invoiceType, setInvoiceType] = useState<string>(defaultInvoiceSettings.purchasesTransactionType || 'CREDIT_PURCHASE');
   const [paidAmount, setPaidAmount] = useState<number>(0);
-  const [source, setSource] = useState<string>('MAIN_WAREHOUSE');
-  const [safe, setSafe] = useState<string>('MAIN_SAFE');
+  const [source, setSource] = useState<string>(defaultInvoiceSettings.purchasesWarehouse || 'MAIN_WAREHOUSE');
+  const [safe, setSafe] = useState<string>(defaultInvoiceSettings.purchasesSafe || 'MAIN_SAFE');
   const [notes, setNotes] = useState<string>('');
   
   const [items, setItems] = useState<InvoiceItem[]>([
-    { id: 'item-' + Date.now(), description: '', quantity: 1, unitPrice: 0, taxRate: 15, availableStock: 0, costPrice: 0 }
+    { id: 'item-' + Date.now(), description: '', quantity: 1, unitPrice: 0, taxRate: defaultSysTaxRate, availableStock: 0, costPrice: 0 }
   ]);
 
   const selectedPartner = useMemo(() => {
@@ -324,9 +321,13 @@ export default function Purchases() {
     setIsEditMode(false);
   };
 
-  const handleNewInvoice = () => {
+  const handleNewInvoice = (customList?: StoredPurchaseInvoice[] | unknown) => {
+    const currSettings = getSystemSettings();
+    const currentDefaults = currSettings.invoiceDefaults || {};
+    const sysTax = currSettings.taxAndInvoice?.defaultVatRate !== undefined ? currSettings.taxAndInvoice.defaultVatRate : 15;
     setEditingInvoiceId(null);
-    const nextSeq = getNextSequentialNumber('purchaseInvoice', savedInvoices.map(i => i.invoiceNumber)).formatted;
+    const invoiceList = Array.isArray(customList) ? customList : savedInvoices;
+    const nextSeq = getNextSequentialNumber('purchaseInvoice', invoiceList.map(i => i.invoiceNumber)).formatted;
     setInvoiceNumber(nextSeq);
     setSupplierRef('');
     setStatus('DRAFT');
@@ -334,10 +335,14 @@ export default function Purchases() {
     setPartnerId('');
     setDueDate('');
     setNotes('');
-    setClassification('TAX');
-    setInvoiceType('CASH_PURCHASE');
+    setClassification((currentDefaults.purchasesClassification as 'NORMAL' | 'TAX') || 'TAX');
+    setTaxRate(sysTax);
+    setDiscount(0);
+    setInvoiceType(currentDefaults.purchasesTransactionType || 'CREDIT_PURCHASE');
+    setSource(currentDefaults.purchasesWarehouse || 'MAIN_WAREHOUSE');
+    setSafe(currentDefaults.purchasesSafe || 'MAIN_SAFE');
     setPaidAmount(0);
-    setItems([{ id: 'item-' + Date.now(), description: '', quantity: 1, unitPrice: 0, taxRate: 15, availableStock: 0, costPrice: 0 }]);
+    setItems([{ id: 'item-' + Date.now(), description: '', quantity: 1, unitPrice: 0, taxRate: sysTax, availableStock: 0, costPrice: 0 }]);
     setItemsCatalog(loadStoredItems());
   };
 
@@ -349,6 +354,9 @@ export default function Purchases() {
     setDueDate(inv.dueDate || '');
     setPartnerId(inv.partnerId);
     setClassification(inv.classification);
+    const resolvedTaxRate = inv.taxRate !== undefined ? inv.taxRate : (inv.items?.[0]?.taxRate ?? 15);
+    setTaxRate(resolvedTaxRate);
+    setDiscount(Number(inv.totals?.discountTotal ?? (inv as unknown as { discountTotal?: number }).discountTotal ?? 0));
     setInvoiceType(inv.invoiceType);
     setSource(inv.source);
     setSafe(inv.safe);
@@ -359,10 +367,66 @@ export default function Purchases() {
       ? inv.totals.cashPaid 
       : (inv.invoiceType === 'CASH_PURCHASE' ? inv.totals.grandTotal : 0);
     setPaidAmount(initialPaid);
-    setItems(inv.items.length > 0 ? inv.items : [{ id: 'item-' + Date.now(), description: '', quantity: 1, unitPrice: 0, taxRate: 15, availableStock: 0, costPrice: 0 }]);
+    setItems(inv.items.length > 0 ? inv.items : [{ id: 'item-' + Date.now(), description: '', quantity: 1, unitPrice: 0, taxRate: resolvedTaxRate, availableStock: 0, costPrice: 0 }]);
     setItemsCatalog(loadStoredItems());
     setShowInvoicesHistory(false);
   };
+
+  // Chronologically sorted list of invoices (oldest to newest) for sequential ERP browsing
+  const chronologicallyOrderedInvoices = useMemo(() => {
+    if (!Array.isArray(savedInvoices)) return [];
+    return [...savedInvoices].sort((a, b) => {
+      const dateCmp = (a.date || '').localeCompare(b.date || '');
+      if (dateCmp !== 0) return dateCmp;
+      return (a.invoiceNumber || '').localeCompare(b.invoiceNumber || '', undefined, { numeric: true });
+    });
+  }, [savedInvoices]);
+
+  const currentInvoiceIndex = useMemo(() => {
+    if (!editingInvoiceId) return -1;
+    return chronologicallyOrderedInvoices.findIndex(inv => inv.id === editingInvoiceId);
+  }, [editingInvoiceId, chronologicallyOrderedInvoices]);
+
+  const handleNavigatePrevious = () => {
+    if (chronologicallyOrderedInvoices.length === 0) return;
+    if (currentInvoiceIndex === -1) {
+      // From new draft, go to latest saved invoice
+      const target = chronologicallyOrderedInvoices[chronologicallyOrderedInvoices.length - 1];
+      if (target) handleEditInvoice(target);
+    } else if (currentInvoiceIndex > 0) {
+      const target = chronologicallyOrderedInvoices[currentInvoiceIndex - 1];
+      if (target) handleEditInvoice(target);
+    }
+  };
+
+  const handleNavigateNext = () => {
+    if (chronologicallyOrderedInvoices.length === 0) return;
+    if (currentInvoiceIndex >= 0 && currentInvoiceIndex < chronologicallyOrderedInvoices.length - 1) {
+      const target = chronologicallyOrderedInvoices[currentInvoiceIndex + 1];
+      if (target) handleEditInvoice(target);
+    } else if (currentInvoiceIndex === chronologicallyOrderedInvoices.length - 1) {
+      handleNewInvoice();
+    }
+  };
+
+  const handleNavigateFirst = () => {
+    if (chronologicallyOrderedInvoices.length > 0) {
+      const first = chronologicallyOrderedInvoices[0];
+      if (first) handleEditInvoice(first);
+    }
+  };
+
+  const handleNavigateLast = () => {
+    if (chronologicallyOrderedInvoices.length > 0) {
+      const last = chronologicallyOrderedInvoices[chronologicallyOrderedInvoices.length - 1];
+      if (last) handleEditInvoice(last);
+    }
+  };
+
+  const canGoPrevious = chronologicallyOrderedInvoices.length > 0 && (currentInvoiceIndex === -1 || currentInvoiceIndex > 0);
+  const canGoNext = chronologicallyOrderedInvoices.length > 0 && currentInvoiceIndex !== -1;
+  const canGoFirst = chronologicallyOrderedInvoices.length > 0 && currentInvoiceIndex !== 0;
+  const canGoLast = chronologicallyOrderedInvoices.length > 0 && (currentInvoiceIndex === -1 || currentInvoiceIndex < chronologicallyOrderedInvoices.length - 1);
 
   const handleAddItem = () => {
     if (!isEditable) {
@@ -381,7 +445,7 @@ export default function Purchases() {
         description: '',
         quantity: 1,
         unitPrice: 0,
-        taxRate: classification === 'TAX' ? 15 : 0,
+        taxRate: classification === 'TAX' ? taxRate : 0,
         availableStock: 0,
         costPrice: 0
       }
@@ -389,13 +453,12 @@ export default function Purchases() {
   };
 
   const handleRemoveItem = (id: string) => {
-    if (!isEditable) {
-      if (status === 'POSTED') {
-        alert('🔒 الفاتورة مرحلة ومقفلة!\n\nلا يمكن حذف أي صنف إلا بعد إلغاء الترحيل أولاً ثم الضغط على زر [تعديل الفاتورة].');
-      } else {
-        alert('⚠️ الفاتورة في وضع المعاينة الآمنة.\n\nاضغط على زر [تعديل الفاتورة] بالأعلى للتمكن من حذف وتعديل الأصناف.');
-      }
+    if (status === 'POSTED') {
+      alert('🔒 الفاتورة مرحلة ومقفلة!\n\nلا يمكن حذف أي صنف إلا بعد إلغاء الترحيل أولاً ثم تعديل الفاتورة.');
       return;
+    }
+    if (!isEditMode) {
+      setIsEditMode(true);
     }
     setItems(prev => {
       if (prev.length <= 1) {
@@ -405,7 +468,7 @@ export default function Purchases() {
           description: '',
           quantity: 1,
           unitPrice: 0,
-          taxRate: classification === 'TAX' ? 15 : 0,
+          taxRate: classification === 'TAX' ? taxRate : 0,
           availableStock: 0,
           costPrice: 0
         }];
@@ -434,18 +497,20 @@ export default function Purchases() {
       subtotal += lineTotal;
       taxTotal += lineTax;
     });
-    const grandTotal = subtotal + taxTotal;
+    const discountTotal = Math.max(0, Number(discount) || 0);
+    const grandTotal = Math.max(0, (subtotal + taxTotal) - discountTotal);
     const cleanPaid = Math.max(0, Math.min(grandTotal, Number(paidAmount) || 0));
     const remainingBalance = Math.max(0, grandTotal - cleanPaid);
 
     return { 
       subtotal, 
       taxTotal, 
+      discountTotal,
       grandTotal,
       cashPaid: cleanPaid,
       remainingBalance
     };
-  }, [items, classification, paidAmount]);
+  }, [items, classification, discount, paidAmount]);
 
   // Handler when user edits paid amount
   const handlePaidAmountChange = (val: number) => {
@@ -484,11 +549,12 @@ export default function Purchases() {
       selectedPartner,
       totals.grandTotal,
       paidAmount,
-      status === 'POSTED' ? invoiceNumber : undefined,
+      invoiceNumber || undefined,
       'VENDOR',
-      selectedPartnerStatement
+      selectedPartnerStatement,
+      invoiceType?.includes('RETURN') || false
     );
-  }, [selectedPartner, totals.grandTotal, paidAmount, status, invoiceNumber, selectedPartnerStatement]);
+  }, [selectedPartner, totals.grandTotal, paidAmount, invoiceNumber, selectedPartnerStatement, invoiceType]);
 
   const currentInvoicePreviewData: PrintPreviewData = useMemo(() => ({
     title: classification === 'TAX' ? 'فاتورة مشتريات ضريبية' : 'فاتورة مشتريات عامة',
@@ -502,6 +568,7 @@ export default function Purchases() {
     partnerAddress: (selectedPartner as { address?: string })?.address,
     partnerType: 'VENDOR',
     classification: classification,
+    taxRate: classification === 'TAX' ? taxRate : 0,
     paymentMethod: getInvoiceTypeName(invoiceType),
     items: items.map(it => ({
       description: it.description || 'صنف مشتريات',
@@ -513,7 +580,7 @@ export default function Purchases() {
     })),
     subtotal: totals.subtotal,
     taxTotal: totals.taxTotal,
-    discountTotal: 0,
+    discountTotal: totals.discountTotal,
     grandTotal: totals.grandTotal,
     paidAmount: paidAmount,
     remainingBalance: Math.max(0, totals.grandTotal - paidAmount),
@@ -522,22 +589,9 @@ export default function Purchases() {
     partnerBalanceImpact: partnerBalanceImpact
   }), [classification, status, invoiceNumber, date, dueDate, selectedPartner, invoiceType, items, totals, paidAmount, notes, partnerBalanceImpact]);
 
-  const handleExportPdf = async () => {
-    if (!pdfInvoiceDocRef.current || isExportingPdf) return;
-    try {
-      setIsExportingPdf(true);
-      const safeNumber = invoiceNumber.trim() || 'DRAFT';
-      await exportElementToPdf(pdfInvoiceDocRef.current, {
-        filename: `فاتورة_مشتريات_${safeNumber}.pdf`,
-        format: 'A4',
-        scale: 2,
-      });
-    } catch (err) {
-      console.error('Export PDF error:', err);
-      alert('⚠️ حدث خطأ أثناء تصدير الفاتورة إلى PDF. يرجى المحاولة مرة أخرى أو استخدام زر الطباعة.');
-    } finally {
-      setIsExportingPdf(false);
-    }
+  const handleExportPdf = () => {
+    setCustomPreviewData(null);
+    setShowPrintPreview(true);
   };
 
   const saveInvoiceToDb = (isPosting: boolean) => {
@@ -576,6 +630,7 @@ export default function Purchases() {
       partnerId,
       partnerName: partnerObj?.name || 'مورد عام',
       classification,
+      taxRate: classification === 'TAX' ? taxRate : 0,
       invoiceType,
       source,
       safe,
@@ -658,19 +713,62 @@ export default function Purchases() {
   };
 
   const handleDelete = () => {
-    if (confirm(`هل أنت متأكد من رغبتك في حذف فاتورة المشتريات رقم (${invoiceNumber}) نهائياً؟`)) {
-      const updated = savedInvoices.filter(i => i.invoiceNumber !== invoiceNumber && (!editingInvoiceId || i.id !== editingInvoiceId));
-      setSavedInvoices(updated);
-      try {
-        localStorage.setItem(DB_PURCHASES_INVOICES_KEY, JSON.stringify(updated));
-        notifyDataChanged();
-        dispatchPartnerLedgerUpdated();
-      } catch (err) {
-        console.error(err);
-      }
-      handleNewInvoice();
-      alert('تم حذف فاتورة المشتريات بنجاح.');
+    if (status === 'POSTED') {
+      showToast({
+        type: 'error',
+        title: '🔒 لا يمكن حذف فاتورة مشتريات مرحلة!',
+        message: 'الفاتورة مرحلة ومعتمدة نظامياً ومقفلة. يجب أولاً الضغط على زر [إلغاء الترحيل] لإعادتها كمسودة قبل الحذف.'
+      });
+      return;
     }
+    const isExisting = editingInvoiceId || savedInvoices.some(i => i.invoiceNumber && i.invoiceNumber.trim().toLowerCase() === invoiceNumber.trim().toLowerCase());
+    setDeleteModal({
+      isOpen: true,
+      invoiceId: editingInvoiceId || undefined,
+      invoiceNumber: invoiceNumber.trim() || 'المسودة الحالية',
+      isNewDraft: !isExisting
+    });
+  };
+
+  const confirmExecuteDelete = () => {
+    if (!deleteModal) return;
+
+    if (deleteModal.isNewDraft) {
+      handleNewInvoice();
+      showToast({
+        type: 'info',
+        title: 'تم إفراغ وإعادة ضبط المسودة',
+        message: 'تم تفريغ كافة الحقول والبدء بفاتورة مشتريات جديدة فارغة.'
+      });
+    } else {
+      const targetNumber = deleteModal.invoiceNumber;
+      const targetId = deleteModal.invoiceId;
+      const targetInv = savedInvoices.find(i => (targetId && i.id === targetId) || (i.invoiceNumber && i.invoiceNumber.trim().toLowerCase() === targetNumber.trim().toLowerCase()));
+      if (targetInv && targetInv.status === 'POSTED') {
+        showToast({
+          type: 'error',
+          title: '🔒 لا يمكن حذف فاتورة مرحلة!',
+          message: 'فاتورة المشتريات مرحلة ومعتمدة نظامياً. يرجى إلغاء ترحيل الفاتورة أولاً لتتمكن من حذفها.'
+        });
+        setDeleteModal(null);
+        return;
+      }
+      const updated = savedInvoices.filter(i => {
+        if (targetId && i.id === targetId) return false;
+        if (i.invoiceNumber && i.invoiceNumber.trim().toLowerCase() === targetNumber.trim().toLowerCase()) return false;
+        return true;
+      });
+      setSavedInvoices(updated);
+      saveStoredPurchaseInvoices(updated);
+      if (editingInvoiceId === targetId || invoiceNumber.trim().toLowerCase() === targetNumber.trim().toLowerCase()) {
+        handleNewInvoice(updated);
+      }
+      showToast({
+        type: 'success',
+        title: `تم حذف فاتورة المشتريات رقم (${targetNumber}) نهائياً بنجاح!`
+      });
+    }
+    setDeleteModal(null);
   };
 
   // Global Keyboard Shortcuts (Ctrl+S, Ctrl+P, Ctrl+N, Ctrl+Enter, F2, Ctrl+H, Esc)
@@ -710,6 +808,20 @@ export default function Purchases() {
         } else {
           window.print();
         }
+        return;
+      }
+
+      // PageUp / Alt+Right: Previous Invoice (تراجع للخلف)
+      if (e.key === 'PageUp' || (e.altKey && e.key === 'ArrowRight')) {
+        e.preventDefault();
+        handleNavigatePrevious();
+        return;
+      }
+
+      // PageDown / Alt+Left: Next Invoice (تقديم للأمام)
+      if (e.key === 'PageDown' || (e.altKey && e.key === 'ArrowLeft')) {
+        e.preventDefault();
+        handleNavigateNext();
         return;
       }
 
@@ -783,169 +895,429 @@ export default function Purchases() {
   return (
     <div className="flex flex-col flex-1 h-full max-w-7xl mx-auto w-full">
       {/* Top Application Bar */}
-      <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-4 print:hidden">
-        <div>
-          <div className="flex items-center gap-2 mb-1 text-emerald-700/80 text-xs font-bold">
-            <span>الموردون والمشتريات</span>
-            <span>/</span>
-            <span className="text-emerald-950 font-extrabold">فواتير المشتريات</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-emerald-600 via-teal-700 to-green-900 bg-clip-text text-transparent">
-              فاتورة المشتريات
-            </h1>
-            <span className={`px-2.5 py-1 text-xs font-black rounded-lg border ${
-              status === 'POSTED' 
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-300' 
-                : isEditMode
-                ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
-                : 'bg-amber-50 text-amber-800 border-amber-300'
-            }`}>
-              {status === 'POSTED' ? 'مرحلة ومعتمدة' : isEditMode ? 'مسودة قيد التحرير' : 'مسودة (وضع العرض)'}
-            </span>
-            {editingInvoiceId && (
-              <span className="px-2.5 py-1 text-xs font-black rounded-lg bg-teal-50 text-teal-800 border border-teal-300 flex items-center gap-1 shadow-2xs">
-                <Edit3 size={12} className="text-teal-600" /> تعديل #{invoiceNumber}
+      <div className="flex flex-col gap-3 mb-4 print:hidden">
+        {/* Breadcrumb & Screen Title */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div>
+            <div className="flex items-center gap-2 mb-1 text-emerald-900/80 text-xs font-bold">
+              <span>الموردين والمشتريات</span>
+              <span>/</span>
+              <span className="text-emerald-950 font-extrabold">فواتير المشتريات</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-emerald-900 via-green-950 to-slate-900 bg-clip-text text-transparent">
+                فاتورة المشتريات
+              </h1>
+              <span className={`px-2.5 py-1 text-xs font-black rounded-lg border shadow-2xs ${
+                status === 'POSTED' 
+                  ? 'bg-emerald-50 text-emerald-950 border-emerald-950' 
+                  : isEditMode
+                  ? 'bg-emerald-50 text-emerald-950 border-emerald-950'
+                  : 'bg-amber-50 text-amber-800 border-amber-300'
+              }`}>
+                {status === 'POSTED' ? 'مرحلة ومعتمدة' : isEditMode ? 'مسودة قيد التحرير' : 'مسودة (وضع العرض)'}
               </span>
-            )}
+              {editingInvoiceId && (
+                <span className="px-2.5 py-1 text-xs font-black rounded-lg bg-emerald-50 text-emerald-950 border border-emerald-950 flex items-center gap-1 shadow-2xs">
+                  <Edit3 size={12} className="text-emerald-800" /> تعديل #{invoiceNumber}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Global Invoice Actions Bar */}
-        <div className="flex flex-wrap items-center gap-2">
-          {editingInvoiceId && isEditMode && (
-            <button
-              type="button"
-              onClick={handleCancelEdit}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-slate-300"
-            >
-              <X size={14} /> إلغاء التعديل
-            </button>
-          )}
+        {/* Global 3D Responsive Invoice Actions Toolbar */}
+        <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex flex-col gap-2.5">
+          
+          {/* DESKTOP VIEW (hidden on mobile, visible on lg and above) */}
+          <div className="hidden lg:flex flex-col gap-2.5">
+            {/* Sub-row: Navigation Stepper (Right) & Print/Export (Left) */}
+            <div className="flex items-center justify-between gap-3 pb-2 border-b border-slate-200/70">
+              {/* Right: ERP Navigation Stepper */}
+              <div className="flex items-center gap-2">
+                <div className="nav-3d-segment">
+                  <button
+                    type="button"
+                    onClick={handleNavigateFirst}
+                    disabled={!canGoFirst}
+                    className="p-1.5 text-slate-600 hover:text-emerald-950 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
+                    title="الفاتورة الأولى (الأقدم)"
+                  >
+                    <ChevronsRight size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNavigatePrevious}
+                    disabled={!canGoPrevious}
+                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-black text-emerald-950 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                    title="تراجع للخلف - الفاتورة السابقة (PageUp / Alt+Right)"
+                  >
+                    <ChevronRight size={14} className="text-emerald-900" />
+                    <span>تراجع للخلف</span>
+                  </button>
 
-          <button
-            type="button"
-            onClick={() => setShowInvoicesHistory(!showInvoicesHistory)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-              showInvoicesHistory 
-                ? 'bg-emerald-100 border-emerald-300 text-emerald-950' 
-                : 'bg-white border-slate-300 text-slate-700 hover:bg-emerald-50/50'
-            }`}
-            title="سجل الفواتير (Ctrl+H)"
-          >
-            <History size={14} className="text-emerald-600" />
-            <span>سجل الفواتير ({savedInvoices.length})</span>
-            <kbd className="hidden sm:inline-block text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono border border-slate-300">Ctrl+H</kbd>
-          </button>
+                  <div className="px-2.5 py-1 text-[11px] font-mono font-black text-emerald-950 bg-emerald-50/80 rounded-lg mx-0.5 select-none border border-emerald-200 whitespace-nowrap">
+                    {currentInvoiceIndex >= 0 ? (
+                      <span>{currentInvoiceIndex + 1} / {chronologicallyOrderedInvoices.length}</span>
+                    ) : (
+                      <span className="text-emerald-700 font-sans font-bold">مسودة جديدة +</span>
+                    )}
+                  </div>
 
-          <button
-            type="button"
-            onClick={handleNewInvoice}
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-950 hover:bg-emerald-100 border-2 border-emerald-300 rounded-xl text-xs font-black transition-colors cursor-pointer shadow-2xs"
-            title="فاتورة جديدة (Ctrl+N)"
-          >
-            <Plus size={14} className="text-emerald-600" />
-            <span>فاتورة جديدة #{nextCalculatedInvoiceNum}</span>
-            <kbd className="hidden sm:inline-block text-[9px] bg-emerald-100 text-emerald-950 px-1.5 py-0.5 rounded font-mono font-black border border-emerald-300">Ctrl+N</kbd>
-          </button>
+                  <button
+                    type="button"
+                    onClick={handleNavigateNext}
+                    disabled={!canGoNext}
+                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-black text-emerald-950 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                    title="تقديم للأمام - الفاتورة التالية (PageDown / Alt+Left)"
+                  >
+                    <span>تقديم للأمام</span>
+                    <ChevronLeft size={14} className="text-emerald-900" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNavigateLast}
+                    disabled={!canGoLast}
+                    className="p-1.5 text-slate-600 hover:text-emerald-950 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
+                    title="الفاتورة الأخيرة (الأحدث)"
+                  >
+                    <ChevronsLeft size={15} />
+                  </button>
+                </div>
 
-          {status === 'DRAFT' ? (
-            <>
-              {!isEditMode ? (
+                {editingInvoiceId && isEditMode && (
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    className="btn-3d btn-3d-white h-9 px-2.5 text-xs font-black text-slate-700 hover:text-slate-900"
+                  >
+                    <X size={14} /> <span>إلغاء التعديل</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Left: Print & Export Group */}
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={handleStartEditInvoice}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl text-xs font-black transition-colors cursor-pointer shadow-sm border border-emerald-900"
-                  title="تعديل الفاتورة (Ctrl+S)"
+                  onClick={() => window.print()}
+                  className="btn-3d btn-3d-slate h-9 px-2.5 sm:px-3 text-xs font-black"
+                  title="طباعة سريعة مباشرة (Ctrl+P)"
                 >
-                  <Edit3 size={14} />
-                  <span>تعديل الفاتورة</span>
-                  <kbd className="hidden sm:inline-block text-[9px] bg-emerald-900 text-emerald-200 px-1.5 py-0.5 rounded font-mono">Ctrl+S</kbd>
+                  <Printer size={14} className="shrink-0" />
+                  <span>طباعة مباشرة</span>
+                  <kbd className="text-[9px] bg-slate-900 text-slate-300 px-1 py-0.5 rounded font-mono border border-slate-700">Ctrl+P</kbd>
                 </button>
-              ) : (
+
                 <button
                   type="button"
-                  onClick={handleSaveDraft}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-white border-2 border-emerald-400 text-emerald-950 hover:bg-emerald-50 rounded-xl text-xs font-black transition-colors cursor-pointer shadow-2xs"
-                  title="حفظ مسودة (Ctrl+S)"
+                  onClick={handleExportPdf}
+                  className="btn-3d btn-3d-rose h-9 px-2.5 sm:px-3 text-xs font-black"
+                  title="تصدير فاتورة المشتريات الحالية بتنسيقها المعتمد كملف PDF"
                 >
-                  <Save size={14} className="text-emerald-600" />
-                  <span>حفظ مسودة</span>
-                  <kbd className="hidden sm:inline-block text-[9px] bg-emerald-50 text-emerald-900 px-1.5 py-0.5 rounded font-mono border border-emerald-300">Ctrl+S</kbd>
+                  <FileDown size={14} className="shrink-0" />
+                  <span>تصدير PDF</span>
                 </button>
-              )}
+
+                <PrintDropdown 
+                  onPreview={() => {
+                    setCustomPreviewData(null);
+                    setShowPrintPreview(true);
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Main Action Line (Desktop):
+                سجل الفواتير -> إضافة فاتورة جديدة -> حفظ مسودة -> حذف -> معاينة -> ترحيل الفاتورة
+            */}
+            <div className="flex items-center gap-2 flex-wrap xl:flex-nowrap w-full">
+              {/* 1. سجل الفواتير */}
               <button
                 type="button"
-                onClick={handlePost}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-colors cursor-pointer shadow-sm border border-emerald-800"
-                title="ترحيل الفاتورة (Ctrl+Enter)"
+                onClick={() => setShowInvoicesHistory(!showInvoicesHistory)}
+                className={`btn-3d h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black ${
+                  showInvoicesHistory ? 'btn-3d-active' : 'btn-3d-white'
+                }`}
+                title="سجل الفواتير (Ctrl+H)"
               >
-                <CheckCircle2 size={14} />
-                <span>ترحيل الفاتورة</span>
-                <kbd className="hidden sm:inline-block text-[9px] bg-emerald-700 text-emerald-100 px-1.5 py-0.5 rounded font-mono font-bold">Ctrl+↵</kbd>
+                <History size={14} className={showInvoicesHistory ? 'text-emerald-300' : 'text-emerald-700'} />
+                <span>سجل الفواتير ({savedInvoices.length})</span>
+                <kbd className="text-[9px] bg-slate-100 text-slate-600 px-1 py-0.5 rounded font-mono border border-slate-300">Ctrl+H</kbd>
               </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={handleUnpost}
-              className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black transition-colors cursor-pointer shadow-sm border border-amber-700"
-            >
-              <RotateCcw size={14} />
-              <span>إلغاء الترحيل</span>
-            </button>
-          )}
 
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-700 hover:bg-rose-50 hover:text-rose-700 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-slate-300"
-            title="حذف الفاتورة"
-          >
-            <Trash2 size={14} />
-            <span>حذف</span>
-          </button>
+              {/* 2. إضافة فاتورة جديدة */}
+              <button
+                type="button"
+                onClick={handleNewInvoice}
+                className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black"
+                title="إضافة فاتورة جديدة (Ctrl+N)"
+              >
+                <Plus size={15} />
+                <span>إضافة فاتورة جديدة</span>
+                <kbd className="text-[9px] bg-emerald-900/60 text-emerald-100 px-1 py-0.5 rounded font-mono border border-emerald-400/30">Ctrl+N</kbd>
+              </button>
 
-          <div className="flex flex-wrap items-center gap-1.5 sm:border-r sm:border-slate-200 sm:pr-2 sm:mr-1 max-w-full">
-            <button
-              type="button"
-              onClick={handleExportPdf}
-              disabled={isExportingPdf}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs hover:shadow-xs disabled:opacity-75 disabled:cursor-wait shrink-0"
-              title="تصدير فاتورة المشتريات الحالية بتنسيقها المعتمد كملف PDF"
-            >
-              {isExportingPdf ? (
+              {/* 3. حفظ مسودة (أو تعديل الفاتورة) */}
+              {status === 'DRAFT' && (
+                !isEditMode ? (
+                  <button
+                    type="button"
+                    onClick={handleStartEditInvoice}
+                    className="btn-3d btn-3d-indigo h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black"
+                    title="تعديل الفاتورة (Ctrl+S)"
+                  >
+                    <Edit3 size={14} />
+                    <span>تعديل الفاتورة</span>
+                    <kbd className="text-[9px] bg-blue-950/60 text-blue-200 px-1 py-0.5 rounded font-mono border border-blue-500/30">Ctrl+S</kbd>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSaveDraft}
+                    className="btn-3d btn-3d-white h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black text-emerald-950"
+                    title="حفظ مسودة (Ctrl+S)"
+                  >
+                    <Save size={14} className="text-emerald-700" />
+                    <span>حفظ مسودة</span>
+                    <kbd className="text-[9px] bg-emerald-50 text-emerald-950 px-1 py-0.5 rounded font-mono border border-emerald-200">Ctrl+S</kbd>
+                  </button>
+                )
+              )}
+
+              {/* 4. حذف */}
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={status === 'POSTED'}
+                className="btn-3d btn-3d-danger-soft h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black"
+                title={status === 'POSTED' ? 'الفاتورة مرحلة ومقفلة نظامياً. يجب إلغاء الترحيل أولاً لحذفها' : 'حذف الفاتورة نهائياً أو إفراغ المسودة'}
+              >
+                <Trash2 size={14} />
+                <span>حذف</span>
+              </button>
+
+              {/* 5. معاينة */}
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomPreviewData(null);
+                  setShowPrintPreview(true);
+                  showToast({
+                    type: 'info',
+                    title: 'معاينة الفاتورة للطباعة',
+                    message: 'يتم الآن عرض الفاتورة بالكامل لمعاينتها قبل الطباعة'
+                  });
+                }}
+                className="btn-3d btn-3d-indigo h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black"
+                title="معاينة الفاتورة قبل الطباعة"
+              >
+                <Eye size={14} className="shrink-0" />
+                <span>معاينة</span>
+              </button>
+
+              {/* 6. ترحيل الفاتورة (أو إلغاء الترحيل) مباشرة بعد معاينة */}
+              {status === 'DRAFT' ? (
+                <button
+                  type="button"
+                  onClick={handlePost}
+                  className="btn-3d btn-3d-emerald h-9 sm:h-10 px-3 sm:px-4 text-xs font-black"
+                  title="ترحيل الفاتورة (Ctrl+Enter)"
+                >
+                  <CheckCircle2 size={15} />
+                  <span>ترحيل الفاتورة</span>
+                  <kbd className="text-[9px] bg-emerald-900/60 text-emerald-100 px-1 py-0.5 rounded font-mono border border-emerald-400/30">Ctrl+↵</kbd>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleUnpost}
+                  className="btn-3d btn-3d-amber h-9 sm:h-10 px-3 sm:px-4 text-xs font-black"
+                  title="إلغاء ترحيل الفاتورة وإعادتها لمسودة"
+                >
+                  <RotateCcw size={14} />
+                  <span>إلغاء الترحيل</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* MOBILE VIEW (< lg): Flex wrapped for smaller screens */}
+          <div className="flex lg:hidden flex-col gap-3">
+            {/* Cluster 1: Sequential ERP Navigation & History */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 w-full">
+              <div className="nav-3d-segment">
+                <button
+                  type="button"
+                  onClick={handleNavigateFirst}
+                  disabled={!canGoFirst}
+                  className="p-1.5 text-slate-600 hover:text-emerald-950 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  title="الفاتورة الأولى (الأقدم)"
+                >
+                  <ChevronsRight size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNavigatePrevious}
+                  disabled={!canGoPrevious}
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-black text-emerald-950 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                  title="تراجع للخلف - الفاتورة السابقة"
+                >
+                  <ChevronRight size={14} className="text-emerald-900" />
+                  <span>السابق</span>
+                </button>
+
+                <div className="px-2 py-1 text-[11px] font-mono font-black text-emerald-950 bg-emerald-50/80 rounded-lg mx-0.5 select-none border border-emerald-200 whitespace-nowrap">
+                  {currentInvoiceIndex >= 0 ? (
+                    <span>{currentInvoiceIndex + 1} / {chronologicallyOrderedInvoices.length}</span>
+                  ) : (
+                    <span className="text-emerald-700 font-sans font-bold">مسودة جديدة +</span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleNavigateNext}
+                  disabled={!canGoNext}
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-black text-emerald-950 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                  title="تقديم للأمام - الفاتورة التالية"
+                >
+                  <span>التالي</span>
+                  <ChevronLeft size={14} className="text-emerald-900" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNavigateLast}
+                  disabled={!canGoLast}
+                  className="p-1.5 text-slate-600 hover:text-emerald-950 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  title="الفاتورة الأخيرة"
+                >
+                  <ChevronsLeft size={15} />
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowInvoicesHistory(!showInvoicesHistory)}
+                className={`btn-3d h-9 px-2.5 text-xs font-black ${
+                  showInvoicesHistory ? 'btn-3d-active' : 'btn-3d-white'
+                }`}
+                title="سجل الفواتير (Ctrl+H)"
+              >
+                <History size={14} className={showInvoicesHistory ? 'text-emerald-300' : 'text-emerald-700'} />
+                <span>سجل الفواتير ({savedInvoices.length})</span>
+              </button>
+
+              {editingInvoiceId && isEditMode && (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="btn-3d btn-3d-white h-9 px-2.5 text-xs font-black text-slate-700"
+                >
+                  <X size={14} /> <span>إلغاء</span>
+                </button>
+              )}
+            </div>
+
+            {/* Cluster 2: Actions on Mobile */}
+            <div className="flex flex-wrap items-center justify-center gap-2 w-full">
+              <button
+                type="button"
+                onClick={handleNewInvoice}
+                className="btn-3d btn-3d-emerald h-9 px-3 text-xs font-black"
+              >
+                <Plus size={15} />
+                <span>فاتورة جديدة</span>
+              </button>
+
+              {status === 'DRAFT' ? (
                 <>
-                  <Loader2 size={14} className="animate-spin shrink-0" />
-                  <span className="hidden sm:inline">جاري التصدير...</span>
-                  <span className="sm:hidden">جاري...</span>
+                  {!isEditMode ? (
+                    <button
+                      type="button"
+                      onClick={handleStartEditInvoice}
+                      className="btn-3d btn-3d-indigo h-9 px-3 text-xs font-black"
+                    >
+                      <Edit3 size={14} />
+                      <span>تعديل</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleSaveDraft}
+                      className="btn-3d btn-3d-white h-9 px-3 text-xs font-black text-emerald-950"
+                    >
+                      <Save size={14} className="text-emerald-700" />
+                      <span>حفظ مسودة</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handlePost}
+                    className="btn-3d btn-3d-emerald h-9 px-3 text-xs font-black"
+                  >
+                    <CheckCircle2 size={15} />
+                    <span>ترحيل الفاتورة</span>
+                  </button>
                 </>
               ) : (
-                <>
-                  <FileDown size={14} className="shrink-0" />
-                  <span className="hidden sm:inline">تصدير PDF</span>
-                  <span className="sm:hidden">PDF</span>
-                </>
+                <button
+                  type="button"
+                  onClick={handleUnpost}
+                  className="btn-3d btn-3d-amber h-9 px-3 text-xs font-black"
+                >
+                  <RotateCcw size={14} />
+                  <span>إلغاء الترحيل</span>
+                </button>
               )}
-            </button>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-2xs shrink-0"
-              title="طباعة سريعة مباشرة (Ctrl+P)"
-            >
-              <Printer size={14} className="shrink-0" />
-              <span className="hidden sm:inline">طباعة مباشرة</span>
-              <span className="sm:hidden">طباعة</span>
-              <kbd className="hidden md:inline-block text-[9px] bg-slate-800 text-slate-300 px-1 py-0.5 rounded font-mono border border-slate-700">Ctrl+P</kbd>
-            </button>
-            <PrintDropdown 
-              onPreview={() => {
-                setCustomPreviewData(null);
-                setShowPrintPreview(true);
-              }}
-              onExportPdf={handleExportPdf}
-            />
+
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={status === 'POSTED'}
+                className="btn-3d btn-3d-danger-soft h-9 px-2.5 text-xs font-black"
+              >
+                <Trash2 size={14} />
+                <span>حذف</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomPreviewData(null);
+                  setShowPrintPreview(true);
+                }}
+                className="btn-3d btn-3d-indigo h-9 px-2.5 text-xs font-black"
+              >
+                <Eye size={14} />
+                <span>معاينة</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="btn-3d btn-3d-slate h-9 px-2.5 text-xs font-black"
+              >
+                <Printer size={14} />
+                <span>طباعة</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportPdf}
+                className="btn-3d btn-3d-rose h-9 px-2.5 text-xs font-black"
+              >
+                <FileDown size={14} />
+                <span>PDF</span>
+              </button>
+
+              <PrintDropdown 
+                onPreview={() => {
+                  setCustomPreviewData(null);
+                  setShowPrintPreview(true);
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -1035,7 +1407,7 @@ export default function Purchases() {
                       <td className="py-2.5">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           inv.status === 'POSTED' 
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                            ? 'bg-emerald-50 text-emerald-950 border border-emerald-900' 
                             : 'bg-amber-50 text-amber-700 border border-amber-200'
                         }`}>
                           {inv.status === 'POSTED' ? 'مرحلة' : 'مسودة'}
@@ -1083,16 +1455,29 @@ export default function Purchases() {
                           </button>
                           <button
                             type="button"
+                            disabled={inv.status === 'POSTED'}
                             onClick={() => {
-                              if (confirm(`هل أنت متأكد من رغبتك في حذف فاتورة المشتريات رقم (${inv.invoiceNumber})؟`)) {
-                                const updated = savedInvoices.filter(i => i.id !== inv.id);
-                                setSavedInvoices(updated);
-                                localStorage.setItem(DB_PURCHASES_INVOICES_KEY, JSON.stringify(updated));
-                                notifyDataChanged();
-                                if (editingInvoiceId === inv.id) handleNewInvoice();
+                              if (inv.status === 'POSTED') {
+                                showToast({
+                                  type: 'error',
+                                  title: '🔒 لا يمكن حذف فاتورة مشتريات مرحلة!',
+                                  message: `فاتورة المشتريات رقم #${inv.invoiceNumber} مرحلة ومعتمدة نظامياً. يرجى فتح الفاتورة وإلغاء الترحيل أولاً لحذفها.`
+                                });
+                                return;
                               }
+                              setDeleteModal({
+                                isOpen: true,
+                                invoiceId: inv.id,
+                                invoiceNumber: inv.invoiceNumber,
+                                isNewDraft: false
+                              });
                             }}
-                            className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
+                            className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                              inv.status === 'POSTED'
+                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed opacity-50 border border-slate-200'
+                                : 'bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer'
+                            }`}
+                            title={inv.status === 'POSTED' ? 'فاتورة المشتريات مرحلة ومقفلة. يجب إلغاء الترحيل أولاً لحذفها' : 'حذف الفاتورة'}
                           >
                             حذف
                           </button>
@@ -1107,9 +1492,9 @@ export default function Purchases() {
         </div>
       )}
 
-      {/* Main Invoice Card - Winter Deep Border */}
+      {/* Main Invoice Card - Deep Very Dark Green Border */}
       <div className={`bg-white rounded-3xl shadow-sm border-2 ${
-        status === 'POSTED' ? 'border-slate-800' : 'border-slate-700'
+        status === 'POSTED' ? 'border-slate-800' : 'border-emerald-950'
       } overflow-hidden flex flex-col flex-1 print:border-none print:shadow-none`}>
         
         {/* Invoice Status & Locking Notice Banner */}
@@ -1148,9 +1533,9 @@ export default function Purchases() {
             </button>
           </div>
         ) : (
-          <div className="bg-emerald-50 border-b-2 border-emerald-300 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-emerald-900 print:hidden">
+          <div className="bg-emerald-50 border-b-2 border-emerald-950 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-emerald-950 print:hidden">
             <div className="flex items-center gap-2">
-              <span className="p-1 rounded-md bg-emerald-200 text-emerald-950 font-black border border-emerald-400">✏️ وضع التعديل نشط</span>
+              <span className="p-1 rounded-md bg-emerald-100 text-emerald-950 font-black border border-emerald-950">✏️ وضع التعديل نشط</span>
               <span className="font-bold">
                 يمكنك الآن إضافة أو حذف وتعديل الأصناف والأسعار في الفاتورة بحرية.
               </span>
@@ -1159,7 +1544,7 @@ export default function Purchases() {
               <button
                 type="button"
                 onClick={handleSaveDraft}
-                className="px-3 py-1.5 bg-white border border-emerald-400 text-emerald-900 hover:bg-emerald-100 rounded-xl font-bold text-xs transition-colors cursor-pointer shadow-2xs"
+                className="px-3 py-1.5 bg-white border border-emerald-950 text-emerald-950 hover:bg-emerald-100 rounded-xl font-bold text-xs transition-colors cursor-pointer shadow-2xs"
               >
                 حفظ التعديلات
               </button>
@@ -1186,64 +1571,123 @@ export default function Purchases() {
           </div>
         </div>
 
-        {/* Modern Settings / Control Strip - Colorized & Winter Styled Boxes (Green / Emerald Palette) */}
+        {/* Modern Settings / Control Strip - Colorized & Very Dark Green Styled Boxes */}
         <div className="bg-slate-100/90 border-b-2 border-slate-700 p-4 sm:p-5 print:hidden">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 text-xs">
             {/* Invoice Number (Sequential & Read-Only) */}
-            <div className="bg-white p-2.5 rounded-2xl border-2 border-emerald-600/70 shadow-2xs space-y-1.5 ring-2 ring-emerald-50">
+            <div className="bg-white p-2.5 rounded-2xl border-2 border-emerald-950 shadow-2xs space-y-1.5 ring-2 ring-emerald-950/10">
               <div className="flex items-center justify-between">
                 <label className="text-emerald-950 font-black text-[11px] flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block"></span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-900 inline-block"></span>
                   رقم الفاتورة
                 </label>
-                <span className="text-[10px] text-emerald-800 font-mono bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-1">
-                  <Lock size={10} className="text-emerald-600" />
+                <span className="text-[10px] text-emerald-950 font-mono bg-emerald-50 border border-emerald-950 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-1">
+                  <Lock size={10} className="text-emerald-900" />
                   <span>تلقائي</span>
                 </span>
               </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  readOnly
-                  tabIndex={-1}
-                  value={invoiceNumber}
-                  className="w-full bg-gradient-to-r from-slate-900 to-emerald-950 border border-emerald-900 py-1.5 px-4 rounded-xl font-mono font-black text-amber-300 text-center select-all focus:outline-none cursor-not-allowed shadow-inner"
-                  title="رقم الفاتورة يتولد تسلسلياً تلقائياً من النظام ومحمي من التعديل"
-                />
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-emerald-400 font-mono font-bold text-xs">
-                  #
-                </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleNavigatePrevious}
+                  disabled={!canGoPrevious}
+                  className="p-1.5 bg-emerald-50 text-emerald-950 hover:bg-emerald-100 border border-emerald-950 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                  title="تراجع للخلف (السابق)"
+                >
+                  <ChevronRight size={14} />
+                </button>
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    readOnly
+                    tabIndex={-1}
+                    value={invoiceNumber}
+                    className="w-full bg-gradient-to-r from-slate-900 to-emerald-950 border border-emerald-950 py-1.5 px-6 rounded-xl font-mono font-black text-amber-300 text-center select-all focus:outline-none cursor-not-allowed shadow-inner text-xs"
+                    title="رقم الفاتورة يتولد تسلسلياً تلقائياً من النظام ومحمي من التعديل"
+                  />
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-emerald-400 font-mono font-bold text-xs">
+                    #
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleNavigateNext}
+                  disabled={!canGoNext}
+                  className="p-1.5 bg-emerald-50 text-emerald-950 hover:bg-emerald-100 border border-emerald-950 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                  title="تقديم للأمام (التالي)"
+                >
+                  <ChevronLeft size={14} />
+                </button>
               </div>
             </div>
 
             {/* Classification */}
-            <div className="bg-white p-2.5 rounded-2xl border-2 border-teal-600/70 shadow-2xs space-y-1.5 ring-2 ring-teal-50">
-              <label className="text-teal-950 font-black text-[11px] flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-teal-600 inline-block"></span>
+            <div className="bg-white p-2.5 rounded-2xl border-2 border-emerald-950 shadow-2xs space-y-1.5 ring-2 ring-emerald-950/10">
+              <label className="text-emerald-950 font-black text-[11px] flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-900 inline-block"></span>
                 تصنيف الفاتورة
               </label>
               <select
                 disabled={!isEditable}
                 value={classification}
-                onChange={e => setClassification(e.target.value as 'NORMAL' | 'TAX')}
-                className="w-full bg-teal-50/40 border-2 border-teal-300 p-1.5 rounded-xl text-teal-950 font-bold focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 disabled:bg-slate-100 disabled:border-slate-300"
+                onChange={e => {
+                  const newClass = e.target.value as 'NORMAL' | 'TAX';
+                  setClassification(newClass);
+                  if (newClass === 'TAX') {
+                    const rate = taxRate || 15;
+                    setItems(prev => prev.map(it => ({ ...it, taxRate: rate })));
+                  } else {
+                    setItems(prev => prev.map(it => ({ ...it, taxRate: 0 })));
+                  }
+                }}
+                className="w-full bg-emerald-50/40 border-2 border-emerald-950 p-1.5 rounded-xl text-emerald-950 font-bold focus:outline-none focus:border-emerald-900 focus:ring-1 focus:ring-emerald-900 disabled:bg-slate-100 disabled:border-slate-300"
               >
-                <option value="TAX">فاتورة ضريبية (15%)</option>
-                <option value="NORMAL">فاتورة عادية (0%)</option>
+                <option value="TAX">فاتورة ضريبية</option>
+                <option value="NORMAL">فاتورة عادية</option>
               </select>
             </div>
 
+            {/* Tax Rate Percentage Field */}
+            {classification === 'TAX' && (
+              <div className="bg-white p-2.5 rounded-2xl border-2 border-emerald-950 shadow-2xs space-y-1.5 ring-2 ring-emerald-950/10">
+                <label className="text-emerald-950 font-black text-[11px] flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-900 inline-block"></span>
+                    النسبة الضريبية
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="any"
+                    disabled={!isEditable}
+                    value={taxRate}
+                    onChange={e => {
+                      const val = e.target.value === '' ? 0 : Number(e.target.value);
+                      setTaxRate(val);
+                      setItems(prev => prev.map(it => ({ ...it, taxRate: val })));
+                    }}
+                    className="w-full bg-emerald-50/40 border-2 border-emerald-950 p-1.5 pr-3 pl-7 rounded-xl text-emerald-950 font-bold font-mono focus:outline-none focus:border-emerald-900 focus:ring-1 focus:ring-emerald-900 disabled:bg-slate-100 disabled:border-slate-300 text-center"
+                    placeholder="15"
+                  />
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-black text-emerald-900 pointer-events-none">%</span>
+                </div>
+              </div>
+            )}
+
             {/* Invoice Type */}
-            <div className="bg-white p-2.5 rounded-2xl border-2 border-green-600/70 shadow-2xs space-y-1.5 ring-2 ring-green-50">
-              <label className="text-green-950 font-black text-[11px] flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-green-600 inline-block"></span>
+            <div className="bg-white p-2.5 rounded-2xl border-2 border-emerald-950 shadow-2xs space-y-1.5 ring-2 ring-emerald-950/10">
+              <label className="text-emerald-950 font-black text-[11px] flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-900 inline-block"></span>
                 نوع المعاملة
               </label>
               <select
                 disabled={!isEditable}
                 value={invoiceType}
                 onChange={e => handleInvoiceTypeChange(e.target.value)}
-                className="w-full bg-green-50/40 border-2 border-green-300 p-1.5 rounded-xl text-green-950 font-bold focus:outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600 disabled:bg-slate-100 disabled:border-slate-300"
+                className="w-full bg-emerald-50/40 border-2 border-emerald-950 p-1.5 rounded-xl text-emerald-950 font-bold focus:outline-none focus:border-emerald-900 focus:ring-1 focus:ring-emerald-900 disabled:bg-slate-100 disabled:border-slate-300"
               >
                 <option value="CASH_PURCHASE">مشتريات نقدية</option>
                 <option value="CREDIT_PURCHASE">مشتريات آجلة</option>
@@ -1258,16 +1702,16 @@ export default function Purchases() {
             </div>
 
             {/* Source / Warehouse Destination */}
-            <div className="bg-white p-2.5 rounded-2xl border-2 border-emerald-700/70 shadow-2xs space-y-1.5 ring-2 ring-emerald-50">
+            <div className="bg-white p-2.5 rounded-2xl border-2 border-emerald-950 shadow-2xs space-y-1.5 ring-2 ring-emerald-950/10">
               <label className="text-emerald-950 font-black text-[11px] flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block"></span>
+                <span className="w-2 h-2 rounded-full bg-emerald-900 inline-block"></span>
                 وجهة المخزون
               </label>
               <select
                 disabled={!isEditable}
                 value={source}
                 onChange={e => setSource(e.target.value)}
-                className="w-full bg-emerald-50/40 border-2 border-emerald-300 p-1.5 rounded-xl text-emerald-950 font-bold focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 disabled:bg-slate-100 disabled:border-slate-300"
+                className="w-full bg-emerald-50/40 border-2 border-emerald-950 p-1.5 rounded-xl text-emerald-950 font-bold focus:outline-none focus:border-emerald-900 focus:ring-1 focus:ring-emerald-900 disabled:bg-slate-100 disabled:border-slate-300"
               >
                 <option value="MAIN_WAREHOUSE">المستودع الرئيسي</option>
                 <option value="SHOWROOM">معرض المبيعات</option>
@@ -1276,16 +1720,16 @@ export default function Purchases() {
             </div>
 
             {/* Safe / Cashbox */}
-            <div className="bg-white p-2.5 rounded-2xl border-2 border-teal-700/70 shadow-2xs space-y-1.5 ring-2 ring-teal-50">
-              <label className="text-teal-950 font-black text-[11px] flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-teal-600 inline-block"></span>
+            <div className="bg-white p-2.5 rounded-2xl border-2 border-emerald-950 shadow-2xs space-y-1.5 ring-2 ring-emerald-950/10">
+              <label className="text-emerald-950 font-black text-[11px] flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-900 inline-block"></span>
                 خزنة الدفع والسداد
               </label>
               <select
                 disabled={!isEditable}
                 value={safe}
                 onChange={e => setSafe(e.target.value)}
-                className="w-full bg-teal-50/40 border-2 border-teal-300 p-1.5 rounded-xl text-teal-950 font-bold focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 disabled:bg-slate-100 disabled:border-slate-300"
+                className="w-full bg-emerald-50/40 border-2 border-emerald-950 p-1.5 rounded-xl text-emerald-950 font-bold focus:outline-none focus:border-emerald-900 focus:ring-1 focus:ring-emerald-900 disabled:bg-slate-100 disabled:border-slate-300"
               >
                 <option value="MAIN_SAFE">الصندوق الرئيسي (كاش)</option>
                 <option value="BANK_AHLI">حساب البنك الأهلي</option>
@@ -1295,19 +1739,19 @@ export default function Purchases() {
           </div>
         </div>
 
-        {/* Vendor & Dates Section - Winter Bordered Boxes in Green/Emerald */}
+        {/* Vendor & Dates Section - Bordered Boxes in Very Dark Green */}
         <div className="p-5 sm:p-6 border-b-2 border-slate-700 grid grid-cols-1 md:grid-cols-12 gap-5 bg-slate-50/40">
           {/* Vendor Selection Card */}
-          <div className="md:col-span-7 bg-white rounded-2xl border-2 border-emerald-300 shadow-xs overflow-hidden">
-            <div className="bg-gradient-to-r from-emerald-100 via-emerald-50 to-teal-50 px-4 py-2.5 border-b-2 border-emerald-200 flex items-center justify-between">
-              <span className="text-xs font-black text-emerald-950 flex items-center gap-2">
-                <span className="p-1 rounded-lg bg-emerald-600 text-white shadow-2xs">
+          <div className="md:col-span-7 bg-white rounded-2xl border-2 border-emerald-950 shadow-xs overflow-hidden">
+            <div className="bg-gradient-to-r from-emerald-950 via-green-950 to-slate-950 text-white px-4 py-2.5 border-b-2 border-emerald-900 flex items-center justify-between">
+              <span className="text-xs font-black text-white flex items-center gap-2">
+                <span className="p-1 rounded-lg bg-emerald-900 text-emerald-200 shadow-2xs border border-emerald-800">
                   <Truck size={14} />
                 </span>
                 <span>بيانات المورد (البائع)</span>
               </span>
               {selectedPartner?.taxNumber && (
-                <span className="text-[11px] font-mono font-bold text-emerald-900 bg-white px-2 py-0.5 rounded-lg border border-emerald-300 shadow-2xs">
+                <span className="text-[11px] font-mono font-bold text-emerald-200 bg-emerald-900/60 px-2 py-0.5 rounded-lg border border-emerald-700 shadow-2xs">
                   ضريبي: {selectedPartner.taxNumber}
                 </span>
               )}
@@ -1322,7 +1766,7 @@ export default function Purchases() {
                     required
                     value={partnerId}
                     onChange={e => setPartnerId(e.target.value)}
-                    className="w-full bg-white border-2 border-emerald-300 p-2.5 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 disabled:bg-slate-100 disabled:border-slate-300"
+                    className="w-full bg-white border-2 border-emerald-950 p-2.5 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-900 focus:ring-1 focus:ring-emerald-900 disabled:bg-slate-100 disabled:border-slate-300"
                   >
                     <option value="">-- حدد المورد من القائمة --</option>
                     {vendors.map(v => (
@@ -1333,7 +1777,7 @@ export default function Purchases() {
                   </select>
                 </div>
 
-                <div className="text-xs text-slate-800 bg-emerald-50/50 p-2 rounded-xl border border-emerald-200 flex items-center justify-between">
+                <div className="text-xs text-slate-800 bg-emerald-50/50 p-2 rounded-xl border border-emerald-900 flex items-center justify-between">
                   <span className="text-emerald-950 font-bold">رقم فاتورة المورد:</span>
                   <input
                     type="text"
@@ -1341,19 +1785,19 @@ export default function Purchases() {
                     value={supplierRef}
                     onChange={e => setSupplierRef(e.target.value)}
                     placeholder="مثال: INV-9821"
-                    className="font-mono font-bold text-slate-900 text-left outline-none border-b-2 border-emerald-300 focus:border-emerald-600 bg-white px-1.5 py-0.5 rounded w-28 disabled:cursor-not-allowed"
+                    className="font-mono font-bold text-slate-900 text-left outline-none border-b-2 border-emerald-950 focus:border-emerald-900 bg-white px-1.5 py-0.5 rounded w-28 disabled:cursor-not-allowed"
                     dir="ltr"
                   />
                 </div>
 
-                <div className="text-xs text-slate-800 bg-emerald-50/50 p-2 rounded-xl border border-emerald-200 flex items-center justify-between">
+                <div className="text-xs text-slate-800 bg-emerald-50/50 p-2 rounded-xl border border-emerald-900 flex items-center justify-between">
                   <span className="text-emerald-950 font-bold">الرصيد الفعلي الحالي:</span>
                   <div className="flex items-center gap-1.5">
                     <span className={`font-mono font-black ${
                       selectedPartnerStatement?.balanceType === 'CREDIT' 
-                        ? 'text-emerald-800' 
+                        ? 'text-emerald-900' 
                         : selectedPartnerStatement?.balanceType === 'DEBIT' 
-                        ? 'text-teal-700' 
+                        ? 'text-emerald-950' 
                         : 'text-slate-600'
                     }`}>
                       {selectedPartnerStatement?.balanceFormatted || '0.00'} {currencySymbol}
@@ -1363,18 +1807,18 @@ export default function Purchases() {
                 </div>
 
                 {selectedPartner && (
-                  <div className="sm:col-span-2 flex items-center justify-between bg-emerald-50/70 p-2 rounded-xl border border-emerald-200 text-xs">
+                  <div className="sm:col-span-2 flex items-center justify-between bg-emerald-50/70 p-2 rounded-xl border border-emerald-900 text-xs">
                     <div className="flex items-center gap-2 text-emerald-950">
-                      <Truck size={13} className="text-emerald-600" />
+                      <Truck size={13} className="text-emerald-900" />
                       <span className="font-bold">كشف حساب المورد والعمليات السابقة:</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setSelectedPartnerForStatementModal(selectedPartner)}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-800 rounded-lg font-bold border border-emerald-300 text-[11px] transition-colors cursor-pointer shadow-2xs"
+                      className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-950 rounded-lg font-bold border border-emerald-950 text-[11px] transition-colors cursor-pointer shadow-2xs"
                       title="عرض كشف حساب المورد التفصيلي وحركات الفواتير والسندات"
                     >
-                      <FileText size={13} className="text-emerald-600" />
+                      <FileText size={13} className="text-emerald-900" />
                       <span>فتح كشف الحساب</span>
                     </button>
                   </div>
@@ -1384,10 +1828,10 @@ export default function Purchases() {
           </div>
 
           {/* Dates & Reference Card */}
-          <div className="md:col-span-5 bg-white rounded-2xl border-2 border-teal-300 shadow-xs overflow-hidden">
-            <div className="bg-gradient-to-r from-teal-100 via-teal-50 to-emerald-50 px-4 py-2.5 border-b-2 border-teal-200 flex items-center justify-between">
-              <span className="text-xs font-black text-teal-950 flex items-center gap-2">
-                <span className="p-1 rounded-lg bg-teal-600 text-white shadow-2xs">
+          <div className="md:col-span-5 bg-white rounded-2xl border-2 border-emerald-950 shadow-xs overflow-hidden">
+            <div className="bg-gradient-to-r from-emerald-950 via-green-950 to-slate-950 text-white px-4 py-2.5 border-b-2 border-emerald-900 flex items-center justify-between">
+              <span className="text-xs font-black text-white flex items-center gap-2">
+                <span className="p-1 rounded-lg bg-emerald-900 text-emerald-200 shadow-2xs border border-emerald-800">
                   <Calendar size={14} />
                 </span>
                 <span>تاريخ الفاتورة والاستحقاق</span>
@@ -1398,7 +1842,7 @@ export default function Purchases() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div className="space-y-1">
                   <label className="text-emerald-950 font-bold text-[11px] flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-900"></span>
                     تاريخ الشراء / التوريد
                   </label>
                   <input
@@ -1407,13 +1851,13 @@ export default function Purchases() {
                     required
                     value={date}
                     onChange={e => setDate(e.target.value)}
-                    className="w-full bg-white border-2 border-emerald-200 p-2 rounded-xl text-slate-900 font-mono font-bold focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 disabled:bg-slate-100 disabled:border-slate-300"
+                    className="w-full bg-white border-2 border-emerald-950 p-2 rounded-xl text-slate-900 font-mono font-bold focus:outline-none focus:border-emerald-900 focus:ring-1 focus:ring-emerald-900 disabled:bg-slate-100 disabled:border-slate-300"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-teal-950 font-bold text-[11px] flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-teal-600"></span>
+                  <label className="text-emerald-950 font-bold text-[11px] flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-900"></span>
                     تاريخ الاستحقاق
                   </label>
                   <input
@@ -1421,7 +1865,7 @@ export default function Purchases() {
                     disabled={!isEditable}
                     value={dueDate}
                     onChange={e => setDueDate(e.target.value)}
-                    className="w-full bg-white border-2 border-teal-200 p-2 rounded-xl text-slate-900 font-mono font-bold focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 disabled:bg-slate-100 disabled:border-slate-300"
+                    className="w-full bg-white border-2 border-emerald-950 p-2 rounded-xl text-slate-900 font-mono font-bold focus:outline-none focus:border-emerald-900 focus:ring-1 focus:ring-emerald-900 disabled:bg-slate-100 disabled:border-slate-300"
                   />
                 </div>
               </div>
@@ -1488,6 +1932,19 @@ export default function Purchases() {
                             placeholder="ابحث بالحرف أو الكود عن الصنف أو المادة..."
                           />
                         </div>
+                        {itemInfo.matched && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const targetId = item.itemId || itemsCatalog.find(i => i.code === item.itemCode || i.name.trim().toLowerCase() === (item.description || '').trim().toLowerCase())?.id;
+                              if (targetId) setAnalyticItemId(targetId);
+                            }}
+                            className="p-1.5 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 transition-all shrink-0 print:hidden flex items-center justify-center cursor-pointer shadow-2xs"
+                            title="تحليل أسعار التوريد، التكلفة، ومعدلات السحب والربحية"
+                          >
+                            <BarChart3 size={13} />
+                          </button>
+                        )}
                         {/* Delete button beside the item input */}
                         <button
                           type="button"
@@ -1512,7 +1969,7 @@ export default function Purchases() {
                             ? 'bg-rose-50 text-rose-800 border-rose-400'
                             : itemInfo.stock <= 5
                             ? 'bg-amber-50 text-amber-800 border-amber-400'
-                            : 'bg-emerald-50 text-emerald-800 border-emerald-400'
+                            : 'bg-emerald-50 text-emerald-950 border-emerald-950'
                         }`}>
                           <span>{itemInfo.stock.toLocaleString()}</span>
                           <span className="text-[10px] font-bold text-slate-600">{itemInfo.unit}</span>
@@ -1567,16 +2024,16 @@ export default function Purchases() {
                     </td>
                     {classification === 'TAX' && (
                       <td className="py-2 px-3 text-center border-l border-slate-300">
-                        <select
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="any"
                           disabled={!isEditable}
                           value={item.taxRate}
                           onChange={e => handleItemChange(item.id, 'taxRate', Number(e.target.value))}
                           className="w-full bg-white p-1.5 rounded-xl border-2 border-slate-500 font-mono text-center font-bold text-slate-900 focus:outline-none focus:border-slate-900 disabled:bg-slate-100 disabled:border-slate-300"
-                        >
-                          <option value="15">15%</option>
-                          <option value="5">5%</option>
-                          <option value="0">0%</option>
-                        </select>
+                        />
                       </td>
                     )}
                     <td className="py-2 px-4 text-left font-mono font-black text-slate-950 text-sm border-l border-slate-300 bg-slate-50/70">
@@ -1611,7 +2068,7 @@ export default function Purchases() {
           </table>
         </div>
 
-        {/* Add Item Action Bar - Green & Emerald Styled */}
+        {/* Add Item Action Bar - Very Dark Green Styled */}
         <div className="p-4 border-t-2 border-slate-700 bg-emerald-50/40 print:hidden flex flex-wrap items-center justify-between gap-3">
           {isEditable ? (
             <>
@@ -1619,22 +2076,22 @@ export default function Purchases() {
                 <button
                   type="button"
                   onClick={handleAddItem}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:from-emerald-800 active:to-teal-900 text-white rounded-xl text-xs font-black transition-all shadow-xs hover:shadow cursor-pointer border border-emerald-900"
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-900 to-slate-950 hover:from-emerald-950 hover:to-slate-900 active:from-slate-950 active:to-emerald-950 text-white rounded-xl text-xs font-black transition-all shadow-xs hover:shadow cursor-pointer border border-emerald-950"
                   title="إضافة صنف مشتريات جديد (F2 أو Insert)"
                 >
                   <Plus size={16} />
                   <span>إضافة صنف مشتريات جديد</span>
-                  <kbd className="text-[10px] bg-emerald-900 text-emerald-100 px-1.5 py-0.5 rounded font-mono">F2</kbd>
+                  <kbd className="text-[10px] bg-emerald-950 text-emerald-100 px-1.5 py-0.5 rounded font-mono border border-emerald-900">F2</kbd>
                 </button>
               </div>
-              <span className="text-xs text-emerald-950 font-black bg-white px-3.5 py-1.5 rounded-xl border-2 border-emerald-300 shadow-2xs">
-                عدد الأصناف: <strong className="text-emerald-700 font-mono text-sm">{items.length}</strong>
+              <span className="text-xs text-emerald-950 font-black bg-white px-3.5 py-1.5 rounded-xl border-2 border-emerald-950 shadow-2xs">
+                عدد الأصناف: <strong className="text-emerald-900 font-mono text-sm">{items.length}</strong>
               </span>
             </>
           ) : (
             <div className="w-full flex items-center justify-between text-xs text-slate-700 py-1 font-bold">
               <div className="flex items-center gap-2">
-                <Lock size={14} className="text-emerald-700" />
+                <Lock size={14} className="text-emerald-800" />
                 <span>
                   {status === 'POSTED' 
                     ? 'الأصناف مقفلة لأن الفاتورة مرحلة. لإضافة أو حذف أو تعديل الأصناف اضغط على [إلغاء الترحيل] بالأعلى.' 
@@ -1653,7 +2110,7 @@ export default function Purchases() {
                 <button
                   type="button"
                   onClick={handleStartEditInvoice}
-                  className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs transition-colors cursor-pointer border border-emerald-950"
+                  className="px-3 py-1 bg-emerald-900 hover:bg-emerald-950 text-white rounded-lg font-bold text-xs transition-colors cursor-pointer border border-emerald-950"
                 >
                   تعديل الفاتورة الآن
                 </button>
@@ -1672,12 +2129,12 @@ export default function Purchases() {
               value={notes}
               onChange={e => setNotes(e.target.value)}
               placeholder="اكتب هنا أي ملاحظات بخصوص الشحنة أو بوالص الشحن أو شروط السداد للمورد..."
-              className="w-full bg-white border-2 border-emerald-300 rounded-2xl p-3 text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 min-h-[95px] resize-none disabled:bg-slate-100 disabled:border-slate-300 shadow-2xs"
+              className="w-full bg-white border-2 border-emerald-950 rounded-2xl p-3 text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-900 focus:ring-1 focus:ring-emerald-900 min-h-[95px] resize-none disabled:bg-slate-100 disabled:border-slate-300 shadow-2xs"
             />
           </div>
 
           {/* Calculations Matrix Card - Deep Winter Dark Box with Emerald Accents */}
-          <div className="md:col-span-5 bg-slate-900 text-white p-5 rounded-2xl border-2 border-emerald-700/60 shadow-lg space-y-3">
+          <div className="md:col-span-5 bg-slate-900 text-white p-5 rounded-2xl border-2 border-emerald-950 shadow-lg space-y-3">
             <div className="flex justify-between items-center text-xs text-slate-300">
               <span className="font-bold">المجموع الخاضع للضريبة:</span>
               <span className="font-mono font-black text-white text-sm">
@@ -1687,12 +2144,30 @@ export default function Purchases() {
 
             {classification === 'TAX' && (
               <div className="flex justify-between items-center text-xs text-slate-300">
-                <span className="font-bold">ضريبة القيمة المضافة (VAT 15%):</span>
+                <span className="font-bold">ضريبة القيمة المضافة (VAT {taxRate}%):</span>
                 <span className="font-mono font-black text-emerald-300 text-sm">
                   {totals.taxTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currencySymbol}
                 </span>
               </div>
             )}
+
+            {/* الخصم المكتسب من المورد */}
+            <div className="flex justify-between items-center text-xs text-slate-300 pt-1">
+              <span className="font-bold text-emerald-300">الخصم المكتسب (من المورد):</span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  disabled={!isEditable}
+                  value={discount === 0 ? '' : discount}
+                  onChange={e => setDiscount(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="0.00"
+                  className="w-24 text-right bg-slate-800 border border-emerald-500/60 rounded-lg px-2 py-1 text-xs font-mono font-bold text-emerald-300 focus:outline-none focus:border-emerald-400 disabled:opacity-50"
+                />
+                <span className="text-[10px] font-bold text-emerald-400">{currencySymbol}</span>
+              </div>
+            </div>
 
             <div className="border-t-2 border-slate-700 pt-3.5 flex justify-between items-center">
               <span className="text-sm font-black text-white">إجمالي فاتورة الشراء المستحقة:</span>
@@ -1705,7 +2180,7 @@ export default function Purchases() {
             </div>
 
             {/* المبلغ كتابة بالحروف (تفقيط المبلغ الإجمالي) - أسفل خانة صافي المبلغ الإجمالي */}
-            <div className="bg-slate-800/90 rounded-xl p-2.5 border border-emerald-700/50 text-xs">
+            <div className="bg-slate-800/90 rounded-xl p-2.5 border border-emerald-900 text-xs">
               <span className="text-[10px] text-emerald-300 font-bold block mb-1">المبلغ كتابة بالحروف:</span>
               <p className="font-bold text-amber-300 leading-relaxed font-sans text-xs">
                 {tafqeet(totals.grandTotal)}
@@ -1714,17 +2189,17 @@ export default function Purchases() {
 
             {/* خانة السداد ومبلغ الدفع وتحديد نوع الفاتورة */}
             <div className="pt-3 border-t-2 border-slate-700/90 space-y-2.5">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <span className="text-xs font-black text-white flex items-center gap-1.5">
                   <CreditCard size={14} className="text-emerald-400" />
                   <span>المبلغ المسدد للمورد (السداد النقدي):</span>
                 </span>
-                <div className="flex items-center gap-1">
+                <div className="flex flex-wrap items-center gap-1 w-full sm:w-auto">
                   <button
                     type="button"
                     disabled={!isEditable}
                     onClick={() => handlePaidAmountChange(totals.grandTotal)}
-                    className="px-2 py-0.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 rounded text-[10px] font-bold border border-emerald-700/60 disabled:opacity-50 transition-colors"
+                    className="flex-1 sm:flex-none px-2 py-0.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 rounded text-[10px] font-bold border border-emerald-900 disabled:opacity-50 transition-colors"
                   >
                     100% نقدي
                   </button>
@@ -1732,7 +2207,7 @@ export default function Purchases() {
                     type="button"
                     disabled={!isEditable}
                     onClick={() => handlePaidAmountChange(Number((totals.grandTotal * 0.5).toFixed(2)))}
-                    className="px-2 py-0.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 rounded text-[10px] font-bold border border-amber-700/60 disabled:opacity-50 transition-colors"
+                    className="flex-1 sm:flex-none px-2 py-0.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 rounded text-[10px] font-bold border border-amber-700/60 disabled:opacity-50 transition-colors"
                   >
                     50% جزئي
                   </button>
@@ -1740,7 +2215,7 @@ export default function Purchases() {
                     type="button"
                     disabled={!isEditable}
                     onClick={() => handlePaidAmountChange(0)}
-                    className="px-2 py-0.5 bg-teal-950/80 hover:bg-teal-900 text-teal-300 rounded text-[10px] font-bold border border-teal-700/60 disabled:opacity-50 transition-colors"
+                    className="flex-1 sm:flex-none px-2 py-0.5 bg-teal-950/80 hover:bg-teal-900 text-teal-300 rounded text-[10px] font-bold border border-emerald-900 disabled:opacity-50 transition-colors"
                   >
                     آجل (0)
                   </button>
@@ -1758,7 +2233,7 @@ export default function Purchases() {
                   value={paidAmount === 0 ? '0' : paidAmount}
                   onChange={e => handlePaidAmountChange(parseFloat(e.target.value) || 0)}
                   placeholder="أدخل المبلغ المسدد..."
-                  className="w-full bg-slate-800/90 border-2 border-emerald-700/70 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 rounded-xl px-3 py-2 text-base font-mono font-black text-amber-300 disabled:bg-slate-900/80 disabled:border-slate-700 disabled:text-slate-400 transition-all text-left"
+                  className="w-full bg-slate-800/90 border-2 border-emerald-950 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl px-3 py-2 text-base font-mono font-black text-amber-300 disabled:bg-slate-900/80 disabled:border-slate-700 disabled:text-slate-400 transition-all text-left"
                 />
                 <span className="absolute right-3 top-2.5 text-xs text-emerald-300/80 font-bold pointer-events-none">
                   {currencySymbol} مسدد
@@ -1806,7 +2281,7 @@ export default function Purchases() {
                   <button
                     type="button"
                     onClick={() => setSelectedPartnerForStatementModal(selectedPartner)}
-                    className="flex items-center gap-1 px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded font-bold text-[10px] border border-emerald-700/60 transition-colors cursor-pointer"
+                    className="flex items-center gap-1 px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded font-bold text-[10px] border border-emerald-900 transition-colors cursor-pointer"
                     title="عرض كشف حساب المورد التفصيلي وحركات الفواتير والسندات"
                   >
                     <FileText size={11} />
@@ -1814,7 +2289,7 @@ export default function Purchases() {
                   </button>
                 </div>
 
-                <div className="bg-slate-800/90 rounded-xl p-3 border border-emerald-800/50 space-y-1.5 text-xs font-mono">
+                <div className="bg-slate-800/90 rounded-xl p-3 border border-emerald-950 space-y-1.5 text-xs font-mono">
                   <div className="flex justify-between items-center text-slate-400 text-[11px]">
                     <span className="font-sans">الرصيد السابق قبل الفاتورة:</span>
                     <span className="font-bold text-slate-200">
@@ -1879,24 +2354,73 @@ export default function Purchases() {
         </div>
       </div>
 
-      {/* Offscreen Certified Document for Instant Pixel-Perfect PDF Export */}
-      <div 
-        style={{ position: 'fixed', left: '-9999px', top: '0', zIndex: -100, width: '210mm' }}
-        aria-hidden="true"
-      >
-        <CertifiedInvoiceDocument
-          ref={pdfInvoiceDocRef}
-          data={currentInvoicePreviewData}
-          format="A4"
-        />
-      </div>
-
       {/* Partner Statement Modal */}
       <PartnerStatementModal
         partner={selectedPartnerForStatementModal}
         isOpen={Boolean(selectedPartnerForStatementModal)}
         onClose={() => setSelectedPartnerForStatementModal(null)}
       />
+
+      {/* In-App Delete Confirmation Modal (100% reliable in any iframe) */}
+      {deleteModal && deleteModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border-2 border-slate-300 text-right space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center mx-auto mb-1 shadow-inner">
+              <Trash2 size={28} />
+            </div>
+            <h3 className="text-base font-black text-slate-900 text-center">
+              {deleteModal.isNewDraft ? 'إفراغ مسودة الفاتورة الحالية' : 'تأكيد حذف فاتورة المشتريات نهائياً'}
+            </h3>
+            <p className="text-xs text-slate-600 text-center leading-relaxed">
+              {deleteModal.isNewDraft ? (
+                <>هل ترغب حقاً في إفراغ كافة البيانات وإعادة تعيين هذه الفاتورة للبدء بمسودة جديدة فارغة؟</>
+              ) : (
+                <>
+                  هل أنت متأكد من رغبتك في حذف فاتورة المشتريات رقم{' '}
+                  <span className="font-mono font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-200">
+                    {deleteModal.invoiceNumber}
+                  </span>{' '}
+                  نهائياً من قاعدة البيانات؟ لا يمكن التراجع عن هذا الإجراء بعد تنفيذه.
+                </>
+              )}
+            </p>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={confirmExecuteDelete}
+                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl shadow-md transition-colors cursor-pointer border border-rose-800 flex items-center justify-center gap-1.5"
+              >
+                <Trash2 size={14} />
+                <span>{deleteModal.isNewDraft ? 'نعم، إفراغ المسودة' : 'نعم، حذف الفاتورة نهائياً'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteModal(null)}
+                className="py-2.5 px-5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer border border-slate-300"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-60 animate-bounce">
+          <div className={`px-5 py-3 rounded-2xl shadow-2xl border text-xs font-bold flex items-center gap-2 ${
+            toast.type === 'success' 
+              ? 'bg-emerald-950 text-white border-emerald-900' 
+              : toast.type === 'error'
+              ? 'bg-rose-900 text-white border-rose-500'
+              : 'bg-slate-900 text-white border-slate-700'
+          }`}>
+            <CheckCircle2 size={16} className={toast.type === 'success' ? 'text-emerald-400' : 'text-slate-300'} />
+            <span>{toast.title}</span>
+          </div>
+        </div>
+      )}
 
       {/* Universal Print Preview Modal */}
       <PrintPreviewModal
@@ -1907,6 +2431,15 @@ export default function Purchases() {
         }}
         data={customPreviewData || currentInvoicePreviewData}
       />
+
+      {/* Item Analytics Modal */}
+      {analyticItemId && (
+        <ItemAnalyticsModal
+          isOpen={true}
+          selectedItemId={analyticItemId}
+          onClose={() => setAnalyticItemId(null)}
+        />
+      )}
     </div>
   );
 }

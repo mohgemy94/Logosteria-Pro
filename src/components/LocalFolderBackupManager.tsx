@@ -230,7 +230,7 @@ export default function LocalFolderBackupManager({ onClose, isModal = false }: P
           <button
             type="button"
             onClick={downloadBackupDirectly}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+            className="btn-3d btn-3d-white px-3 py-1.5 text-xs font-bold flex items-center gap-1.5"
             title="تحميل نسخة احتياطية فورية لملف التنزيلات المباشر"
           >
             <Download size={14} className="text-blue-600" />
@@ -241,7 +241,7 @@ export default function LocalFolderBackupManager({ onClose, isModal = false }: P
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+              className="btn-3d btn-3d-white px-3 py-1.5 text-xs font-bold"
             >
               إغلاق
             </button>
@@ -407,7 +407,7 @@ export default function LocalFolderBackupManager({ onClose, isModal = false }: P
                   type="button"
                   onClick={handlePickFolder}
                   disabled={isSelectingFolder}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                  className="btn-3d btn-3d-blue px-4 py-2 text-xs font-bold flex items-center gap-2 disabled:opacity-50"
                 >
                   <Folder size={16} />
                   <span>{hasFolderHandle ? 'تغيير المجلد' : 'اختيار مجلد محلي على الجهاز'}</span>
@@ -419,7 +419,7 @@ export default function LocalFolderBackupManager({ onClose, isModal = false }: P
                       type="button"
                       onClick={handleSaveNow}
                       disabled={isSavingNow}
-                      className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                      className="btn-3d btn-3d-emerald px-3.5 py-2 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
                       title="حفظ فوري فوري لجميع البيانات في المجلد"
                     >
                       <Save size={15} className={isSavingNow ? 'animate-spin' : ''} />
@@ -429,7 +429,7 @@ export default function LocalFolderBackupManager({ onClose, isModal = false }: P
                     <button
                       type="button"
                       onClick={handleDisconnectFolder}
-                      className="px-3 py-2.5 bg-white border border-slate-300 text-slate-600 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                      className="btn-3d btn-3d-danger-soft px-3 py-2 text-xs font-bold"
                       title="فصل الربط مع هذا المجلد"
                     >
                       إلغاء الربط
@@ -595,7 +595,7 @@ export default function LocalFolderBackupManager({ onClose, isModal = false }: P
             <button
               type="button"
               onClick={() => setInventory(collectSystemBackupData())}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 cursor-pointer"
+              className="btn-3d btn-3d-white px-3 py-1.5 text-xs font-bold flex items-center gap-1.5"
             >
               <RefreshCw size={13} />
               تحديث العد الآن
@@ -721,7 +721,7 @@ export default function LocalFolderBackupManager({ onClose, isModal = false }: P
                 type="button"
                 onClick={handleRestoreFromCurrentFolder}
                 disabled={!hasFolderHandle || isRestoring}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-300 text-slate-800 hover:bg-slate-100 rounded-xl text-xs font-bold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                className="btn-3d btn-3d-emerald-soft flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold disabled:opacity-50"
               >
                 <FolderCheck size={14} className="text-emerald-600" />
                 <span>{isRestoring ? 'جاري الفحص...' : 'فحص واستعادة أحدث نسخة من المجلد'}</span>
@@ -740,7 +740,7 @@ export default function LocalFolderBackupManager({ onClose, isModal = false }: P
                 </p>
               </div>
 
-              <label className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-300 text-slate-800 hover:bg-slate-100 rounded-xl text-xs font-bold shadow-2xs transition-colors cursor-pointer">
+              <label className="btn-3d btn-3d-primary-soft flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold">
                 <Upload size={14} className="text-blue-600" />
                 <span>اختيار ملف JSON للاستعادة</span>
                 <input
@@ -786,14 +786,14 @@ export default function LocalFolderBackupManager({ onClose, isModal = false }: P
                     <button
                       type="button"
                       onClick={() => handleExecuteRestore(confirmRestoreModal)}
-                      className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                      className="btn-3d btn-3d-amber px-5 py-2 text-xs font-bold"
                     >
                       تأكيد استعادة هذه النسخة وتطبيقها الآن
                     </button>
                     <button
                       type="button"
                       onClick={() => setConfirmRestoreModal(null)}
-                      className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-xl text-xs font-medium hover:bg-slate-50 transition-colors cursor-pointer"
+                      className="btn-3d btn-3d-white px-4 py-2 text-xs font-bold"
                     >
                       إلغاء
                     </button>

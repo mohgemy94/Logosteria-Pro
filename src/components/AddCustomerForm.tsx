@@ -1,23 +1,32 @@
 import React, { useState } from 'react';
-import { Users, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 
 interface AddCustomerFormProps {
+  initialCode?: string;
   onSave: (customer: { 
+    code?: string;
     name: string; 
     taxNumber: string; 
     phone: string; 
-    address?: string;
+    address?: string | undefined;
+    email?: string | undefined;
+    creditLimit?: number | undefined;
+    paymentTermsDays?: number | undefined;
     openingBalance?: number;
   }) => void;
   onCancel: () => void;
 }
 
-export default function AddCustomerForm({ onSave, onCancel }: AddCustomerFormProps) {
+export default function AddCustomerForm({ initialCode, onSave, onCancel }: AddCustomerFormProps) {
   const [newCustomer, setNewCustomer] = useState({ 
+    code: initialCode || '',
     name: '', 
     taxNumber: '', 
     phone: '', 
     address: '',
+    email: '',
+    creditLimit: '',
+    paymentTermsDays: '0',
     openingBalance: '',
     balanceType: 'DEBIT' // DEBIT (مدين - عليه مبالغ) or CREDIT (دائن - له رصيد مقدم)
   });
@@ -35,16 +44,6 @@ export default function AddCustomerForm({ onSave, onCancel }: AddCustomerFormPro
       isValid = false;
     }
 
-    if (newCustomer.taxNumber && !/^\d{15}$/.test(newCustomer.taxNumber)) {
-      newErrors.taxNumber = 'الرقم الضريبي يجب أن يكون 15 رقماً';
-      isValid = false;
-    }
-
-    if (newCustomer.phone && !/^05\d{8}$/.test(newCustomer.phone)) {
-      newErrors.phone = 'رقم الهاتف يجب أن يبدأ بـ 05 ويتكون من 10 أرقام';
-      isValid = false;
-    }
-
     setErrors(newErrors);
     return isValid;
   };
@@ -54,24 +53,37 @@ export default function AddCustomerForm({ onSave, onCancel }: AddCustomerFormPro
     if (validate()) {
       const rawBal = Number(newCustomer.openingBalance) || 0;
       const finalBal = newCustomer.balanceType === 'CREDIT' ? -Math.abs(rawBal) : Math.abs(rawBal);
+      const limitVal = newCustomer.creditLimit ? Number(newCustomer.creditLimit) : undefined;
+      const termsVal = newCustomer.paymentTermsDays ? Number(newCustomer.paymentTermsDays) : undefined;
       onSave({
+        code: newCustomer.code.trim(),
         name: newCustomer.name.trim(),
         taxNumber: newCustomer.taxNumber.trim(),
         phone: newCustomer.phone.trim(),
         address: newCustomer.address.trim(),
+        email: newCustomer.email.trim() || undefined,
+        creditLimit: limitVal !== undefined && !isNaN(limitVal) ? limitVal : undefined,
+        paymentTermsDays: termsVal !== undefined && !isNaN(termsVal) ? termsVal : undefined,
         openingBalance: finalBal
       });
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-6 animate-fadeIn">
-      <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm sm:text-base">
-        <Users size={18} className="text-blue-600" /> تسجيل عميل جديد وربط الحساب
-      </h3>
-
+    <form onSubmit={handleSubmit} className="animate-fadeIn">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
         
+        {/* Code */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-bold uppercase text-slate-500">كود العميل</label>
+          <input 
+            value={newCustomer.code} 
+            onChange={e => setNewCustomer({...newCustomer, code: e.target.value})} 
+            className="border border-slate-200 p-2 rounded-lg text-xs focus:outline-none focus:border-blue-500 font-mono" 
+            placeholder="CUST-001" 
+          />
+        </div>
+
         {/* Name */}
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-bold uppercase text-slate-500">اسم العميل / المنشأة <span className="text-red-500">*</span></label>
@@ -89,7 +101,7 @@ export default function AddCustomerForm({ onSave, onCancel }: AddCustomerFormPro
 
         {/* Tax Number */}
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold uppercase text-slate-500">الرقم الضريبي (15 رقم)</label>
+          <label className="text-[10px] font-bold uppercase text-slate-500">الرقم الضريبي</label>
           <input 
             value={newCustomer.taxNumber} 
             onChange={e => {
@@ -104,7 +116,7 @@ export default function AddCustomerForm({ onSave, onCancel }: AddCustomerFormPro
 
         {/* Phone */}
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold uppercase text-slate-500">رقم الهاتف الجوال</label>
+          <label className="text-[10px] font-bold uppercase text-slate-500">رقم الهاتف الجوال / تليفون</label>
           <input 
             value={newCustomer.phone} 
             onChange={e => {
@@ -112,10 +124,23 @@ export default function AddCustomerForm({ onSave, onCancel }: AddCustomerFormPro
               if (errors.phone) setErrors({...errors, phone: ''});
             }} 
             className={`border p-2 rounded-lg text-xs focus:outline-none focus:border-blue-500 font-mono ${errors.phone ? 'border-red-400 bg-red-50' : 'border-slate-200'}`} 
-            placeholder="05XXXXXXXX" 
+            placeholder="رقم الهاتف" 
             dir="ltr"
           />
           {errors.phone && <span className="text-[10px] text-red-500 text-right">{errors.phone}</span>}
+        </div>
+
+        {/* Email */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-bold uppercase text-slate-500">البريد الإلكتروني</label>
+          <input 
+            type="email"
+            value={newCustomer.email} 
+            onChange={e => setNewCustomer({...newCustomer, email: e.target.value})} 
+            className="border border-slate-200 p-2 rounded-lg text-xs focus:outline-none focus:border-blue-500 font-mono" 
+            placeholder="billing@example.com" 
+            dir="ltr"
+          />
         </div>
 
         {/* Address */}
@@ -127,6 +152,38 @@ export default function AddCustomerForm({ onSave, onCancel }: AddCustomerFormPro
             className="border border-slate-200 p-2 rounded-lg text-xs focus:outline-none focus:border-blue-500" 
             placeholder="المدينة - الحي - الشارع" 
           />
+        </div>
+
+        {/* Credit Limit */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-bold uppercase text-slate-500">حد الائتمان المسموح (ريال)</label>
+          <input 
+            type="number"
+            step="0.01"
+            min="0"
+            value={newCustomer.creditLimit} 
+            onChange={e => setNewCustomer({...newCustomer, creditLimit: e.target.value})} 
+            className="border border-slate-200 p-2 rounded-lg text-xs focus:outline-none focus:border-blue-500 font-mono" 
+            placeholder="مثال: 50000" 
+          />
+          <span className="text-[9px] text-slate-400">سقف المديونية الآمنة، اتركه فارغاً إذا كان غير محدد</span>
+        </div>
+
+        {/* Payment Terms Days */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-bold uppercase text-slate-500">فترة الائتمان / السداد</label>
+          <select
+            value={newCustomer.paymentTermsDays}
+            onChange={e => setNewCustomer({...newCustomer, paymentTermsDays: e.target.value})}
+            className="border border-slate-200 p-2 rounded-lg text-xs focus:outline-none focus:border-blue-500 bg-white"
+          >
+            <option value="0">سداد فوري / نقدي (Cash on Delivery)</option>
+            <option value="15">خلال 15 يوماً</option>
+            <option value="30">خلال 30 يوماً (شهر)</option>
+            <option value="45">خلال 45 يوماً</option>
+            <option value="60">خلال 60 يوماً (شهران)</option>
+            <option value="90">خلال 90 يوماً (3 أشهر)</option>
+          </select>
         </div>
 
         {/* Opening Balance Amount */}
@@ -162,13 +219,13 @@ export default function AddCustomerForm({ onSave, onCancel }: AddCustomerFormPro
         <button 
           type="button" 
           onClick={onCancel} 
-          className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer font-medium"
+          className="btn-3d btn-3d-white px-4 py-2 text-xs font-black hover:scale-105 active:scale-95 transition-all"
         >
           إلغاء
         </button>
         <button 
           type="submit" 
-          className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition-colors shadow-sm cursor-pointer"
+          className="btn-3d btn-3d-blue px-5 py-2 text-xs font-black hover:scale-105 active:scale-95 transition-all"
         >
           <Save size={15} />
           <span>حفظ العميل وفتح الحساب</span>

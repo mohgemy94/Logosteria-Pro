@@ -1,248 +1,26 @@
-import { Employee, PayrollRecord } from '../types/payroll';
+import { 
+  Employee, 
+  PayrollRecord, 
+  LoanAdvance, 
+  LoanInstallment, 
+  AttendanceOvertimeRecord, 
+  EndOfServiceSettlement 
+} from '../types/payroll';
 
-const STORAGE_KEY_EMPLOYEES = 'alpha_accounting_employees_v1';
+export const STORAGE_KEY_EMPLOYEES = 'alpha_accounting_employees_v1';
+export const STORAGE_KEY_LOANS = 'alpha_accounting_loans_v1';
+export const STORAGE_KEY_ATTENDANCE = 'alpha_accounting_attendance_v1';
+export const STORAGE_KEY_SETTLEMENTS = 'alpha_accounting_settlements_v1';
 
-export const INITIAL_EMPLOYEES: Employee[] = [
-  {
-    id: 'emp-1',
-    code: 'EMP-101',
-    name: 'أحمد منصور الحربي',
-    department: 'الإدارة المالية',
-    jobTitle: 'رئيس حسابات أول',
-    nationalId: '1088492019',
-    phone: '0551234567',
-    email: 'ahmed.harbi@alpha.com',
-    joinDate: '2022-01-15',
-    bankName: 'مصرف الراجحي',
-    iban: 'SA4480000201608010001234',
-    basicSalary: 9500,
-    housingAllowance: 2375,
-    transportAllowance: 800,
-    foodAllowance: 400,
-    otherAllowances: 300,
-    status: 'ACTIVE',
-    bonuses: [
-      {
-        id: 'b-1',
-        type: 'EXCELLENCE',
-        typeName: 'مكافأة تميز وإقفال مالي',
-        amount: 1500,
-        date: '2024-09-01',
-        reason: 'إنجاز القوائم المالية الشهرية في الوقت القياسي',
-        status: 'APPROVED'
-      }
-    ],
-    deductions: [
-      {
-        id: 'd-1',
-        type: 'INSURANCE',
-        typeName: 'استقطاع التأمينات الاجتماعية (GOSI)',
-        amount: 950,
-        date: '2024-09-05',
-        reason: 'حصة الموظف من التأمينات 10%',
-        status: 'APPLIED'
-      }
-    ]
-  },
-  {
-    id: 'emp-2',
-    code: 'EMP-102',
-    name: 'سارة فهد القحطاني',
-    department: 'المبيعات والتسويق',
-    jobTitle: 'مشرفة مبيعات كبار العملاء',
-    nationalId: '1092748192',
-    phone: '0569876543',
-    email: 'sara.qahtani@alpha.com',
-    joinDate: '2022-06-01',
-    bankName: 'البنك الأهلي السعودي (SNB)',
-    iban: 'SA1210000001234567890123',
-    basicSalary: 7500,
-    housingAllowance: 1875,
-    transportAllowance: 900,
-    foodAllowance: 300,
-    otherAllowances: 0,
-    status: 'ACTIVE',
-    bonuses: [
-      {
-        id: 'b-2',
-        type: 'TARGET_INCENTIVE',
-        typeName: 'حافز كسر حاجز المبيعات المستهدف',
-        amount: 2800,
-        date: '2024-09-03',
-        reason: 'تخطي حاجز التارجت الشهري بنسبة 135%',
-        status: 'APPROVED'
-      }
-    ],
-    deductions: [
-      {
-        id: 'd-2',
-        type: 'DELAY',
-        typeName: 'خصم تأخير دقائق حضور',
-        amount: 120,
-        date: '2024-09-04',
-        reason: 'تأخر صباحي تراكمي تجاوز 45 دقيقة',
-        status: 'APPLIED'
-      },
-      {
-        id: 'd-3',
-        type: 'INSURANCE',
-        typeName: 'استقطاع التأمينات الاجتماعية (GOSI)',
-        amount: 750,
-        date: '2024-09-05',
-        reason: 'حصة الموظف من التأمينات 10%',
-        status: 'APPLIED'
-      }
-    ]
-  },
-  {
-    id: 'emp-3',
-    code: 'EMP-103',
-    name: 'محمد إبراهيم الشمري',
-    department: 'إدارة المستودعات واللوجستيات',
-    jobTitle: 'أمين مستودع رئيسي',
-    nationalId: '1074839201',
-    phone: '0503344556',
-    email: 'mohamed.shammari@alpha.com',
-    joinDate: '2023-02-10',
-    bankName: 'مصرف الإنماء',
-    iban: 'SA3305000068201938472910',
-    basicSalary: 6000,
-    housingAllowance: 1500,
-    transportAllowance: 600,
-    foodAllowance: 500,
-    otherAllowances: 400, // بدل طبيعة عمل ومخاطر
-    status: 'ACTIVE',
-    bonuses: [
-      {
-        id: 'b-3',
-        type: 'BONUS',
-        typeName: 'مكافأة جرد دوري بدون فوارق',
-        amount: 750,
-        date: '2024-09-02',
-        reason: 'مطابقة تامة بين الجرد الفعلي والسجلات الدفترية',
-        status: 'APPROVED'
-      }
-    ],
-    deductions: [
-      {
-        id: 'd-4',
-        type: 'LOAN_INSTALLMENT',
-        typeName: 'قسط سلفة الموظف الشهرية',
-        amount: 500,
-        date: '2024-09-05',
-        reason: 'سداد القسط 3 من 6 لسلفة شهرية سابقة',
-        status: 'APPLIED'
-      },
-      {
-        id: 'd-5',
-        type: 'INSURANCE',
-        typeName: 'استقطاع التأمينات الاجتماعية (GOSI)',
-        amount: 600,
-        date: '2024-09-05',
-        reason: 'حصة الموظف من التأمينات 10%',
-        status: 'APPLIED'
-      }
-    ]
-  },
-  {
-    id: 'emp-4',
-    code: 'EMP-104',
-    name: 'عمر خالد الدوسري',
-    department: 'تقنية المعلومات والنظم',
-    jobTitle: 'أخصائي شبكات ونظم تخطيط موارد',
-    nationalId: '1063920192',
-    phone: '0547788990',
-    email: 'omar.dossari@alpha.com',
-    joinDate: '2021-11-20',
-    bankName: 'بنك الرياض',
-    iban: 'SA8820000001092837465019',
-    basicSalary: 8800,
-    housingAllowance: 2200,
-    transportAllowance: 800,
-    foodAllowance: 300,
-    otherAllowances: 500, // بدل دعم فني وهاتف
-    status: 'ACTIVE',
-    bonuses: [
-      {
-        id: 'b-4',
-        type: 'BONUS',
-        typeName: 'حافز استقرار الأنظمة وسرعة الدعم',
-        amount: 1000,
-        date: '2024-09-01',
-        reason: 'صيانة وتطوير الخوادم وقواعد البيانات بنجاح',
-        status: 'APPROVED'
-      }
-    ],
-    deductions: [
-      {
-        id: 'd-6',
-        type: 'INSURANCE',
-        typeName: 'استقطاع التأمينات الاجتماعية (GOSI)',
-        amount: 880,
-        date: '2024-09-05',
-        reason: 'حصة الموظف من التأمينات 10%',
-        status: 'APPLIED'
-      }
-    ]
-  },
-  {
-    id: 'emp-5',
-    code: 'EMP-105',
-    name: 'ريم سلطان العتيبي',
-    department: 'الموارد البشرية والشؤون الإدارية',
-    jobTitle: 'أخصائية شؤون الموظفين والرواتب',
-    nationalId: '1058392018',
-    phone: '0591122334',
-    email: 'reem.otaibi@alpha.com',
-    joinDate: '2023-08-01',
-    bankName: 'مصرف الراجحي',
-    iban: 'SA9280000301928471928301',
-    basicSalary: 6800,
-    housingAllowance: 1700,
-    transportAllowance: 700,
-    foodAllowance: 250,
-    otherAllowances: 0,
-    status: 'ACTIVE',
-    bonuses: [
-      {
-        id: 'b-5',
-        type: 'TARGET_INCENTIVE',
-        typeName: 'حافز إنجاز مسيرات حماية الأجور (WPS)',
-        amount: 900,
-        date: '2024-09-02',
-        reason: 'إيداع وتوثيق ملفات حماية الأجور بنسبة التزام 100%',
-        status: 'APPROVED'
-      }
-    ],
-    deductions: [
-      {
-        id: 'd-7',
-        type: 'ABSENCE',
-        typeName: 'خصم غياب يوم غير مدفوع',
-        amount: 226.66,
-        date: '2024-09-03',
-        reason: 'غياب بدون إذن مسبق ليوم عمل واحد',
-        status: 'APPLIED'
-      },
-      {
-        id: 'd-8',
-        type: 'INSURANCE',
-        typeName: 'استقطاع التأمينات الاجتماعية (GOSI)',
-        amount: 680,
-        date: '2024-09-05',
-        reason: 'حصة الموظف من التأمينات 10%',
-        status: 'APPLIED'
-      }
-    ]
-  }
-];
+export const INITIAL_EMPLOYEES: Employee[] = [];
 
+// ==================== EMPLOYEES ====================
 export function getStoredEmployees(): Employee[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_EMPLOYEES);
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
@@ -255,30 +33,198 @@ export function getStoredEmployees(): Employee[] {
 export function saveStoredEmployees(employees: Employee[]): void {
   try {
     localStorage.setItem(STORAGE_KEY_EMPLOYEES, JSON.stringify(employees));
+    window.dispatchEvent(new Event('alpha-payroll-updated'));
   } catch (e) {
     console.error('Failed saving employees to localStorage', e);
   }
 }
 
-export function calculateEmployeeTotals(emp: Employee) {
+// ==================== LOANS & ADVANCES (السلف والقروض) ====================
+export function getStoredLoans(): LoanAdvance[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_LOANS);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Failed reading loans from localStorage', e);
+  }
+  return [];
+}
+
+export function saveStoredLoans(loans: LoanAdvance[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_LOANS, JSON.stringify(loans));
+    window.dispatchEvent(new Event('alpha-payroll-updated'));
+  } catch (e) {
+    console.error('Failed saving loans to localStorage', e);
+  }
+}
+
+export function generateLoanSchedule(
+  loanId: string, 
+  amount: number, 
+  installmentsCount: number, 
+  startMonth: string
+): LoanInstallment[] {
+  const count = Math.max(1, installmentsCount);
+  const monthly = Math.floor(amount / count);
+  const remainder = amount - (monthly * count);
+
+  const parts = (startMonth || '2024-09').split('-');
+  const yearStr = parts[0] || '2024';
+  const monthStr = parts[1] || '09';
+  let currentYear = parseInt(yearStr, 10) || new Date().getFullYear();
+  let currentMonth = parseInt(monthStr, 10) || (new Date().getMonth() + 1);
+
+  const schedule: LoanInstallment[] = [];
+
+  for (let i = 1; i <= count; i++) {
+    // Add remainder to the last installment
+    const installmentAmt = (i === count) ? (monthly + remainder) : monthly;
+    const formattedMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+
+    schedule.push({
+      id: `inst-${loanId}-${i}`,
+      installmentNumber: i,
+      month: formattedMonth,
+      amount: installmentAmt,
+      status: 'PENDING'
+    });
+
+    currentMonth++;
+    if (currentMonth > 12) {
+      currentMonth = 1;
+      currentYear++;
+    }
+  }
+
+  return schedule;
+}
+
+// ==================== ATTENDANCE & OVERTIME ====================
+export function getStoredAttendanceRecords(): AttendanceOvertimeRecord[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_ATTENDANCE);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Failed reading attendance records from localStorage', e);
+  }
+  return [];
+}
+
+export function saveStoredAttendanceRecords(records: AttendanceOvertimeRecord[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(records));
+    window.dispatchEvent(new Event('alpha-payroll-updated'));
+  } catch (e) {
+    console.error('Failed saving attendance records to localStorage', e);
+  }
+}
+
+// ==================== END OF SERVICE SETTLEMENTS ====================
+export function getStoredSettlements(): EndOfServiceSettlement[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SETTLEMENTS);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Failed reading settlements from localStorage', e);
+  }
+  return [];
+}
+
+export function saveStoredSettlements(settlements: EndOfServiceSettlement[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_SETTLEMENTS, JSON.stringify(settlements));
+    window.dispatchEvent(new Event('alpha-payroll-updated'));
+  } catch (e) {
+    console.error('Failed saving settlements to localStorage', e);
+  }
+}
+
+// ==================== TOTALS & PAYROLL CALCULATIONS ====================
+export function calculateEmployeeTotals(emp: Employee, targetMonth?: string, activeLoans: LoanAdvance[] = []) {
   const totalAllowances = (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0);
-  const totalBonuses = (emp.bonuses || []).reduce((sum, b) => sum + (b.amount || 0), 0);
-  const totalDeductions = (emp.deductions || []).reduce((sum, d) => sum + (d.amount || 0), 0);
+  
+  // Filter bonuses if targetMonth is provided, or sum all for employee general view
+  const totalBonuses = (emp.bonuses || []).reduce((sum, b) => {
+    if (!targetMonth || b.date.startsWith(targetMonth)) {
+      return sum + (b.amount || 0);
+    }
+    return sum + (b.amount || 0);
+  }, 0);
+
+  // Deductions from employee profile
+  let totalDeductions = (emp.deductions || []).reduce((sum, d) => {
+    return sum + (d.amount || 0);
+  }, 0);
+
+  // Active Loan installment for target month
+  let loanInstallmentAmount = 0;
+  if (targetMonth) {
+    activeLoans
+      .filter(l => l.employeeId === emp.id && l.status === 'ACTIVE')
+      .forEach(l => {
+        const inst = l.installments.find(i => i.month === targetMonth && i.status === 'PENDING');
+        if (inst) {
+          loanInstallmentAmount += inst.amount;
+        }
+      });
+  }
+
+  // GOSI Calculation (if enabled)
+  let gosiAmount = 0;
+  if (emp.gosiSubscription) {
+    const rate = emp.gosiEmployeePercent !== undefined ? emp.gosiEmployeePercent : (emp.nationalityType === 'SAUDI' ? 9.75 : 0);
+    const wageBase = emp.basicSalary + (emp.housingAllowance || 0);
+    gosiAmount = Math.round((wageBase * rate) / 100);
+  }
+
+  const grandDeductions = totalDeductions + loanInstallmentAmount + gosiAmount;
   const grossSalary = emp.basicSalary + totalAllowances + totalBonuses;
-  const netSalary = Math.max(0, grossSalary - totalDeductions);
+  const netSalary = Math.max(0, grossSalary - grandDeductions);
 
   return {
     totalAllowances,
     totalBonuses,
-    totalDeductions,
+    totalDeductions: grandDeductions,
+    baseDeductions: totalDeductions,
+    loanInstallmentAmount,
+    gosiAmount,
     grossSalary,
     netSalary
   };
 }
 
-export function generatePayrollRecords(employees: Employee[], monthStr: string = '2024-09'): PayrollRecord[] {
+export function generatePayrollRecords(
+  employees: Employee[], 
+  monthStr: string = '2024-09',
+  loans: LoanAdvance[] = []
+): PayrollRecord[] {
   return employees.map(emp => {
-    const { totalAllowances, totalBonuses, totalDeductions, grossSalary, netSalary } = calculateEmployeeTotals(emp);
+    const { 
+      totalAllowances, 
+      totalBonuses, 
+      totalDeductions, 
+      loanInstallmentAmount,
+      gosiAmount,
+      grossSalary, 
+      netSalary 
+    } = calculateEmployeeTotals(emp, monthStr, loans);
+
     return {
       id: `pr-${emp.id}-${monthStr}`,
       employeeId: emp.id,
@@ -286,6 +232,9 @@ export function generatePayrollRecords(employees: Employee[], monthStr: string =
       employeeName: emp.name,
       department: emp.department,
       jobTitle: emp.jobTitle,
+      nationalId: emp.nationalId,
+      iban: emp.iban,
+      bankName: emp.bankName,
       month: monthStr,
       basicSalary: emp.basicSalary,
       housingAllowance: emp.housingAllowance || 0,
@@ -295,9 +244,86 @@ export function generatePayrollRecords(employees: Employee[], monthStr: string =
       bonusesAmount: totalBonuses,
       grossSalary,
       deductionsAmount: totalDeductions,
+      loanDeduction: loanInstallmentAmount,
+      gosiDeduction: gosiAmount,
       netSalary,
       paymentStatus: 'APPROVED',
       paymentMethod: 'BANK_TRANSFER'
     };
   });
+}
+
+// ==================== END OF SERVICE CALCULATOR HELPER ====================
+export function calculateGratuity(
+  basicSalary: number,
+  allowances: number,
+  joinDateStr: string,
+  endDateStr: string,
+  reason: 'RESIGNATION' | 'TERMINATION_BY_EMPLOYER' | 'CONTRACT_EXPIRED' | 'FORCE_MAJEURE',
+  unusedVacationDays: number = 0
+) {
+  const start = new Date(joinDateStr);
+  const end = new Date(endDateStr);
+  const diffTime = Math.max(0, end.getTime() - start.getTime());
+  const totalDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  
+  const years = Math.floor(totalDays / 365.25);
+  const remainingDays = totalDays % 365.25;
+  const months = Math.floor(remainingDays / 30.4375);
+  const days = Math.floor(remainingDays % 30.4375);
+
+  const totalWage = basicSalary + allowances;
+  const serviceYearsFraction = totalDays / 365.25;
+
+  let baseGratuity = 0;
+  if (serviceYearsFraction <= 5) {
+    baseGratuity = serviceYearsFraction * (totalWage / 2);
+  } else {
+    const first5 = 5 * (totalWage / 2);
+    const extraYears = serviceYearsFraction - 5;
+    const rest = extraYears * totalWage;
+    baseGratuity = first5 + rest;
+  }
+
+  // Reason multiplier
+  let entitlementRatio = 1.0;
+  let reasonLabel = 'إنهاء العقد من المنشأة / فسخ نظامي';
+
+  if (reason === 'RESIGNATION') {
+    reasonLabel = 'استقالة بمبادرة الموظف';
+    if (serviceYearsFraction < 2) {
+      entitlementRatio = 0;
+    } else if (serviceYearsFraction >= 2 && serviceYearsFraction < 5) {
+      entitlementRatio = 1 / 3;
+    } else if (serviceYearsFraction >= 5 && serviceYearsFraction < 10) {
+      entitlementRatio = 2 / 3;
+    } else {
+      entitlementRatio = 1.0;
+    }
+  } else if (reason === 'CONTRACT_EXPIRED') {
+    reasonLabel = 'انتهاء مدة العقد المحددة';
+    entitlementRatio = 1.0;
+  } else if (reason === 'FORCE_MAJEURE') {
+    reasonLabel = 'قوة قاهرة / ترك العمل لسبب مشروع';
+    entitlementRatio = 1.0;
+  }
+
+  const finalGratuity = Math.round(baseGratuity * entitlementRatio);
+  const dayRate = totalWage / 30;
+  const vacationCompensation = Math.round(unusedVacationDays * dayRate);
+
+  return {
+    years,
+    months,
+    days,
+    totalDays,
+    serviceYearsFraction,
+    totalWage,
+    baseGratuity: Math.round(baseGratuity),
+    entitlementRatio,
+    reasonLabel,
+    finalGratuity,
+    vacationCompensation,
+    totalSettlement: finalGratuity + vacationCompensation
+  };
 }

@@ -4,9 +4,13 @@ export type SequenceType =
   | 'receiptVoucher' 
   | 'paymentVoucher' 
   | 'internalVoucher'
+  | 'internalReceiptVoucher'
+  | 'internalPaymentVoucher'
   | 'itemCode';
 
 export const SEQUENCES_KEY = 'alpha_document_sequences_v3';
+export const DAILY_SEQUENCES_KEY = 'alpha_daily_sequences_v1';
+export const DEVICE_ID_KEY = 'alpha_device_id';
 
 // Database storage keys in localStorage
 export const DB_ITEMS_KEY = 'alpha_items_store_v1';
@@ -15,6 +19,8 @@ export const DB_PURCHASES_INVOICES_KEY = 'alpha_purchases_invoices_v1';
 export const DB_RECEIPT_VOUCHERS_KEY = 'alpha_receipt_vouchers_v1';
 export const DB_PAYMENT_VOUCHERS_KEY = 'alpha_payment_vouchers_v1';
 export const DB_INTERNAL_VOUCHERS_KEY = 'alpha_internal_vouchers_v1';
+export const DB_INTERNAL_RECEIPT_VOUCHERS_KEY = 'alpha_internal_receipt_vouchers_v1';
+export const DB_INTERNAL_PAYMENT_VOUCHERS_KEY = 'alpha_internal_payment_vouchers_v1';
 
 export interface SequencesStore {
   salesInvoice: number;
@@ -22,6 +28,8 @@ export interface SequencesStore {
   receiptVoucher: number;
   paymentVoucher: number;
   internalVoucher: number;
+  internalReceiptVoucher: number;
+  internalPaymentVoucher: number;
   itemCode: number;
 }
 
@@ -31,16 +39,59 @@ export const DEFAULT_SEQUENCES: SequencesStore = {
   receiptVoucher: 1,
   paymentVoucher: 1,
   internalVoucher: 1,
+  internalReceiptVoucher: 1,
+  internalPaymentVoucher: 1,
   itemCode: 5, // Since default items are 1, 2, 3, 4
 };
 
 /**
+ * Retrieves the currently active device identifier (e.g. 'MOB1', 'POS-01').
+ * Cached synchronously in localStorage for instant render performance.
+ */
+export function getDeviceIdentifier(): string {
+  if (typeof window === 'undefined') return 'MOB1';
+  try {
+    const direct = localStorage.getItem(DEVICE_ID_KEY);
+    if (direct && direct.trim()) return direct.trim().toUpperCase();
+
+    // Check system settings
+    const sysRaw = localStorage.getItem('alpha_system_settings_v1');
+    if (sysRaw) {
+      const parsed = JSON.parse(sysRaw);
+      if (parsed?.device?.deviceId) return String(parsed.device.deviceId).trim().toUpperCase();
+    }
+
+    // Check app settings table cached in localStorage
+    const appSettingsRaw = localStorage.getItem('alpha_sqlite_app_settings');
+    if (appSettingsRaw) {
+      const parsed = JSON.parse(appSettingsRaw);
+      if (parsed?.device_id) return String(parsed.device_id).trim().toUpperCase();
+    }
+  } catch {
+    // fallback
+  }
+  return 'MOB1';
+}
+
+/**
+ * Generates date components in YYMMDD format (e.g. 260916 for Sept 16, 2026).
+ */
+export function getCurrentDateSequenceKey(targetDate?: string | Date): { dateKey: string; yy: string; mm: string; dd: string } {
+  const d = targetDate ? (typeof targetDate === 'string' ? new Date(targetDate) : targetDate) : new Date();
+  const dateObj = isNaN(d.getTime()) ? new Date() : d;
+  const yy = String(dateObj.getFullYear()).slice(-2);
+  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const dd = String(dateObj.getDate()).padStart(2, '0');
+  return {
+    dateKey: `${yy}${mm}${dd}`,
+    yy,
+    mm,
+    dd,
+  };
+}
+
+/**
  * Extracts the trailing or largest numeric sequence from any string or code.
- * Examples:
- *  "12" -> 12
- *  "ITM-005" -> 5
- *  "INV-2024-0014" -> 14
- *  "PO-105" -> 105
  */
 export function extractTrailingNumber(val: string | number | undefined | null): number {
   if (val === undefined || val === null) return 0;
@@ -90,6 +141,32 @@ export function saveSequences(seqs: SequencesStore): void {
 }
 
 /**
+ * Reads the daily sequences mapping from localStorage (deviceId_docType_dateKey -> lastSeq)
+ */
+export function getDailySequences(): Record<string, number> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(DAILY_SEQUENCES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Saves updated daily sequences to localStorage
+ */
+export function saveDailySequences(dailyMap: Record<string, number>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(DAILY_SEQUENCES_KEY, JSON.stringify(dailyMap));
+    window.dispatchEvent(new CustomEvent('alpha-sequences-updated', { detail: dailyMap }));
+  } catch (e) {
+    console.error('Error saving daily sequences:', e);
+  }
+}
+
+/**
  * Reads existing records of a specific document type from localStorage database.
  */
 export function getStoredDatabaseCodes(type: SequenceType): string[] {
@@ -123,6 +200,14 @@ export function getStoredDatabaseCodes(type: SequenceType): string[] {
         key = DB_INTERNAL_VOUCHERS_KEY;
         extractor = (it) => String(it.voucherNumber || '');
         break;
+      case 'internalReceiptVoucher':
+        key = DB_INTERNAL_RECEIPT_VOUCHERS_KEY;
+        extractor = (it) => String(it.voucherNumber || '');
+        break;
+      case 'internalPaymentVoucher':
+        key = DB_INTERNAL_PAYMENT_VOUCHERS_KEY;
+        extractor = (it) => String(it.voucherNumber || '');
+        break;
     }
 
     if (!key) return [];
@@ -153,40 +238,134 @@ export function getMaxNumberFromList(list: (string | number)[]): number {
 }
 
 /**
+ * Resolves the appropriate prefix for a document type (e.g. 'INV', 'PO', 'REC', 'PAY', 'JRN')
+ * by inspecting system settings or falling back to architecture standards.
+ */
+export function getSequencePrefix(type: SequenceType, _codes?: string[]): string {
+  if (type === 'itemCode') return '';
+  
+  // 1. Check system settings in localStorage
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('alpha_system_settings_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.taxAndInvoice) {
+          if (type === 'salesInvoice' && parsed.taxAndInvoice.salesPrefix) {
+            return String(parsed.taxAndInvoice.salesPrefix).replace(/[-_#]+$/, '').trim();
+          }
+          if (type === 'purchaseInvoice' && parsed.taxAndInvoice.purchasePrefix) {
+            return String(parsed.taxAndInvoice.purchasePrefix).replace(/[-_#]+$/, '').trim();
+          }
+          if (type === 'receiptVoucher' && parsed.taxAndInvoice.receiptVoucherPrefix) {
+            return String(parsed.taxAndInvoice.receiptVoucherPrefix).replace(/[-_#]+$/, '').trim();
+          }
+          if (type === 'paymentVoucher' && parsed.taxAndInvoice.paymentVoucherPrefix) {
+            return String(parsed.taxAndInvoice.paymentVoucherPrefix).replace(/[-_#]+$/, '').trim();
+          }
+          if (type === 'internalVoucher' && parsed.taxAndInvoice.journalPrefix) {
+            return String(parsed.taxAndInvoice.journalPrefix).replace(/[-_#]+$/, '').trim();
+          }
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  // 2. Standard Document Type Prefixes
+  switch (type) {
+    case 'salesInvoice': return 'INV';
+    case 'purchaseInvoice': return 'PO';
+    case 'receiptVoucher': return 'REC';
+    case 'paymentVoucher': return 'PAY';
+    case 'internalVoucher': return 'JRN';
+    case 'internalReceiptVoucher': return 'IRV';
+    case 'internalPaymentVoucher': return 'IPV';
+    default: return '';
+  }
+}
+
+/**
  * Calculates the next unique sequence number guaranteed to be:
- * 1. Strictly greater than the highest number in existing records
- * 2. Greater than or equal to the sequence counter store
- * 3. Never colliding with any existing record
+ * 1. Formatted according to the multi-platform distributed architecture:
+ *    [PREFIX]-[DEVICE_ID]-[YYMMDD]-[SEQ] (e.g. INV-MOB1-260916-0001)
+ * 2. Strictly greater than any existing document for today on this device node.
+ * 3. Guaranteed collision-free across multiple offline-synced devices.
  */
 export function getNextSequentialNumber(
   type: SequenceType,
-  inMemoryRecords?: (string | number)[]
+  inMemoryRecords?: (string | number)[],
+  options?: { date?: string | Date; deviceId?: string }
 ): { nextNumber: number; formatted: string } {
   const codes = inMemoryRecords !== undefined 
     ? inMemoryRecords.map(String).map(s => s.trim()).filter(Boolean)
     : getStoredDatabaseCodes(type);
 
-  const rawMax = getMaxNumberFromList(codes);
-  const maxInExisting = typeof rawMax === 'number' && !isNaN(rawMax) && isFinite(rawMax) && rawMax >= 0 ? rawMax : 0;
-  
-  const rawCounter = getSequences()[type];
-  const currentCounter = typeof rawCounter === 'number' && !isNaN(rawCounter) && isFinite(rawCounter) && rawCounter >= 1 ? rawCounter : 1;
+  // 1. Items retain clean sequential numeric codes (e.g. 1, 2, 3...)
+  if (type === 'itemCode') {
+    const rawMax = getMaxNumberFromList(codes);
+    const maxInExisting = typeof rawMax === 'number' && !isNaN(rawMax) && isFinite(rawMax) && rawMax >= 0 ? rawMax : 0;
+    const rawCounter = getSequences().itemCode;
+    const currentCounter = typeof rawCounter === 'number' && !isNaN(rawCounter) && isFinite(rawCounter) && rawCounter >= 1 ? rawCounter : 1;
+    const candidate = Math.max(currentCounter, maxInExisting + 1, 1);
+    return {
+      nextNumber: candidate,
+      formatted: candidate.toString(),
+    };
+  }
 
-  // The next number MUST be strictly greater than any existing record in database
-  const rawCandidate = Math.max(currentCounter, maxInExisting + 1);
-  let candidate = isFinite(rawCandidate) && !isNaN(rawCandidate) && rawCandidate >= 1 ? Math.floor(rawCandidate) : 1;
+  // 2. Financial Documents: [PREFIX]-[DEVICE_ID]-[YYMMDD]-[SEQ]
+  const prefix = getSequencePrefix(type, codes);
+  const deviceId = (options?.deviceId || getDeviceIdentifier()).trim().toUpperCase() || 'MOB1';
+  const { dateKey } = getCurrentDateSequenceKey(options?.date);
 
-  // If candidate happens to match an existing code, increment until unique (with safety guard)
+  // Scan existing codes for today's highest sequence matching this device & date
+  let maxSeqToday = 0;
+  const matchRegex = new RegExp(`^${prefix}[-_]${deviceId}[-_]${dateKey}[-_](\\d+)`, 'i');
+  const genericMatchRegex = new RegExp(`^${prefix}[-_].*${dateKey}[-_](\\d+)`, 'i');
+
+  for (const c of codes) {
+    const match = c.match(matchRegex);
+    if (match && match[1]) {
+      const seqNum = parseInt(match[1], 10);
+      if (!isNaN(seqNum) && seqNum > maxSeqToday) {
+        maxSeqToday = seqNum;
+      }
+    } else {
+      const gMatch = c.match(genericMatchRegex);
+      if (gMatch && gMatch[1]) {
+        const seqNum = parseInt(gMatch[1], 10);
+        if (!isNaN(seqNum) && seqNum > maxSeqToday) {
+          maxSeqToday = seqNum;
+        }
+      }
+    }
+  }
+
+  // Check stored daily sequence counter
+  const dailyMap = getDailySequences();
+  const dailyKey = `${deviceId}_${type}_${dateKey}`;
+  const prefixDailyKey = `${deviceId}_${prefix}_${dateKey}`;
+  const storedDailySeq = Math.max(dailyMap[dailyKey] || 0, dailyMap[prefixDailyKey] || 0);
+
+  let candidateSeq = Math.max(maxSeqToday + 1, storedDailySeq + 1, 1);
+  let seqPadded = candidateSeq < 10000 ? String(candidateSeq).padStart(4, '0') : String(candidateSeq);
+  let formatted = `${prefix}-${deviceId}-${dateKey}-${seqPadded}`;
+
+  // Collision Safety: If candidate or formatted string exists, increment until strictly unique
   const existingSet = new Set(codes.map(c => String(c).trim().toLowerCase()));
   let safetyLoop = 0;
-  while (existingSet.has(String(candidate).toLowerCase()) && safetyLoop < 5000) {
-    candidate++;
+  while (existingSet.has(formatted.toLowerCase()) && safetyLoop < 5000) {
+    candidateSeq++;
+    seqPadded = candidateSeq < 10000 ? String(candidateSeq).padStart(4, '0') : String(candidateSeq);
+    formatted = `${prefix}-${deviceId}-${dateKey}-${seqPadded}`;
     safetyLoop++;
   }
 
   return {
-    nextNumber: candidate,
-    formatted: candidate.toString(),
+    nextNumber: candidateSeq,
+    formatted,
   };
 }
 
@@ -221,13 +400,36 @@ export function advanceSequenceAfterSave(
   type: SequenceType,
   usedNumberOrCode: string | number
 ): number {
-  const usedNum = extractTrailingNumber(usedNumberOrCode);
-  const seqs = getSequences();
-  const current = seqs[type] || 1;
+  if (type === 'itemCode') {
+    const usedNum = extractTrailingNumber(usedNumberOrCode);
+    const seqs = getSequences();
+    const current = seqs.itemCode || 1;
+    const nextSeq = Math.max(usedNum + 1, current + 1);
+    seqs.itemCode = nextSeq;
+    saveSequences(seqs);
+    return nextSeq;
+  }
 
-  const nextSeq = Math.max(usedNum + 1, current + 1);
-  seqs[type] = nextSeq;
-  saveSequences(seqs);
+  // Financial Documents
+  const prefix = getSequencePrefix(type);
+  const deviceId = getDeviceIdentifier();
+  const { dateKey } = getCurrentDateSequenceKey();
+
+  const usedStr = String(usedNumberOrCode).trim();
+  const match = usedStr.match(new RegExp(`[-_](\\d+)$`));
+  const usedSeq = match && match[1] ? parseInt(match[1], 10) : extractTrailingNumber(usedStr);
+
+  const dailyMap = getDailySequences();
+  const dailyKey = `${deviceId}_${type}_${dateKey}`;
+  const prefixDailyKey = `${deviceId}_${prefix}_${dateKey}`;
+
+  const current = Math.max(dailyMap[dailyKey] || 0, dailyMap[prefixDailyKey] || 0);
+  const nextSeq = Math.max(usedSeq, current + 1, 1);
+
+  dailyMap[dailyKey] = nextSeq;
+  dailyMap[prefixDailyKey] = nextSeq;
+  saveDailySequences(dailyMap);
+
   return nextSeq;
 }
 
