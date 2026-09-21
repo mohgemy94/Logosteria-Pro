@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Logosteria</string>
+    <string name="title_activity_main">Logosteria</string>
+    <string name="package_name">com.logosteria.pro</string>
+    <string name="custom_url_scheme">com.logosteria.pro</string>
+</resources>

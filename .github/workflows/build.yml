@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  # 1. بناء نسخة الديسك توب للويندوز (Windows EXE)
   build-windows:
     runs-on: windows-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -24,22 +24,22 @@ jobs:
       - name: Build Web Application
         run: npm run build
 
-      - name: Package Windows App (Electron)
+      - name: Package Windows App with Electron
         run: npm run dist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Windows Artifacts
+      - name: Upload EXE Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Logosteria-Windows-Desktop
+          name: Logosteria-Desktop-App
           path: |
             dist-electron/*.exe
             dist-electron/*.blockmap
 
-  # 2. بناء نسخة تطبيق الأندرويد (Android APK) لـ React Native
   build-android:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -49,24 +49,32 @@ jobs:
         with:
           node-version: 22
 
-      - name: Setup Java JDK for Android
+      - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: 'zulu'
           java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Install Dependencies
         run: npm install
 
-      - name: Build Android APK Release
+      - name: Build Web Application
+        run: npm run build
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Build Android APK
         run: |
           cd android
-          chmod +x gradlew
-          ./gradlew assembleRelease
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Upload Android Artifacts
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Logosteria-Android-App
-          path: |
-            android/app/build/outputs/apk/release/*.apk
+          name: Logosteria-Android-APK
+          path: android/app/build/outputs/apk/debug/*.apk
