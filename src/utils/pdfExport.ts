@@ -182,7 +182,7 @@ export async function exportElementToPdf(
     filename = 'invoice.pdf',
     format = 'A4',
     customSize,
-    scale = 2,
+    scale = 3.2,
   } = options;
 
   const target = element || document.getElementById('certified-invoice-document');
@@ -201,67 +201,124 @@ export async function exportElementToPdf(
 
   const def = getPaperFormatDef(format, customSize);
 
-  // Render element to high-res canvas
-  const canvas = await html2canvas(target, {
-    scale: Math.max(1.5, scale),
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: '#ffffff',
-    logging: false,
-    imageTimeout: 15000,
-    onclone: (clonedDoc, clonedElement) => {
-      // 1. Extract and inline ALL stylesheet CSS rules directly into clonedDoc.head
-      // This solves the Desktop/Electron file:// protocol issue where linked stylesheets are blocked by CORS/security
-      try {
-        let allCssRules = '';
-        Array.from(document.styleSheets).forEach((sheet) => {
-          try {
-            const rules = sheet.cssRules || sheet.rules;
-            if (rules) {
-              Array.from(rules).forEach((rule) => {
-                allCssRules += rule.cssText + '\n';
-              });
+  // Temporarily remove any ancestor CSS scale/transform during capture so html2canvas measures at full natural width
+  const transformedAncestors: { el: HTMLElement; transform: string }[] = [];
+  let ancestor: HTMLElement | null = target.parentElement;
+  while (ancestor && ancestor !== document.body) {
+    const inlineTransform = ancestor.style.transform;
+    const computedTransform = window.getComputedStyle(ancestor).transform;
+    if ((inlineTransform && inlineTransform !== 'none') || (computedTransform && computedTransform !== 'none')) {
+      transformedAncestors.push({
+        el: ancestor,
+        transform: inlineTransform,
+      });
+      ancestor.style.transform = 'none';
+    }
+    ancestor = ancestor.parentElement;
+  }
+
+  let canvas: HTMLCanvasElement;
+  try {
+    // Render element to high-res canvas (scale 3.2 produces ~300+ DPI Retina crispness)
+    canvas = await html2canvas(target, {
+      scale: Math.max(3, scale),
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      imageTimeout: 15000,
+      onclone: (clonedDoc, clonedElement) => {
+        // 1. Extract and inline ALL stylesheet CSS rules directly into clonedDoc.head
+        // This solves the Desktop/Electron file:// protocol issue where linked stylesheets are blocked by CORS/security
+        try {
+          let allCssRules = '';
+          Array.from(document.styleSheets).forEach((sheet) => {
+            try {
+              const rules = sheet.cssRules || sheet.rules;
+              if (rules) {
+                Array.from(rules).forEach((rule) => {
+                  allCssRules += rule.cssText + '\n';
+                });
+              }
+            } catch (e) {
+              if (sheet.ownerNode) {
+                clonedDoc.head.appendChild(sheet.ownerNode.cloneNode(true));
+              }
             }
-          } catch (e) {
-            if (sheet.ownerNode) {
-              clonedDoc.head.appendChild(sheet.ownerNode.cloneNode(true));
-            }
+          });
+
+          if (allCssRules) {
+            const styleEl = clonedDoc.createElement('style');
+            styleEl.textContent = allCssRules;
+            clonedDoc.head.appendChild(styleEl);
           }
+        } catch (err) {
+          console.warn('Styles extraction warning:', err);
+        }
+
+        // 2. Clone all existing <style> and <link> elements into head
+        document.querySelectorAll('style, link[rel="stylesheet"]').forEach((styleNode) => {
+          clonedDoc.head.appendChild(styleNode.cloneNode(true));
         });
 
-        if (allCssRules) {
-          const styleEl = clonedDoc.createElement('style');
-          styleEl.textContent = allCssRules;
-          clonedDoc.head.appendChild(styleEl);
+        // 3. Inject typography and contrast enhancements for crisp 300+ DPI print output without blurry or washed-out text
+        const highResStyle = clonedDoc.createElement('style');
+        highResStyle.textContent = `
+          * {
+            -webkit-font-smoothing: antialiased !important;
+            -moz-osx-font-smoothing: grayscale !important;
+            text-rendering: optimizeLegibility !important;
+          }
+          /* Ensure primary titles, text and tables are rich solid black, not washed-out gray */
+          .text-slate-900, .text-slate-800, .text-black, h1, h2, h3, h4, th, strong, b {
+            color: #000000 !important;
+          }
+          .text-slate-700, .text-slate-600 {
+            color: #1e293b !important;
+          }
+          .text-slate-500 {
+            color: #334155 !important;
+          }
+          /* Ensure crisp borders */
+          .border-slate-300, .border-slate-200 {
+            border-color: #94a3b8 !important;
+          }
+          .border-slate-100 {
+            border-color: #cbd5e1 !important;
+          }
+          /* Ensure barcode and QR codes render with maximum pixel crispness */
+          img, canvas, svg {
+            image-rendering: -webkit-optimize-contrast !important;
+            image-rendering: crisp-edges !important;
+          }
+        `;
+        clonedDoc.head.appendChild(highResStyle);
+
+        // 4. Strip transforms or zoom from preview container
+        clonedElement.style.transform = 'none';
+        clonedElement.style.margin = '0 auto';
+        clonedElement.style.boxShadow = 'none';
+
+        // Ensure all parents in the clone are visible
+        let curr: HTMLElement | null = clonedElement.parentElement;
+        while (curr && curr !== clonedDoc.body) {
+          curr.style.transform = 'none';
+          curr.style.overflow = 'visible';
+          curr.style.width = 'auto';
+          curr.style.height = 'auto';
+          curr.style.maxHeight = 'none';
+          curr = curr.parentElement;
         }
-      } catch (err) {
-        console.warn('Styles extraction warning:', err);
-      }
+      },
+    });
+  } finally {
+    // Restore ancestor transforms immediately
+    transformedAncestors.forEach(({ el, transform }) => {
+      el.style.transform = transform;
+    });
+  }
 
-      // 2. Clone all existing <style> and <link> elements into head
-      document.querySelectorAll('style, link[rel="stylesheet"]').forEach((styleNode) => {
-        clonedDoc.head.appendChild(styleNode.cloneNode(true));
-      });
-
-      // 3. Strip transforms or zoom from preview container
-      clonedElement.style.transform = 'none';
-      clonedElement.style.margin = '0 auto';
-      clonedElement.style.boxShadow = 'none';
-
-      // Ensure all parents in the clone are visible
-      let curr: HTMLElement | null = clonedElement.parentElement;
-      while (curr && curr !== clonedDoc.body) {
-        curr.style.transform = 'none';
-        curr.style.overflow = 'visible';
-        curr.style.width = 'auto';
-        curr.style.height = 'auto';
-        curr.style.maxHeight = 'none';
-        curr = curr.parentElement;
-      }
-    },
-  });
-
-  const imgData = canvas.toDataURL('image/png', 0.95);
+  const imgData = canvas.toDataURL('image/png');
   const canvasAspect = canvas.height / canvas.width;
 
   const widthMm = def.widthMm;
@@ -282,7 +339,7 @@ export async function exportElementToPdf(
       compress: true,
     });
 
-    pdf.addImage(imgData, 'PNG', 0, 0, widthMm, isContinuous ? pageHeightMm : calculatedHeightMm, undefined, 'FAST');
+    pdf.addImage(imgData, 'PNG', 0, 0, widthMm, isContinuous ? pageHeightMm : calculatedHeightMm, undefined, 'SLOW');
     pdf.save(safeFilename);
   } else {
     // Multi-page document (e.g. multi-page invoice or long statement of account)
@@ -299,13 +356,13 @@ export async function exportElementToPdf(
     let heightLeftMm = calculatedHeightMm;
     let positionMm = 0;
 
-    pdf.addImage(imgData, 'PNG', 0, positionMm, widthMm, calculatedHeightMm, undefined, 'FAST');
+    pdf.addImage(imgData, 'PNG', 0, positionMm, widthMm, calculatedHeightMm, undefined, 'SLOW');
     heightLeftMm -= pageHeightMm;
 
     while (heightLeftMm > 2) {
       positionMm -= pageHeightMm;
       pdf.addPage([widthMm, pageHeightMm], orientation);
-      pdf.addImage(imgData, 'PNG', 0, positionMm, widthMm, calculatedHeightMm, undefined, 'FAST');
+      pdf.addImage(imgData, 'PNG', 0, positionMm, widthMm, calculatedHeightMm, undefined, 'SLOW');
       heightLeftMm -= pageHeightMm;
     }
 

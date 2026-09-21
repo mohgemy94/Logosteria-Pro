@@ -768,7 +768,7 @@ export async function exportVouchersReportPDF(
     await exportElementToPdf(container, {
       filename: `كشف_حركة_السندات_${dateSlug}.pdf`,
       format: 'A4',
-      scale: 2
+      scale: 3.2
     });
   } catch (err) {
     console.warn('PDF direct export fallback to printable iframe:', err);

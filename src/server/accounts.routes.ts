@@ -48,7 +48,7 @@ accountsTreeRouter.get('/accounts/:code/rollup-balance', async (req: Request, re
       return;
     }
 
-    const rollupData = await accountRollupService.getAggregatedSubAccountBalance(tenantId, code);
+    const rollupData = await accountRollupService.getAggregatedSubAccountBalance(tenantId, String(code));
 
     res.status(200).json({
       success: true,

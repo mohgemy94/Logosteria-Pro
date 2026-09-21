@@ -226,7 +226,7 @@ accountRouter.delete('/accounts/:id', async (req: Request, res: Response) => {
       return;
     }
 
-    const result = await accountEngine.deleteAccount(id);
+    const result = await accountEngine.deleteAccount(String(id));
     res.json({
       success: true,
       message: result.message
@@ -254,7 +254,7 @@ accountRouter.patch('/accounts/:id/toggle-status', async (req: Request, res: Res
       return;
     }
 
-    const updated = await accountEngine.toggleAccountStatus(id);
+    const updated = await accountEngine.toggleAccountStatus(String(id));
     res.json({
       success: true,
       message: updated.isActive 

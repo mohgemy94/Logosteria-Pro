@@ -324,7 +324,7 @@ async function captureAndSavePdf(element: HTMLElement, filename: string, orienta
   }
 
   const canvas = await html2canvas(element, {
-    scale: 2,
+    scale: 3.2,
     useCORS: true,
     allowTaint: true,
     backgroundColor: '#ffffff',
@@ -360,10 +360,39 @@ async function captureAndSavePdf(element: HTMLElement, filename: string, orienta
       document.querySelectorAll('style, link[rel="stylesheet"]').forEach((styleNode) => {
         clonedDoc.head.appendChild(styleNode.cloneNode(true));
       });
+
+      const highResStyle = clonedDoc.createElement('style');
+      highResStyle.textContent = `
+        * {
+          -webkit-font-smoothing: antialiased !important;
+          -moz-osx-font-smoothing: grayscale !important;
+          text-rendering: optimizeLegibility !important;
+        }
+        .text-slate-900, .text-slate-800, .text-black, h1, h2, h3, h4, th, strong, b {
+          color: #000000 !important;
+        }
+        .text-slate-700, .text-slate-600 {
+          color: #1e293b !important;
+        }
+        .text-slate-500 {
+          color: #334155 !important;
+        }
+        .border-slate-300, .border-slate-200 {
+          border-color: #94a3b8 !important;
+        }
+        .border-slate-100 {
+          border-color: #cbd5e1 !important;
+        }
+        img, canvas, svg {
+          image-rendering: -webkit-optimize-contrast !important;
+          image-rendering: crisp-edges !important;
+        }
+      `;
+      clonedDoc.head.appendChild(highResStyle);
     },
   });
 
-  const imgData = canvas.toDataURL('image/png', 0.95);
+  const imgData = canvas.toDataURL('image/png');
   const pdf = new jsPDF({
     orientation,
     unit: 'mm',
@@ -379,13 +408,13 @@ async function captureAndSavePdf(element: HTMLElement, filename: string, orienta
   let heightLeft = imgHeight;
   let position = 8; // top margin
 
-  pdf.addImage(imgData, 'PNG', 8, position, imgWidth, imgHeight, undefined, 'FAST');
+  pdf.addImage(imgData, 'PNG', 8, position, imgWidth, imgHeight, undefined, 'SLOW');
   heightLeft -= (pageHeight - 16);
 
   while (heightLeft > 5) {
     position = heightLeft - imgHeight + 8;
     pdf.addPage('a4', orientation);
-    pdf.addImage(imgData, 'PNG', 8, position, imgWidth, imgHeight, undefined, 'FAST');
+    pdf.addImage(imgData, 'PNG', 8, position, imgWidth, imgHeight, undefined, 'SLOW');
     heightLeft -= (pageHeight - 16);
   }
 

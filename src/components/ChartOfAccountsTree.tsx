@@ -623,7 +623,7 @@ export default function ChartOfAccountsTree() {
       await exportElementToPdf(treePrintRef.current, {
         filename: `دليل_شجرة_الحسابات_${new Date().toISOString().split('T')[0]}.pdf`,
         format: 'A4',
-        scale: 2
+        scale: 3.2
       });
     } catch (err) {
       console.error('Failed to export Chart of Accounts PDF:', err);

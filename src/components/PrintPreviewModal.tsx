@@ -580,13 +580,13 @@ export default function PrintPreviewModal({
         <div 
           className="relative transition-all duration-150 flex justify-center shrink-0 my-auto print:static print:m-0 print:w-full print:block max-w-full"
           style={{ 
-            width: `${scaledWidth}px`,
+            width: isExportingPdf ? `${baseWidth}px` : `${scaledWidth}px`,
           }}
         >
           <div 
             style={{ 
               width: `${baseWidth}px`,
-              transform: `scale(${zoom / 100})`, 
+              transform: isExportingPdf ? 'none' : `scale(${zoom / 100})`, 
               transformOrigin: 'top center' 
             }}
             className="transition-transform duration-150 shrink-0 shadow-2xl print:shadow-none print:transform-none print:w-full print:m-0 print-document-scaler"

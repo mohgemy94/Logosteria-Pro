@@ -201,7 +201,7 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
       await exportElementToPdf(printAreaRef.current, {
         filename: `ميزان_المراجعة_${new Date().toISOString().split('T')[0]}.pdf`,
         format: 'A4',
-        scale: 2
+        scale: 3.2
       });
     } catch (error) {
       console.error('Failed to export Trial Balance PDF:', error);
