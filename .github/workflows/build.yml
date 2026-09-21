@@ -37,7 +37,7 @@ jobs:
             dist-electron/*.exe
             dist-electron/*.blockmap
 
-  # 2. بناء تطبيق الأندرويد (Android APK) باستخدام Capacitor و Gradle
+  # 2. بناء تطبيق الأندرويد القابل للتثبيت (Android Debug APK) باستخدام Capacitor
   build-android:
     runs-on: ubuntu-latest
     steps:
@@ -49,7 +49,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Setup Java JDK (Required for Android)
+      - name: Setup Java JDK 21
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
@@ -64,15 +64,15 @@ jobs:
       - name: Sync Capacitor Android Project
         run: npx cap sync android
 
-      - name: Build Android APK Release
+      - name: Build Android APK Debug
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleDebug
 
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Logosteria-Android-App
           path: |
-            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/apk/debug/*.apk
