@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-all:
-    runs-on: ubuntu-latest
-
+  # 1. بناء نسخة الويندوز تعمل على بيئة ويندوز (بدون الحاجة لـ wine)
+  build-windows:
+    runs-on: windows-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -24,7 +24,6 @@ jobs:
       - name: Build Web Application
         run: npm run build
 
-      # --- 1. بناء نسخة سطح المكتب (Windows EXE) ---
       - name: Package Windows App (Electron)
         run: npm run dist
         env:
@@ -38,17 +37,30 @@ jobs:
             dist-electron/*.exe
             dist-electron/*.blockmap
 
-      # --- 2. بناء نسخة الأندرويد (Android APK) ---
+  # 2. بناء نسخة الأندرويد تعمل على بيئة لينكس أو ماك وتستخدم Java
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Setup Java JDK for Android
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Install Dependencies
+        run: npm install
+
       - name: Build Android APK
         run: |
-          # افترض أن مشروعك يستخدم Capacitor أو Cordova للبناء، أضف أمر البناء المناسب هنا
-          # مثال لـ Capacitor: npx cap sync android && cd android && ./gradlew assembleRelease
+          # أو الأوامر الخاصة بإطار العمل الذي تستخدمه لتصدير الأندرويد
           echo "Building Android APK..."
 
       - name: Upload Android Artifacts
@@ -57,5 +69,4 @@ jobs:
           name: Logosteria-Android-App
           path: |
             android/app/build/outputs/apk/release/*.apk
-            dist-electron/*.exe
-            dist-electron/*.blockmap
+            
