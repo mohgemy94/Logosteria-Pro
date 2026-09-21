@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # 1. بناء نسخة الويندوز تعمل على بيئة ويندوز (بدون الحاجة لـ wine)
+  # 1. بناء نسخة سطح المكتب (Windows EXE) على بيئة ويندوز الفعلية
   build-windows:
     runs-on: windows-latest
     steps:
@@ -37,7 +37,7 @@ jobs:
             dist-electron/*.exe
             dist-electron/*.blockmap
 
-  # 2. بناء نسخة الأندرويد تعمل على بيئة لينكس أو ماك وتستخدم Java
+  # 2. بناء نسخة الأندرويد (Android APK) على بيئة لينكس مع دعم Java
   build-android:
     runs-on: ubuntu-latest
     steps:
@@ -58,9 +58,15 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
+      - name: Build Web Application
+        run: npm run build
+
+      # --- أضف هنا أوامر بناء الأندرويد الخاصة بإطار العمل لديك (مثل Capacitor) ---
       - name: Build Android APK
         run: |
-          # أو الأوامر الخاصة بإطار العمل الذي تستخدمه لتصدير الأندرويد
+          # مثال إذا كنت تستخدم Capacitor:
+          # npx cap sync android
+          # cd android && ./gradlew assembleRelease
           echo "Building Android APK..."
 
       - name: Upload Android Artifacts
@@ -69,4 +75,3 @@ jobs:
           name: Logosteria-Android-App
           path: |
             android/app/build/outputs/apk/release/*.apk
-            
