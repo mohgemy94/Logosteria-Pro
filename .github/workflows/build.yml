@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # 1. بناء نسخة سطح المكتب (Windows EXE) على بيئة ويندوز الفعلية
+  # 1. بناء نسخة الديسك توب للويندوز (Windows EXE)
   build-windows:
     runs-on: windows-latest
     steps:
@@ -37,7 +37,7 @@ jobs:
             dist-electron/*.exe
             dist-electron/*.blockmap
 
-  # 2. بناء نسخة الأندرويد (Android APK) على بيئة لينكس مع دعم Java
+  # 2. بناء نسخة تطبيق الأندرويد (Android APK) لـ React Native
   build-android:
     runs-on: ubuntu-latest
     steps:
@@ -58,16 +58,11 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Build Web Application
-        run: npm run build
-
-      # --- أضف هنا أوامر بناء الأندرويد الخاصة بإطار العمل لديك (مثل Capacitor) ---
-      - name: Build Android APK
+      - name: Build Android APK Release
         run: |
-          # مثال إذا كنت تستخدم Capacitor:
-          # npx cap sync android
-          # cd android && ./gradlew assembleRelease
-          echo "Building Android APK..."
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
