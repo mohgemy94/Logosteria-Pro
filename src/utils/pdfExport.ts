@@ -208,8 +208,42 @@ export async function exportElementToPdf(
     allowTaint: true,
     backgroundColor: '#ffffff',
     logging: false,
+    imageTimeout: 15000,
     onclone: (clonedDoc, clonedElement) => {
-      // Strip transforms or zoom from preview container
+      // 1. Extract and inline ALL stylesheet CSS rules directly into clonedDoc.head
+      // This solves the Desktop/Electron file:// protocol issue where linked stylesheets are blocked by CORS/security
+      try {
+        let allCssRules = '';
+        Array.from(document.styleSheets).forEach((sheet) => {
+          try {
+            const rules = sheet.cssRules || sheet.rules;
+            if (rules) {
+              Array.from(rules).forEach((rule) => {
+                allCssRules += rule.cssText + '\n';
+              });
+            }
+          } catch (e) {
+            if (sheet.ownerNode) {
+              clonedDoc.head.appendChild(sheet.ownerNode.cloneNode(true));
+            }
+          }
+        });
+
+        if (allCssRules) {
+          const styleEl = clonedDoc.createElement('style');
+          styleEl.textContent = allCssRules;
+          clonedDoc.head.appendChild(styleEl);
+        }
+      } catch (err) {
+        console.warn('Styles extraction warning:', err);
+      }
+
+      // 2. Clone all existing <style> and <link> elements into head
+      document.querySelectorAll('style, link[rel="stylesheet"]').forEach((styleNode) => {
+        clonedDoc.head.appendChild(styleNode.cloneNode(true));
+      });
+
+      // 3. Strip transforms or zoom from preview container
       clonedElement.style.transform = 'none';
       clonedElement.style.margin = '0 auto';
       clonedElement.style.boxShadow = 'none';

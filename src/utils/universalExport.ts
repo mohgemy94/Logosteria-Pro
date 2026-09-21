@@ -329,6 +329,38 @@ async function captureAndSavePdf(element: HTMLElement, filename: string, orienta
     allowTaint: true,
     backgroundColor: '#ffffff',
     logging: false,
+    imageTimeout: 15000,
+    onclone: (clonedDoc) => {
+      try {
+        let allCssRules = '';
+        Array.from(document.styleSheets).forEach((sheet) => {
+          try {
+            const rules = sheet.cssRules || sheet.rules;
+            if (rules) {
+              Array.from(rules).forEach((rule) => {
+                allCssRules += rule.cssText + '\n';
+              });
+            }
+          } catch (e) {
+            if (sheet.ownerNode) {
+              clonedDoc.head.appendChild(sheet.ownerNode.cloneNode(true));
+            }
+          }
+        });
+
+        if (allCssRules) {
+          const styleEl = clonedDoc.createElement('style');
+          styleEl.textContent = allCssRules;
+          clonedDoc.head.appendChild(styleEl);
+        }
+      } catch (err) {
+        console.warn('Styles extraction warning in universalExport:', err);
+      }
+
+      document.querySelectorAll('style, link[rel="stylesheet"]').forEach((styleNode) => {
+        clonedDoc.head.appendChild(styleNode.cloneNode(true));
+      });
+    },
   });
 
   const imgData = canvas.toDataURL('image/png', 0.95);
