@@ -40,19 +40,31 @@ export default function WpsModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
-      <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center pb-4 mb-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+    <div 
+      className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="bg-white rounded-t-3xl sm:rounded-3xl max-w-4xl w-full p-4 sm:p-6 md:p-8 shadow-2xl border border-slate-200 max-h-[92vh] sm:max-h-[90vh] flex flex-col animate-modalIn text-right overflow-hidden"
+        onClick={e => e.stopPropagation()}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        {/* Mobile Handle */}
+        <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+
+        {/* Header (Fixed) */}
+        <div className="flex justify-between items-center pb-3 sm:pb-4 mb-3 sm:mb-4 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
               <ShieldCheck size={22} />
             </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
+            <div className="min-w-0">
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate">
                 تصدير ملف حماية الأجور والتحويل البنكي (WPS / SARI)
               </h3>
-              <p className="text-xs text-slate-500">
+              <p className="text-[11px] sm:text-xs text-slate-500 truncate sm:overflow-visible sm:whitespace-normal">
                 متوافق مع منصة مدد، نظام حماية الأجور السعودي، والتحويلات البنكية السريعة
               </p>
             </div>
@@ -60,37 +72,39 @@ export default function WpsModal({
           <button 
             type="button" 
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 cursor-pointer transition-colors shrink-0"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Stats summary */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-emerald-50/60 rounded-2xl border border-emerald-100 mb-5 text-xs">
-          <div>
-            <span className="text-emerald-700 block text-[11px] font-medium">عدد الموظفين في الملف:</span>
-            <span className="text-lg font-bold font-mono text-emerald-950">{totalEmployees} موظف</span>
+        {/* Scrollable Content Body */}
+        <div className="overflow-y-auto flex-1 pr-0.5 space-y-4">
+          {/* Stats summary */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 p-3.5 sm:p-4 bg-emerald-50/60 rounded-2xl border border-emerald-100 text-xs">
+            <div>
+              <span className="text-emerald-700 block text-[11px] font-medium">عدد الموظفين في الملف:</span>
+              <span className="text-base sm:text-lg font-bold font-mono text-emerald-950">{totalEmployees} موظف</span>
+            </div>
+            <div>
+              <span className="text-emerald-700 block text-[11px] font-medium">إجمالي الرواتب الأساسية:</span>
+              <span className="text-base sm:text-lg font-bold font-mono text-emerald-950">
+                {filteredRecords.reduce((s, r) => s + r.basicSalary, 0).toLocaleString()} {currency}
+              </span>
+            </div>
+            <div>
+              <span className="text-emerald-700 block text-[11px] font-medium">إجمالي الاستقطاعات:</span>
+              <span className="text-base sm:text-lg font-bold font-mono text-rose-700">
+                {totalDeductions.toLocaleString()} {currency}
+              </span>
+            </div>
+            <div>
+              <span className="text-emerald-700 block text-[11px] font-medium">صافي الحوالات البنكية:</span>
+              <span className="text-base sm:text-lg font-bold font-mono text-emerald-700">
+                {totalNetSalary.toLocaleString()} {currency}
+              </span>
+            </div>
           </div>
-          <div>
-            <span className="text-emerald-700 block text-[11px] font-medium">إجمالي الرواتب الأساسية:</span>
-            <span className="text-lg font-bold font-mono text-emerald-950">
-              {filteredRecords.reduce((s, r) => s + r.basicSalary, 0).toLocaleString()} {currency}
-            </span>
-          </div>
-          <div>
-            <span className="text-emerald-700 block text-[11px] font-medium">إجمالي الاستقطاعات:</span>
-            <span className="text-lg font-bold font-mono text-rose-700">
-              {totalDeductions.toLocaleString()} {currency}
-            </span>
-          </div>
-          <div>
-            <span className="text-emerald-700 block text-[11px] font-medium">صافي الحوالات البنكية:</span>
-            <span className="text-lg font-bold font-mono text-emerald-700">
-              {totalNetSalary.toLocaleString()} {currency}
-            </span>
-          </div>
-        </div>
 
         {/* Filters */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -150,12 +164,13 @@ export default function WpsModal({
             </table>
           </div>
         </div>
+        </div>
 
-        {/* Modal Actions */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100">
+        {/* Modal Actions (Sticky Footer) */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100 shrink-0">
           <div className="flex items-center gap-2 text-xs text-slate-500">
-            <CheckCircle2 size={16} className="text-emerald-600" />
-            <span>يتم توليد الملف بصيغة UTF-8 BOM الداعمة للغة العربية في برامج المحاسبة والإكسل مباشرة.</span>
+            <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+            <span className="text-[11px] sm:text-xs">يتم توليد الملف بصيغة UTF-8 BOM الداعمة للغة العربية في برامج المحاسبة والإكسل مباشرة.</span>
           </div>
 
           <div className="flex items-center gap-2.5 w-full sm:w-auto">

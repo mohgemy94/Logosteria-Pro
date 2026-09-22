@@ -257,31 +257,37 @@ export const WarehouseCardModal: React.FC<WarehouseCardModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden"
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 overflow-hidden animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       {/* Background Overlay */}
       <div 
-        className="fixed inset-0 bg-slate-900/65 backdrop-blur-xs animate-in fade-in duration-200" 
+        className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs" 
         onClick={onClose}
       />
       
       {/* Modal Container */}
       <div 
-        className="relative bg-white rounded-2xl sm:rounded-3xl max-w-6xl w-full h-[94vh] sm:h-[90vh] max-h-[94vh] sm:max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 text-right animate-in fade-in zoom-in-95 duration-200 overflow-hidden"
+        className="relative bg-white rounded-t-3xl sm:rounded-3xl max-w-6xl w-full max-h-[92vh] sm:max-h-[88vh] md:max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 text-right animate-modalIn overflow-hidden z-10"
         onClick={e => e.stopPropagation()}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
+        {/* Mobile Handle */}
+        <div className="w-12 h-1.5 bg-white/40 rounded-full mx-auto my-2 sm:hidden shrink-0 absolute top-0 left-1/2 -translate-x-1/2 z-20" />
         
         {/* 🌟 1. MODAL HEADER BANNER (Mobile-Friendly & High Contrast) 🌟 */}
-        <div className={`p-3.5 sm:p-5 md:p-6 bg-gradient-to-r ${cardHeaderBg} text-white relative shrink-0 shadow-sm`}>
+        <div className={`p-3.5 sm:p-5 md:p-6 bg-gradient-to-r ${cardHeaderBg} text-white relative shrink-0 shadow-sm pt-4 sm:pt-5`}>
           <div className="flex items-start justify-between gap-2.5 sm:gap-4">
             
             {/* Left/Start: Title, Icon & Description */}
-            <div className="flex items-start gap-2.5 sm:gap-4">
+            <div className="flex items-start gap-2.5 sm:gap-4 min-w-0 flex-1">
               <div className="w-10 h-10 sm:w-13 sm:h-13 rounded-xl sm:rounded-2xl bg-white/20 backdrop-blur-xs flex items-center justify-center text-white shrink-0 shadow-inner border border-white/20">
                 <IconComponent className="w-5 h-5 sm:w-7 sm:h-7" />
               </div>
 
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                   <span className="text-[10px] sm:text-xs bg-white/25 border border-white/30 px-2 sm:px-2.5 py-0.5 rounded-full font-bold">
                     نافذة تفاصيل البطاقة
@@ -296,7 +302,7 @@ export const WarehouseCardModal: React.FC<WarehouseCardModalProps> = ({
                   </span>
                 </div>
 
-                <h3 className="text-base sm:text-xl md:text-2xl font-black mt-1 tracking-tight text-white leading-tight">
+                <h3 className="text-base sm:text-xl md:text-2xl font-black mt-1 tracking-tight text-white leading-tight truncate">
                   {cardTitle}
                 </h3>
                 
@@ -878,8 +884,8 @@ export const WarehouseCardModal: React.FC<WarehouseCardModalProps> = ({
           )}
         </div>
 
-        {/* 🌟 4. MODAL FOOTER BAR 🌟 */}
-        <div className="p-2.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 shrink-0 text-xs">
+        {/* 🌟 4. MODAL FOOTER BAR (Fixed) 🌟 */}
+        <div className="p-3 sm:p-4 bg-slate-50/95 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 shrink-0 text-xs">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-slate-600 font-medium text-[11px] sm:text-xs">
             <span>عدد الأصناف: <strong>{stats.count}</strong></span>
             <span className="hidden sm:inline">•</span>
@@ -889,19 +895,21 @@ export const WarehouseCardModal: React.FC<WarehouseCardModalProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 justify-end w-full sm:w-auto">
-            <ExportButtonGroup
-              title={`تقرير بطاقة المستودع - ${cardTitle}`}
-              filename={`بطاقة_${cardTitle.replace(/\s+/g, '_')}`}
-              headers={modalHeaders}
-              rows={modalRows}
-              filterSummary={`عدد الأصناف: ${stats.count} | إجمالي الكمية: ${stats.totalUnits.toLocaleString()} | القيمة: ${stats.totalCostVal.toLocaleString()} ريال`}
-              size="sm"
-            />
+            <div className="hidden sm:block">
+              <ExportButtonGroup
+                title={`تقرير بطاقة المستودع - ${cardTitle}`}
+                filename={`بطاقة_${cardTitle.replace(/\s+/g, '_')}`}
+                headers={modalHeaders}
+                rows={modalRows}
+                filterSummary={`عدد الأصناف: ${stats.count} | إجمالي الكمية: ${stats.totalUnits.toLocaleString()} | القيمة: ${stats.totalCostVal.toLocaleString()} ريال`}
+                size="sm"
+              />
+            </div>
 
             <button
               type="button"
               onClick={handlePrintModal}
-              className="btn-3d btn-3d-white flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 text-slate-700 rounded-xl text-xs font-black shadow-xs hover:scale-105 active:scale-95 transition-all cursor-pointer"
+              className="btn-3d btn-3d-white flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 text-slate-700 rounded-xl text-xs font-black shadow-xs hover:scale-105 active:scale-95 transition-all cursor-pointer"
             >
               <Printer size={14} className="text-blue-600" />
               <span>طباعة</span>
@@ -910,7 +918,7 @@ export const WarehouseCardModal: React.FC<WarehouseCardModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="btn-3d btn-3d-slate flex-1 sm:flex-none px-4 py-1.5 sm:px-5 sm:py-2 text-white rounded-xl text-xs font-black shadow-xs hover:scale-105 active:scale-95 transition-all cursor-pointer text-center"
+              className="btn-3d btn-3d-slate flex-1 sm:flex-none px-5 py-2 text-white rounded-xl text-xs font-black shadow-xs hover:scale-105 active:scale-95 transition-all cursor-pointer text-center"
             >
               إغلاق
             </button>

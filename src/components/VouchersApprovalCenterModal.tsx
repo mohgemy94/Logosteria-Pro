@@ -135,28 +135,41 @@ export default function VouchersApprovalCenterModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto" dir="rtl">
-      <div className="bg-white rounded-2xl max-w-4xl w-full border border-slate-200 shadow-2xl overflow-hidden my-auto animate-in zoom-in-95 flex flex-col max-h-[90vh]">
+    <div 
+      className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 animate-fadeIn" 
+      dir="rtl"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        onClick={e => e.stopPropagation()}
+        className="bg-white rounded-t-3xl sm:rounded-2xl max-w-4xl w-full border border-slate-200/90 shadow-2xl overflow-hidden animate-modalIn flex flex-col max-h-[92vh] sm:max-h-[88vh] md:max-h-[90vh] text-right"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        {/* Mobile Handle */}
+        <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
         {/* Header */}
-        <div className="p-4 sm:p-5 bg-gradient-to-l from-violet-900 via-slate-900 to-slate-900 text-white flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-violet-600/30 border border-violet-400/30 flex items-center justify-center text-violet-300">
+        <div className="p-3.5 sm:p-5 bg-gradient-to-l from-violet-900 via-slate-900 to-slate-900 text-white flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 rounded-xl bg-violet-600/30 border border-violet-400/30 flex items-center justify-center text-violet-300 shrink-0">
               <ShieldCheck size={24} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base sm:text-lg font-black tracking-tight">مركز اعتمادات وموافقات السندات</h3>
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-mono">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm sm:text-base md:text-lg font-black tracking-tight truncate">مركز اعتمادات وموافقات السندات</h3>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-mono shrink-0">
                   {pendingItems.length} بانتظار الاعتماد
                 </span>
               </div>
-              <p className="text-xs text-slate-300 mt-0.5">
+              <p className="text-xs text-slate-300 mt-0.5 truncate sm:overflow-visible sm:whitespace-normal">
                 دورة الاعتماد الهرمية (Approval Hierarchy): اعتماد المدير المالي والمدير العام للسندات الكبيرة قبل الصرف الفعلي
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {onOpenSettings && (
               <button
                 type="button"
@@ -164,8 +177,9 @@ export default function VouchersApprovalCenterModal({
                   onClose();
                   onOpenSettings();
                 }}
-                className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+                className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer hover:scale-105 active:scale-95"
                 title="إعدادات دورة الاعتماد"
+                aria-label="إعدادات دورة الاعتماد"
               >
                 <Sliders size={18} />
               </button>
@@ -173,9 +187,10 @@ export default function VouchersApprovalCenterModal({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer hover:scale-105 active:scale-95"
+              aria-label="إغلاق"
             >
-              <X size={20} />
+              <X size={18} />
             </button>
           </div>
         </div>
@@ -382,15 +397,15 @@ export default function VouchersApprovalCenterModal({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs">
-          <span className="text-slate-500 font-medium">
+        {/* Footer (Fixed) */}
+        <div className="p-3.5 sm:p-4 bg-slate-50/95 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+          <span className="text-slate-500 font-medium hidden sm:inline">
             المبالغ المعتمدة تصبح مؤهلة فوراً للصرف الفعلي والترحيل المحاسبي.
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-lg font-bold cursor-pointer transition-colors"
+            className="w-full sm:w-auto px-5 py-2.5 sm:py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl font-bold cursor-pointer transition-all hover:scale-105 active:scale-95"
           >
             إغلاق
           </button>
@@ -399,8 +414,12 @@ export default function VouchersApprovalCenterModal({
 
       {/* Action Dialog (Approve / Reject) */}
       {activeItem && actionType && (
-        <div className="fixed inset-0 z-60 bg-slate-950/70 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 border border-slate-200 shadow-2xl animate-in zoom-in-95" dir="rtl">
+        <div className="fixed inset-0 z-60 bg-slate-950/80 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeIn">
+          <div 
+            className="bg-white rounded-t-3xl sm:rounded-2xl max-w-md w-full p-4 sm:p-5 border border-slate-200 shadow-2xl animate-modalIn text-right" 
+            dir="rtl"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3.5">
               <div className="flex items-center gap-2">
                 {actionType === 'APPROVE' ? (

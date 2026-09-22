@@ -1234,26 +1234,38 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
 
       {/* MODAL 1: Clear Check & Auto Journal Entry Generation */}
       {selectedCheckForClear && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
-            <div className="px-5 py-4 bg-emerald-600 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={20} />
-                <div>
-                  <h3 className="font-black text-base">تأكيد صرف وتحصيل الشيك في الحساب البنكي</h3>
-                  <p className="text-xs text-emerald-100">سيتم توليد قيد استحقاق محاسبي نظامي تلقائياً في دفتر اليومية</p>
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedCheckForClear(null);
+          }}
+        >
+          <div 
+            className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] animate-modalIn text-right"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
+            <div className="px-4 sm:px-5 py-3.5 sm:py-4 bg-emerald-600 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle2 size={20} className="shrink-0" />
+                <div className="min-w-0">
+                  <h3 className="font-black text-sm sm:text-base truncate">تأكيد صرف وتحصيل الشيك في الحساب البنكي</h3>
+                  <p className="text-[11px] sm:text-xs text-emerald-100 truncate">سيتم توليد قيد استحقاق محاسبي نظامي تلقائياً</p>
                 </div>
               </div>
               <button 
                 type="button" 
                 onClick={() => setSelectedCheckForClear(null)}
-                className="text-emerald-100 hover:text-white p-1 cursor-pointer"
+                className="text-emerald-100 hover:text-white p-1 cursor-pointer shrink-0"
               >
                 ✕
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-xs">
+            <div className="p-4 sm:p-5 space-y-3 sm:space-y-4 text-xs overflow-y-auto flex-1">
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
                 <div>
                   <div className="text-[10px] text-slate-500">بيانات الشيك المطلوب صرفه:</div>
@@ -1372,7 +1384,7 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
               </div>
             </div>
 
-            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+            <div className="px-4 sm:px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setSelectedCheckForClear(null)}
@@ -1395,26 +1407,38 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
 
       {/* MODAL 2: Endorse Check to Vendor Modal (تظهير الشيك لمورد) */}
       {selectedCheckForEndorse && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
-            <div className="px-5 py-4 bg-purple-700 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ArrowRightLeft size={20} />
-                <div>
-                  <h3 className="font-black text-base">تظهير وتحويل الشيك لمورد (Check Endorsement)</h3>
-                  <p className="text-xs text-purple-100">تحويل ملكية الشيك الوارد لسداد رصيد مورد وتوليد القيد آلياً</p>
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedCheckForEndorse(null);
+          }}
+        >
+          <div 
+            className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] animate-modalIn text-right"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
+            <div className="px-4 sm:px-5 py-3.5 sm:py-4 bg-purple-700 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <ArrowRightLeft size={20} className="shrink-0" />
+                <div className="min-w-0">
+                  <h3 className="font-black text-sm sm:text-base truncate">تظهير وتحويل الشيك لمورد (Check Endorsement)</h3>
+                  <p className="text-[11px] sm:text-xs text-purple-100 truncate">تحويل ملكية الشيك الوارد لسداد رصيد مورد</p>
                 </div>
               </div>
               <button 
                 type="button" 
                 onClick={() => setSelectedCheckForEndorse(null)}
-                className="text-purple-100 hover:text-white p-1 cursor-pointer"
+                className="text-purple-100 hover:text-white p-1 cursor-pointer shrink-0"
               >
                 ✕
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-xs">
+            <div className="p-4 sm:p-5 space-y-3 sm:space-y-4 text-xs overflow-y-auto flex-1">
               <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 flex items-center justify-between">
                 <div>
                   <div className="text-[10px] text-purple-600 font-bold">الشيك المراد تظهيره:</div>
@@ -1492,7 +1516,7 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
               </div>
             </div>
 
-            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+            <div className="px-4 sm:px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setSelectedCheckForEndorse(null)}
@@ -1515,26 +1539,38 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
 
       {/* MODAL 3: Bounce Check Modal */}
       {selectedCheckForBounce && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
-            <div className="px-5 py-4 bg-rose-600 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <XCircle size={20} />
-                <div>
-                  <h3 className="font-black text-base">تسجيل ارتداد الشيك (Bounced Check)</h3>
-                  <p className="text-xs text-rose-100">سيتم عكس إقفال الشيك وإعادة المديونية للطرف المعني نظامياً</p>
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedCheckForBounce(null);
+          }}
+        >
+          <div 
+            className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] animate-modalIn text-right"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
+            <div className="px-4 sm:px-5 py-3.5 sm:py-4 bg-rose-600 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <XCircle size={20} className="shrink-0" />
+                <div className="min-w-0">
+                  <h3 className="font-black text-sm sm:text-base truncate">تسجيل ارتداد الشيك (Bounced Check)</h3>
+                  <p className="text-[11px] sm:text-xs text-rose-100 truncate">سيتم عكس إقفال الشيك وإعادة المديونية نظامياً</p>
                 </div>
               </div>
               <button 
                 type="button" 
                 onClick={() => setSelectedCheckForBounce(null)}
-                className="text-rose-100 hover:text-white p-1 cursor-pointer"
+                className="text-rose-100 hover:text-white p-1 cursor-pointer shrink-0"
               >
                 ✕
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-xs">
+            <div className="p-4 sm:p-5 space-y-3 sm:space-y-4 text-xs overflow-y-auto flex-1">
               <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 flex items-center justify-between">
                 <div>
                   <div className="text-[10px] text-rose-600 font-bold">شيك مرتد:</div>
@@ -1610,7 +1646,7 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
               </div>
             </div>
 
-            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+            <div className="px-4 sm:px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setSelectedCheckForBounce(null)}
@@ -1633,26 +1669,38 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
 
       {/* MODAL 4: Bulk Clearance Modal */}
       {isBulkClearModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
-            <div className="px-5 py-4 bg-emerald-600 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={20} />
-                <div>
-                  <h3 className="font-black text-base">تحصيل وصرف مجمع للشيكات المحددة</h3>
-                  <p className="text-xs text-emerald-100">تحصيل ({selectedCheckIds.length}) شيك بقيمة إجمالية ({selectedTotalAmount.toLocaleString()} {currencySymbol})</p>
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsBulkClearModalOpen(false);
+          }}
+        >
+          <div 
+            className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] animate-modalIn text-right"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
+            <div className="px-4 sm:px-5 py-3.5 sm:py-4 bg-emerald-600 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle2 size={20} className="shrink-0" />
+                <div className="min-w-0">
+                  <h3 className="font-black text-sm sm:text-base truncate">تحصيل وصرف مجمع للشيكات المحددة</h3>
+                  <p className="text-[11px] sm:text-xs text-emerald-100 truncate">تحصيل ({selectedCheckIds.length}) شيك بقيمة ({selectedTotalAmount.toLocaleString()} {currencySymbol})</p>
                 </div>
               </div>
               <button 
                 type="button" 
                 onClick={() => setIsBulkClearModalOpen(false)}
-                className="text-emerald-100 hover:text-white p-1 cursor-pointer"
+                className="text-emerald-100 hover:text-white p-1 cursor-pointer shrink-0"
               >
                 ✕
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-xs">
+            <div className="p-4 sm:p-5 space-y-3 sm:space-y-4 text-xs overflow-y-auto flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">تاريخ التحصيل الجماعي *</label>
@@ -1694,7 +1742,7 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
               </div>
             </div>
 
-            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+            <div className="px-4 sm:px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsBulkClearModalOpen(false)}
@@ -1717,22 +1765,34 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
 
       {/* MODAL 5: Printable Bank Deposit Slip (حافظة إيداع شيكات للبنك) */}
       {printableDepositSlip && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-8">
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPrintableDepositSlip(null);
+          }}
+        >
+          <div 
+            className="bg-white w-full max-w-3xl rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[94vh] sm:max-h-[90vh] animate-modalIn text-right"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0 print:hidden" />
+
             {/* Top Toolbar */}
-            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between print:hidden">
-              <div className="flex items-center gap-2">
-                <Landmark size={20} className="text-amber-400" />
-                <h3 className="font-bold text-sm">معاينة حافظة تسليم وإيداع الشيكات للبنك</h3>
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex items-center justify-between shrink-0 print:hidden">
+              <div className="flex items-center gap-2 min-w-0">
+                <Landmark size={20} className="text-amber-400 shrink-0" />
+                <h3 className="font-bold text-xs sm:text-sm truncate">معاينة حافظة تسليم وإيداع الشيكات للبنك</h3>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  className="px-3 sm:px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
                 >
                   <Printer size={14} />
-                  <span>طباعة الحافظة الآن</span>
+                  <span>طباعة الحافظة</span>
                 </button>
                 <button
                   type="button"
@@ -1745,7 +1805,7 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
             </div>
 
             {/* Printable Document Paper */}
-            <div className="p-8 bg-white text-slate-900 space-y-6 text-xs print:p-0 print:m-0" id="deposit-slip-print">
+            <div className="p-4 sm:p-8 bg-white text-slate-900 space-y-5 sm:space-y-6 text-xs overflow-y-auto flex-1 print:p-0 print:m-0" id="deposit-slip-print">
               {/* Header */}
               <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
                 <div>
@@ -1842,18 +1902,30 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
 
       {/* MODAL 6: Single Check Voucher Print Modal (سند استلام شيك رسمي) */}
       {printableSingleCheckVoucher && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-8">
-            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between print:hidden">
-              <div className="flex items-center gap-2">
-                <Receipt size={20} className="text-amber-400" />
-                <h3 className="font-bold text-sm">سند وحافظة استلام الشيك المصرفي #{printableSingleCheckVoucher.checkNumber}</h3>
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPrintableSingleCheckVoucher(null);
+          }}
+        >
+          <div 
+            className="bg-white w-full max-w-2xl rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[94vh] sm:max-h-[90vh] animate-modalIn text-right"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0 print:hidden" />
+
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex items-center justify-between shrink-0 print:hidden">
+              <div className="flex items-center gap-2 min-w-0">
+                <Receipt size={20} className="text-amber-400 shrink-0" />
+                <h3 className="font-bold text-xs sm:text-sm truncate">سند وحافظة استلام الشيك #{printableSingleCheckVoucher.checkNumber}</h3>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  className="px-3 sm:px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
                 >
                   <Printer size={14} />
                   <span>طباعة السند</span>
@@ -1868,7 +1940,7 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
               </div>
             </div>
 
-            <div className="p-8 bg-white text-slate-900 space-y-5 text-xs print:p-0 print:m-0" id="single-check-print">
+            <div className="p-4 sm:p-8 bg-white text-slate-900 space-y-4 sm:space-y-5 text-xs overflow-y-auto flex-1 print:p-0 print:m-0" id="single-check-print">
               <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
                 <div>
                   <h2 className="text-lg font-black text-slate-900">{companyName}</h2>
@@ -1936,28 +2008,40 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
 
       {/* MODAL 7: View Auto Journal Entry */}
       {viewJournalEntry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
-            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText size={18} className="text-blue-400" />
-                <div>
-                  <h3 className="font-black text-base font-mono">
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setViewJournalEntry(null);
+          }}
+        >
+          <div 
+            className="bg-white w-full max-w-xl rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] animate-modalIn text-right"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
+            <div className="px-4 sm:px-5 py-3.5 sm:py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText size={18} className="text-blue-400 shrink-0" />
+                <div className="min-w-0">
+                  <h3 className="font-black text-sm sm:text-base font-mono truncate">
                     القيد اليومي المحاسبي [{viewJournalEntry.entryNumber}]
                   </h3>
-                  <p className="text-xs text-slate-400">{viewJournalEntry.description}</p>
+                  <p className="text-[11px] sm:text-xs text-slate-400 truncate">{viewJournalEntry.description}</p>
                 </div>
               </div>
               <button 
                 type="button" 
                 onClick={() => setViewJournalEntry(null)}
-                className="text-slate-400 hover:text-white p-1 cursor-pointer"
+                className="text-slate-400 hover:text-white p-1 cursor-pointer shrink-0"
               >
                 ✕
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-xs">
+            <div className="p-4 sm:p-5 space-y-3 sm:space-y-4 text-xs overflow-y-auto flex-1">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-700 font-medium">
                 <div>
                   <span className="text-[10px] text-slate-400 block">التاريخ</span>
@@ -1976,51 +2060,53 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
               </div>
 
               {/* Journal Items Table */}
-              <table className="w-full text-right text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                    <th className="py-2 px-3">رقم واسم الحساب</th>
-                    <th className="py-2 px-3 text-left font-mono">مدين ({currencySymbol})</th>
-                    <th className="py-2 px-3 text-left font-mono">دائن ({currencySymbol})</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {viewJournalEntry.items.map((item, idx) => {
-                    const accs = loadChartOfAccounts();
-                    const acc = accs.find(a => a.id === item.accountId || a.code === item.accountId);
-                    return (
-                      <tr key={idx} className="hover:bg-slate-50 font-mono">
-                        <td className="py-2 px-3 font-sans">
-                          <div className="font-bold text-slate-900">[{acc?.code || item.accountId}] {acc?.name || 'حساب'}</div>
-                          {item.partnerName && (
-                            <div className="text-[10px] text-slate-500 font-normal">الطرف: {item.partnerName}</div>
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-left font-black text-slate-900">
-                          {Number(item.debit) > 0 ? Number(item.debit).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
-                        </td>
-                        <td className="py-2 px-3 text-left font-black text-slate-900">
-                          {Number(item.credit) > 0 ? Number(item.credit).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-slate-50 font-bold font-mono border-t border-slate-200 text-slate-900">
-                    <td className="py-2 px-3 font-sans">الإجمالي المتوازن</td>
-                    <td className="py-2 px-3 text-left text-emerald-700 font-black">
-                      {viewJournalEntry.items.reduce((s, i) => s + (Number(i.debit) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="py-2 px-3 text-left text-emerald-700 font-black">
-                      {viewJournalEntry.items.reduce((s, i) => s + (Number(i.credit) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="w-full text-right text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                      <th className="py-2 px-3">رقم واسم الحساب</th>
+                      <th className="py-2 px-3 text-left font-mono">مدين ({currencySymbol})</th>
+                      <th className="py-2 px-3 text-left font-mono">دائن ({currencySymbol})</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {viewJournalEntry.items.map((item, idx) => {
+                      const accs = loadChartOfAccounts();
+                      const acc = accs.find(a => a.id === item.accountId || a.code === item.accountId);
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50 font-mono">
+                          <td className="py-2 px-3 font-sans">
+                            <div className="font-bold text-slate-900">[{acc?.code || item.accountId}] {acc?.name || 'حساب'}</div>
+                            {item.partnerName && (
+                              <div className="text-[10px] text-slate-500 font-normal">الطرف: {item.partnerName}</div>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-left font-black text-slate-900">
+                            {Number(item.debit) > 0 ? Number(item.debit).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
+                          </td>
+                          <td className="py-2 px-3 text-left font-black text-slate-900">
+                            {Number(item.credit) > 0 ? Number(item.credit).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-50 font-bold font-mono border-t border-slate-200 text-slate-900">
+                      <td className="py-2 px-3 font-sans">الإجمالي المتوازن</td>
+                      <td className="py-2 px-3 text-left text-emerald-700 font-black">
+                        {viewJournalEntry.items.reduce((s, i) => s + (Number(i.debit) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2 px-3 text-left text-emerald-700 font-black">
+                        {viewJournalEntry.items.reduce((s, i) => s + (Number(i.credit) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
 
-            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+            <div className="px-4 sm:px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
               {onNavigate && (
                 <button
                   type="button"
@@ -2047,17 +2133,29 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
 
       {/* MODAL 8: Check Details / Card Modal */}
       {viewCheckCard && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
-            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Landmark size={20} className="text-amber-400" />
-                <h3 className="font-black text-sm">بطاقة الشيك المصرفي #{viewCheckCard.checkNumber}</h3>
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setViewCheckCard(null);
+          }}
+        >
+          <div 
+            className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] animate-modalIn text-right"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
+            <div className="px-4 sm:px-5 py-3.5 sm:py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <Landmark size={20} className="text-amber-400 shrink-0" />
+                <h3 className="font-black text-xs sm:text-sm truncate">بطاقة الشيك المصرفي #{viewCheckCard.checkNumber}</h3>
               </div>
-              <button type="button" onClick={() => setViewCheckCard(null)} className="text-slate-400 hover:text-white p-1 cursor-pointer">✕</button>
+              <button type="button" onClick={() => setViewCheckCard(null)} className="text-slate-400 hover:text-white p-1 cursor-pointer shrink-0">✕</button>
             </div>
 
-            <div className="p-5 space-y-3 text-xs">
+            <div className="p-4 sm:p-5 space-y-3 text-xs overflow-y-auto flex-1">
               <div className="p-4 bg-linear-to-r from-amber-50 to-amber-100/60 rounded-xl border border-amber-300 text-center">
                 <div className="text-[10px] text-amber-800 uppercase font-bold tracking-wider">مبلغ الشيك المصرفي</div>
                 <div className="text-2xl font-black text-amber-950 font-mono mt-1">
@@ -2109,7 +2207,7 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
               </div>
             </div>
 
-            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+            <div className="px-4 sm:px-5 py-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -2136,153 +2234,167 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
 
       {/* MODAL 9: Register New Check Manually */}
       {isNewCheckModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
-            <div className="px-5 py-4 bg-blue-600 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Plus size={20} />
-                <h3 className="font-black text-base">تسجيل شيك بنكي جديد في الحافظة</h3>
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsNewCheckModalOpen(false);
+          }}
+        >
+          <div 
+            className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] animate-modalIn text-right"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
+            <div className="px-4 sm:px-5 py-3.5 sm:py-4 bg-blue-600 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <Plus size={20} className="shrink-0" />
+                <h3 className="font-black text-sm sm:text-base truncate">تسجيل شيك بنكي جديد في الحافظة</h3>
               </div>
               <button 
                 type="button" 
                 onClick={() => setIsNewCheckModalOpen(false)}
-                className="text-blue-100 hover:text-white p-1 cursor-pointer"
+                className="text-blue-100 hover:text-white p-1 cursor-pointer shrink-0"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSaveNewCheck} className="p-5 space-y-4 text-xs">
-              {/* Type Switcher */}
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">نوع الشيك *</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNewCheckType('INCOMING')}
-                    className={`py-2 px-3 rounded-lg font-bold border text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      newCheckType === 'INCOMING'
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <ArrowDownLeft size={14} />
-                    شيك وارد (قبض من عميل)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewCheckType('OUTGOING')}
-                    className={`py-2 px-3 rounded-lg font-bold border text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      newCheckType === 'OUTGOING'
-                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <ArrowUpRight size={14} />
-                    شيك صادر (صرف لمورد)
-                  </button>
+            <form onSubmit={handleSaveNewCheck} className="flex flex-col flex-1 min-h-0">
+              <div className="p-4 sm:p-5 space-y-3 sm:space-y-4 text-xs overflow-y-auto flex-1">
+                {/* Type Switcher */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">نوع الشيك *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewCheckType('INCOMING')}
+                      className={`py-2 px-3 rounded-lg font-bold border text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        newCheckType === 'INCOMING'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <ArrowDownLeft size={14} />
+                      شيك وارد (قبض من عميل)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewCheckType('OUTGOING')}
+                      className={`py-2 px-3 rounded-lg font-bold border text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        newCheckType === 'OUTGOING'
+                          ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <ArrowUpRight size={14} />
+                      شيك صادر (صرف لمورد)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Number and Amount */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">رقم الشيك المصرفي *</label>
+                    <input
+                      type="text"
+                      value={newCheckNumber}
+                      onChange={(e) => setNewCheckNumber(e.target.value)}
+                      placeholder="مثال: CHQ-55921"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">مبلغ الشيك ({currencySymbol}) *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={newCheckAmount}
+                      onChange={(e) => setNewCheckAmount(e.target.value ? Number(e.target.value) : '')}
+                      placeholder="0.00"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono font-black focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Dates */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">تاريخ التحرير / الاستلام *</label>
+                    <input
+                      type="date"
+                      value={newCheckIssueDate}
+                      onChange={(e) => setNewCheckIssueDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">تاريخ الاستحقاق والصرف *</label>
+                    <input
+                      type="date"
+                      value={newCheckDueDate}
+                      onChange={(e) => setNewCheckDueDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono font-bold text-blue-700"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Bank & Partner */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">البنك المسحوب عليه *</label>
+                    <input
+                      type="text"
+                      value={newCheckBankName}
+                      onChange={(e) => setNewCheckBankName(e.target.value)}
+                      placeholder="مثال: مصرف الراجحي"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      {newCheckType === 'INCOMING' ? 'اسم العميل / الساحب *' : 'اسم المورد / المستفيد *'}
+                    </label>
+                    <input
+                      type="text"
+                      value={newCheckPartnerName}
+                      onChange={(e) => setNewCheckPartnerName(e.target.value)}
+                      placeholder={newCheckType === 'INCOMING' ? 'اسم العميل أو الجهة الدافعة' : 'اسم المورد أو المستفيد'}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">ملاحظات وبيان إضافي</label>
+                  <textarea
+                    rows={2}
+                    value={newCheckNotes}
+                    onChange={(e) => setNewCheckNotes(e.target.value)}
+                    placeholder="ملاحظات حول الشيك، الغرض، أو شروط الصرف..."
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                  />
+                </div>
+
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 text-blue-900 text-[11px] leading-relaxed flex items-start gap-2">
+                  <Info size={16} className="shrink-0 mt-0.5 text-blue-600" />
+                  <div>
+                    سيتم حفظ الشيك في الحافظة بحالة <strong>(تحت التحصيل ⏳)</strong>، وسيقوم النظام بتنبيهك تلقائياً قبل تاريخ استحقاقه لإيداعه أو صرفه وتوليد القيد المحاسبي.
+                  </div>
                 </div>
               </div>
 
-              {/* Number and Amount */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">رقم الشيك المصرفي *</label>
-                  <input
-                    type="text"
-                    value={newCheckNumber}
-                    onChange={(e) => setNewCheckNumber(e.target.value)}
-                    placeholder="مثال: CHQ-55921"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">مبلغ الشيك ({currencySymbol}) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={newCheckAmount}
-                    onChange={(e) => setNewCheckAmount(e.target.value ? Number(e.target.value) : '')}
-                    placeholder="0.00"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono font-black focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Dates */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">تاريخ التحرير / الاستلام *</label>
-                  <input
-                    type="date"
-                    value={newCheckIssueDate}
-                    onChange={(e) => setNewCheckIssueDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">تاريخ الاستحقاق والصرف *</label>
-                  <input
-                    type="date"
-                    value={newCheckDueDate}
-                    onChange={(e) => setNewCheckDueDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono font-bold text-blue-700"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Bank & Partner */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">البنك المسحوب عليه *</label>
-                  <input
-                    type="text"
-                    value={newCheckBankName}
-                    onChange={(e) => setNewCheckBankName(e.target.value)}
-                    placeholder="مثال: مصرف الراجحي"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">
-                    {newCheckType === 'INCOMING' ? 'اسم العميل / الساحب *' : 'اسم المورد / المستفيد *'}
-                  </label>
-                  <input
-                    type="text"
-                    value={newCheckPartnerName}
-                    onChange={(e) => setNewCheckPartnerName(e.target.value)}
-                    placeholder={newCheckType === 'INCOMING' ? 'اسم العميل أو الجهة الدافعة' : 'اسم المورد أو المستفيد'}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">ملاحظات وبيان إضافي</label>
-                <textarea
-                  rows={2}
-                  value={newCheckNotes}
-                  onChange={(e) => setNewCheckNotes(e.target.value)}
-                  placeholder="ملاحظات حول الشيك، الغرض، أو شروط الصرف..."
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
-                />
-              </div>
-
-              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 text-blue-900 text-[11px] leading-relaxed flex items-start gap-2">
-                <Info size={16} className="shrink-0 mt-0.5 text-blue-600" />
-                <div>
-                  سيتم حفظ الشيك في الحافظة بحالة <strong>(تحت التحصيل ⏳)</strong>، وسيقوم النظام بتنبيهك تلقائياً قبل تاريخ استحقاقه لإيداعه أو صرفه وتوليد القيد المحاسبي.
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+              <div className="px-4 sm:px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsNewCheckModalOpen(false)}

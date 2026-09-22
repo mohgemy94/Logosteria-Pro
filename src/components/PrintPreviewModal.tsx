@@ -616,11 +616,21 @@ export default function PrintPreviewModal({
       {/* Custom Size Configuration Dialog */}
 
       {showCustomDialog && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/80 backdrop-blur-xs p-4 animate-fadeIn">
+        <div 
+          className="fixed inset-0 z-60 flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-xs p-0 sm:p-4 animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowCustomDialog(false);
+          }}
+        >
           <div 
             dir="rtl"
-            className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden text-slate-800"
+            className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden text-slate-800 animate-modalIn max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
           >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
             <div className="bg-slate-900 text-white p-4 flex items-center justify-between border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-purple-600/30 border border-purple-500/30 flex items-center justify-center text-purple-300">
@@ -640,8 +650,8 @@ export default function PrintPreviewModal({
               </button>
             </div>
 
-            <form onSubmit={handleSaveCustom} className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleSaveCustom} className="p-4 sm:p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700 block">
                     عرض الورقة (سم):
@@ -655,10 +665,10 @@ export default function PrintPreviewModal({
                       value={tempWidthCm}
                       onChange={e => setTempWidthCm(e.target.value)}
                       required
-                      className="w-full pl-8 pr-3 py-2 border-2 border-slate-300 rounded-xl text-sm font-bold font-mono focus:outline-none focus:border-purple-600 bg-white"
+                      className="w-full pl-8 pr-3 py-2.5 sm:py-2 border-2 border-slate-300 rounded-xl text-sm font-bold font-mono focus:outline-none focus:border-purple-600 bg-white"
                       placeholder="مثال: 15"
                     />
-                    <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">سم</span>
+                    <span className="absolute left-3 top-3 sm:top-2.5 text-xs text-slate-400 font-bold">سم</span>
                   </div>
                 </div>
 
@@ -675,10 +685,10 @@ export default function PrintPreviewModal({
                       value={tempHeightCm}
                       onChange={e => setTempHeightCm(e.target.value)}
                       required
-                      className="w-full pl-8 pr-3 py-2 border-2 border-slate-300 rounded-xl text-sm font-bold font-mono focus:outline-none focus:border-purple-600 bg-white"
+                      className="w-full pl-8 pr-3 py-2.5 sm:py-2 border-2 border-slate-300 rounded-xl text-sm font-bold font-mono focus:outline-none focus:border-purple-600 bg-white"
                       placeholder="مثال: 20"
                     />
-                    <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">سم</span>
+                    <span className="absolute left-3 top-3 sm:top-2.5 text-xs text-slate-400 font-bold">سم</span>
                   </div>
                 </div>
               </div>
@@ -691,13 +701,13 @@ export default function PrintPreviewModal({
                 <button
                   type="button"
                   onClick={() => setShowCustomDialog(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="flex-1 sm:flex-none px-4 py-2.5 sm:py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-bold shadow-md transition-colors cursor-pointer"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-bold shadow-md transition-colors cursor-pointer"
                 >
                   <Pin size={14} />
                   <span>تثبيت وحفظ المقاس</span>

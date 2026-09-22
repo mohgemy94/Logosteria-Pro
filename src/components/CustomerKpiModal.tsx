@@ -190,22 +190,34 @@ export default function CustomerKpiModal({
   }, [filteredData]);
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 animate-fadeIn">
-      <div className="bg-white rounded-2xl max-w-5xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
-        {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-start justify-between gap-3 shrink-0 bg-slate-50/50">
-          <div className="flex items-start gap-3">
-            <div className="w-11 h-11 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-center shrink-0">
+    <div 
+      className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 z-50 animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        onClick={e => e.stopPropagation()}
+        className="bg-white rounded-t-3xl sm:rounded-2xl max-w-5xl w-full shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] md:max-h-[90vh] animate-modalIn text-right"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        {/* Mobile Handle */}
+        <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
+        {/* Header (Fixed) */}
+        <div className="p-3.5 sm:p-5 border-b border-slate-100 flex items-start justify-between gap-3 shrink-0 bg-slate-50/90">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-center shrink-0">
               {icon}
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base sm:text-lg font-bold text-slate-900">{title}</h3>
-                <span className={`px-2 py-0.5 rounded-full text-[11px] font-black border font-mono ${badgeColor}`}>
+                <h3 className="text-sm sm:text-base md:text-lg font-black text-slate-900 truncate">{title}</h3>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black border font-mono shrink-0 ${badgeColor}`}>
                   {summary.count} {summary.countLabel}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
+              <p className="text-xs text-slate-500 mt-0.5 max-w-2xl leading-relaxed truncate sm:overflow-visible sm:whitespace-normal">
                 {subtitle}
               </p>
             </div>
@@ -213,8 +225,9 @@ export default function CustomerKpiModal({
           <button 
             type="button" 
             onClick={onClose}
-            className="btn-3d btn-3d-white p-1.5 rounded-xl text-slate-500 hover:text-slate-800 cursor-pointer hover:scale-105 active:scale-95 transition-all shrink-0"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shrink-0"
             title="إغلاق النافذة"
+            aria-label="إغلاق النافذة"
           >
             <X size={18} />
           </button>
@@ -451,15 +464,15 @@ export default function CustomerKpiModal({
           </table>
         </div>
 
-        {/* Footer */}
-        <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs shrink-0">
+        {/* Footer (Fixed) */}
+        <div className="p-3.5 sm:p-4 bg-slate-50/95 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
           <span className="text-slate-500">
             عدد السجلات المعروضة: <span className="font-mono font-bold text-slate-800">{filteredData.length}</span>
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="btn-3d btn-3d-white px-5 py-1.5 text-xs font-black hover:scale-105 active:scale-95 transition-all"
+            className="w-full sm:w-auto btn-3d btn-3d-white px-5 py-2.5 sm:py-2 text-xs font-black hover:scale-105 active:scale-95 transition-all"
           >
             إغلاق
           </button>

@@ -552,11 +552,14 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
 
       {/* POPUP MODAL FOR ACTIVE SETTINGS PORTAL */}
       {activeSection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden my-auto animate-in zoom-in-95">
-            {/* Modal Header */}
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white w-full max-w-6xl rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200/90 flex flex-col max-h-[92vh] sm:max-h-[88vh] md:max-h-[90vh] overflow-hidden transition-all duration-200 animate-modalIn text-right">
+            {/* Mobile drag handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
+            {/* Modal Header (Fixed) */}
+            <div className="px-4 py-3.5 sm:px-6 sm:py-4 bg-slate-50/95 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0">
                   {activeSection === 'company' && <Building2 size={20} />}
                   {activeSection === 'financial_currency' && <Landmark size={20} />}
@@ -568,8 +571,8 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
                   {activeSection === 'approvals_and_reset' && <ShieldCheck size={20} />}
                   {activeSection === 'mobile_permissions' && <Monitor size={20} />}
                 </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm sm:text-base md:text-lg font-black text-slate-900 truncate">
                     {activeSection === 'company' && 'بيانات المنشأة والهوية المؤسسية'}
                     {activeSection === 'financial_currency' && 'المعايير المحاسبية والعملات المتعددة'}
                     {activeSection === 'invoicing_control' && 'الفوترة والضرائب والرقابة الائتمانية والمخزون'}
@@ -580,17 +583,17 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
                     {activeSection === 'approvals_and_reset' && 'الرقابة الإدارية ودورة الاعتماد والتصفير الآمن'}
                     {activeSection === 'mobile_permissions' && 'أذونات وإعدادات سطح المكتب وتطبيق الموبايل (Desktop & Mobile)'}
                   </h3>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
+                  <p className="text-[11px] text-slate-500 mt-0.5 truncate sm:overflow-visible sm:whitespace-normal">
                     قم بإجراء التعديلات المطلوبة ثم اضغط على حفظ الإعدادات لتطبيقها في كامل النظام.
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => handleSaveSettings()}
-                  className="hidden sm:flex items-center gap-1.5 px-4 py-1.5 btn-3d btn-3d-emerald text-xs font-bold"
+                  className="hidden sm:flex items-center gap-1.5 px-4 py-2 btn-3d btn-3d-emerald text-xs font-bold"
                 >
                   <Save size={14} />
                   حفظ
@@ -598,10 +601,11 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
                 <button
                   type="button"
                   onClick={() => setActiveSection(null)}
-                  className="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-colors cursor-pointer"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95"
                   title="إغلاق"
+                  aria-label="إغلاق"
                 >
-                  <X size={16} />
+                  <X size={18} />
                 </button>
               </div>
             </div>
@@ -897,24 +901,24 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-              <span className="text-xs text-slate-500">
+            {/* Modal Footer (Fixed) */}
+            <div className="px-4 py-3 sm:px-6 sm:py-3.5 bg-slate-50/95 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <span className="text-xs text-slate-500 hidden sm:inline">
                 {hasChanges ? 'توجد تعديلات غير محفوظة' : 'كافة الإعدادات متزامنة ومحفوظة'}
               </span>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-end">
                 <button
                   type="button"
                   onClick={() => setActiveSection(null)}
-                  className="btn-3d btn-3d-white px-4 py-2 text-xs font-bold"
+                  className="flex-1 sm:flex-none btn-3d btn-3d-white px-4 py-2.5 sm:py-2 text-xs font-bold"
                 >
                   إغلاق النافذة
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSaveSettings()}
-                  className="btn-3d btn-3d-blue px-5 py-2 text-xs font-bold flex items-center gap-1.5"
+                  className="flex-1 sm:flex-none btn-3d btn-3d-blue px-5 py-2.5 sm:py-2 text-xs font-bold flex items-center justify-center gap-1.5"
                 >
                   <Save size={14} />
                   حفظ التغييرات
@@ -927,33 +931,46 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
 
       {/* RESET CONFIRMATION MODAL */}
       {showResetModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 border border-slate-200 shadow-2xl space-y-4 animate-in zoom-in-95" dir="rtl">
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-xs animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowResetModal(false);
+          }}
+        >
+          <div 
+            onClick={e => e.stopPropagation()}
+            className="bg-white rounded-t-3xl sm:rounded-2xl max-w-md w-full p-5 sm:p-6 border border-slate-200 shadow-2xl space-y-4 animate-modalIn text-right max-h-[90vh] overflow-y-auto" 
+            dir="rtl"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden shrink-0 mb-1" />
+
             <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
               <AlertTriangle size={24} />
             </div>
 
             <div className="text-center">
-              <h4 className="text-lg font-bold text-slate-900">
+              <h4 className="text-base sm:text-lg font-bold text-slate-900">
                 {selectedResetType === 'TRANSACTIONS_ONLY' ? 'تأكيد تصفير العمليات المالية' : 'تأكيد استعادة ضبط المصنع الشامل'}
               </h4>
-              <p className="text-xs text-slate-600 mt-1">
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
                 {selectedResetType === 'TRANSACTIONS_ONLY'
                   ? 'سيتم حذف جميع الفواتير والقيود وسندات القبض والصرف، مع الإبقاء على العملاء والموردين والأصناف ودليل الحسابات.'
                   : 'تحذير شديد: سيتم مسح كافة البيانات المسجلة بالكامل وإعادة النظام لحالته الأولية.'}
               </p>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center justify-between">
-              <span className="text-xs font-bold text-blue-900">تنزيل نسخة احتياطية للأمان:</span>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-blue-900">نسخة احتياطية للأمان:</span>
               <button
                 type="button"
                 onClick={handleDownloadBackup}
                 disabled={isDownloadingBackup}
-                className="btn-3d btn-3d-blue px-3 py-1.5 text-xs font-bold flex items-center gap-1"
+                className="btn-3d btn-3d-blue px-3 py-1.5 text-xs font-bold flex items-center gap-1 shrink-0"
               >
                 <Download size={13} />
-                {isBackupDownloaded ? 'تم التنزيل ✓' : 'تنزيل نسخة JSON'}
+                {isBackupDownloaded ? 'تم التنزيل ✓' : 'تنزيل JSON'}
               </button>
             </div>
 
@@ -966,7 +983,7 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
                 value={confirmationInput}
                 onChange={e => setConfirmationInput(e.target.value)}
                 placeholder="اكتب تصفير هنا..."
-                className="w-full px-3 py-2 text-sm bg-white border-2 border-rose-300 rounded-lg text-center font-bold text-rose-700"
+                className="w-full px-3 py-2.5 text-sm bg-white border-2 border-rose-300 rounded-lg text-center font-bold text-rose-700"
               />
             </div>
 
@@ -974,7 +991,7 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
               <button
                 type="button"
                 onClick={() => setShowResetModal(false)}
-                className="btn-3d btn-3d-white flex-1 py-2 text-xs font-bold"
+                className="btn-3d btn-3d-white flex-1 py-2.5 text-xs font-bold"
               >
                 إلغاء التراجع
               </button>
@@ -982,7 +999,7 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
                 type="button"
                 onClick={handleExecuteReset}
                 disabled={!isConfirmationValid || isExecutingReset}
-                className={`btn-3d flex-1 py-2 text-xs font-bold ${
+                className={`btn-3d flex-1 py-2.5 text-xs font-bold ${
                   isConfirmationValid && !isExecutingReset
                     ? 'btn-3d-danger'
                     : 'btn-3d-white opacity-60 cursor-not-allowed'

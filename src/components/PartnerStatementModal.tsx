@@ -107,25 +107,34 @@ export default function PartnerStatementModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+    <div 
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div 
-        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl overflow-hidden flex flex-col max-h-[94vh] animate-in zoom-in-95 duration-150"
+        className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200/90 w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] md:max-h-[90vh] animate-modalIn text-right"
         onClick={e => e.stopPropagation()}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
-        {/* Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-5 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className={`w-11 h-11 rounded-xl flex items-center justify-center border shadow-sm ${
+        {/* Mobile Handle */}
+        <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
+        {/* Header (Fixed) */}
+        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-3.5 sm:p-5 flex items-center justify-between gap-3 shrink-0 border-b border-slate-800">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center border shadow-sm shrink-0 ${
               isCustomer 
                 ? 'bg-blue-600/30 text-blue-300 border-blue-500/40' 
                 : 'bg-purple-600/30 text-purple-300 border-purple-500/40'
             }`}>
               {isCustomer ? <Building2 size={22} /> : <FileText size={22} />}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-base sm:text-lg text-white">كشف حساب مالي تفصيلي ومطابقة أرصدة</h3>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-sm sm:text-base md:text-lg text-white truncate">كشف حساب مالي تفصيلي ومطابقة أرصدة</h3>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border shrink-0 ${
                   isCustomer 
                     ? 'bg-blue-500/20 text-blue-300 border-blue-400/40' 
                     : 'bg-purple-500/20 text-purple-300 border-purple-400/40'
@@ -133,54 +142,57 @@ export default function PartnerStatementModal({
                   {isCustomer ? 'حساب عميل' : 'حساب مورد'}
                 </span>
               </div>
-              <div className="flex items-center gap-3 text-xs text-slate-300 mt-1 flex-wrap">
-                <span className="font-bold text-white">{partner.name}</span>
-                {partner.taxNumber && <span>الرقم الضريبي: {partner.taxNumber}</span>}
-                {partner.phone && <span>الهاتف: {partner.phone}</span>}
+              <div className="flex items-center gap-2 sm:gap-3 text-xs text-slate-300 mt-0.5 flex-wrap truncate">
+                <span className="font-bold text-white truncate">{partner.name}</span>
+                {partner.taxNumber && <span className="hidden sm:inline">الرقم الضريبي: {partner.taxNumber}</span>}
+                {partner.phone && <span className="hidden xs:inline">الهاتف: {partner.phone}</span>}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setShowPrintPreview(true)}
-              className="btn-3d btn-3d-indigo px-3.5 py-1.5 text-xs font-black hover:scale-105 active:scale-95 transition-all"
+              className="btn-3d btn-3d-indigo px-3 py-1.5 text-xs font-black hover:scale-105 active:scale-95 transition-all"
               title="معاينة كشف الحساب والطباعة الرسمية"
             >
-              <Eye size={14} /> معاينة وطباعة
+              <Eye size={14} /> <span className="hidden sm:inline">معاينة وطباعة</span>
             </button>
-            <ExportButtonGroup
-              title={`كشف حساب تفصيلي - ${partner.name}`}
-              filename={`كشف_حساب_${partner.name.replace(/\s+/g, '_')}`}
-              headers={[
-                'التاريخ',
-                'نوع الحركة',
-                'رقم المستند',
-                'البيان',
-                'مدين (مسحوبات)',
-                'دائن (مدفوعات)',
-                'الرصيد التراكمي',
-                'حالة الرصيد'
-              ]}
-              rows={filteredTransactions.map(tx => [
-                tx.date,
-                tx.docTypeLabel,
-                tx.docNumber,
-                tx.description,
-                tx.debit,
-                tx.credit,
-                tx.runningBalance,
-                tx.runningBalanceType === 'DEBIT' ? 'مدين' : tx.runningBalanceType === 'CREDIT' ? 'دائن' : 'متزن'
-              ])}
-              filterSummary={`الطرف التجاري: ${partner.name} | الرقم الضريبي: ${partner.taxNumber || 'غير متوفر'} | الرصيد الحالي: ${statement.balanceFormatted} ${currencySymbol} (${statement.balanceLabel})`}
-              size="xs"
-            />
+            <div className="hidden sm:block">
+              <ExportButtonGroup
+                title={`كشف حساب تفصيلي - ${partner.name}`}
+                filename={`كشف_حساب_${partner.name.replace(/\s+/g, '_')}`}
+                headers={[
+                  'التاريخ',
+                  'نوع الحركة',
+                  'رقم المستند',
+                  'البيان',
+                  'مدين (مسحوبات)',
+                  'دائن (مدفوعات)',
+                  'الرصيد التراكمي',
+                  'حالة الرصيد'
+                ]}
+                rows={filteredTransactions.map(tx => [
+                  tx.date,
+                  tx.docTypeLabel,
+                  tx.docNumber,
+                  tx.description,
+                  tx.debit,
+                  tx.credit,
+                  tx.runningBalance,
+                  tx.runningBalanceType === 'DEBIT' ? 'مدين' : tx.runningBalanceType === 'CREDIT' ? 'دائن' : 'متزن'
+                ])}
+                filterSummary={`الطرف التجاري: ${partner.name} | الرقم الضريبي: ${partner.taxNumber || 'غير متوفر'} | الرصيد الحالي: ${statement.balanceFormatted} ${currencySymbol} (${statement.balanceLabel})`}
+                size="xs"
+              />
+            </div>
             <button
               type="button"
               onClick={onClose}
-              className="btn-3d btn-3d-slate p-1.5 text-slate-200 hover:text-white hover:scale-105 active:scale-95 transition-all"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-800 text-slate-200 hover:text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all"
               title="إغلاق"
+              aria-label="إغلاق"
             >
               <X size={18} />
             </button>
@@ -188,7 +200,7 @@ export default function PartnerStatementModal({
         </div>
 
         {/* Content Body */}
-        <div className="p-5 overflow-y-auto flex flex-col gap-4 bg-slate-50/50">
+        <div className="p-3 sm:p-5 overflow-y-auto flex flex-col gap-3 sm:gap-4 bg-slate-50/50 flex-1">
           
           {/* Quick Financial Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
@@ -447,16 +459,16 @@ export default function PartnerStatementModal({
 
         </div>
 
-        {/* Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs shrink-0">
-          <span className="text-slate-500 flex items-center gap-1.5">
-            <CheckCircle2 size={14} className="text-emerald-600" />
-            حساب مترابط آلياً مع فواتير المبيعات، المشتريات، وسندات القبض والصرف
+        {/* Footer (Fixed) */}
+        <div className="p-3.5 sm:p-4 bg-slate-50/95 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+          <span className="text-slate-500 flex items-center gap-1.5 text-[11px] sm:text-xs">
+            <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+            <span>حساب مترابط آلياً مع فواتير المبيعات، المشتريات، وسندات القبض والصرف</span>
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="btn-3d btn-3d-slate px-5 py-2 text-white text-xs font-bold hover:scale-105 active:scale-95 transition-all"
+            className="w-full sm:w-auto btn-3d btn-3d-slate px-5 py-2.5 sm:py-2 text-white text-xs font-bold hover:scale-105 active:scale-95 transition-all"
           >
             إغلاق
           </button>

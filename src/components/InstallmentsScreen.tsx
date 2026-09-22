@@ -1327,23 +1327,35 @@ export default function InstallmentsScreen() {
 
       {/* MODAL 1: NEW CONTRACT */}
       {isNewContractModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 my-auto text-right">
-            <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+        <div 
+          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsNewContractModalOpen(false);
+          }}
+        >
+          <div 
+            className="bg-white rounded-t-3xl sm:rounded-3xl max-w-3xl w-full p-4 sm:p-6 md:p-8 shadow-2xl border border-slate-200 text-right max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-modalIn"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+
+            <div className="flex items-center justify-between pb-3 sm:pb-4 mb-3 sm:mb-4 border-b border-slate-200 shrink-0">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
                 <CreditCard className="text-emerald-600" size={20} />
-                إنشاء عقد بيع بالتقسيط وإصدار الأوراق التجارية
+                <span>إنشاء عقد بيع بالتقسيط وإصدار الأوراق التجارية</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setIsNewContractModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveContract} className="space-y-4 text-xs sm:text-sm">
+            <form onSubmit={handleSaveContract} className="space-y-4 text-xs sm:text-sm overflow-y-auto flex-1 pr-0.5">
               {/* Customer Info */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
                 <div className="font-bold text-slate-800 flex items-center justify-between text-xs">
@@ -1585,23 +1597,35 @@ export default function InstallmentsScreen() {
 
       {/* MODAL 2: EXECUTE PAYMENT */}
       {isPayModalOpen && selectedScheduleForPayment && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 my-auto text-right">
-            <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+        <div 
+          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsPayModalOpen(false);
+          }}
+        >
+          <div 
+            className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-200 text-right max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-modalIn"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+
+            <div className="flex items-center justify-between pb-3 sm:pb-4 mb-3 sm:mb-4 border-b border-slate-200 shrink-0">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Receipt className="text-emerald-600" size={20} />
-                تحصيل وسداد قسط / سند قبض
+                <span>تحصيل وسداد قسط / سند قبض</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setIsPayModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleExecutePayment} className="space-y-4 text-xs sm:text-sm">
+            <form onSubmit={handleExecutePayment} className="space-y-4 text-xs sm:text-sm overflow-y-auto flex-1 pr-0.5">
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1.5">
                 <div className="flex justify-between">
                   <span className="text-slate-500">العميل:</span>
@@ -1668,7 +1692,7 @@ export default function InstallmentsScreen() {
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsPayModalOpen(false)}
@@ -1690,28 +1714,40 @@ export default function InstallmentsScreen() {
 
       {/* MODAL 3: VIEW SINGLE CONTRACT & DETAILED SCHEDULE */}
       {selectedContractForView && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 my-auto text-right">
-            <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-200 print:hidden">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+        <div 
+          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedContractForView(null);
+          }}
+        >
+          <div 
+            className="bg-white rounded-t-3xl sm:rounded-3xl max-w-4xl w-full p-4 sm:p-6 md:p-8 shadow-2xl border border-slate-200 text-right max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-modalIn"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+
+            <div className="flex items-center justify-between pb-3 sm:pb-4 mb-4 sm:mb-6 border-b border-slate-200 print:hidden shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
                   <FileCheck size={20} />
                 </div>
-                <div>
-                  <h3 className="text-lg sm:text-xl font-bold text-slate-900">
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-xl font-bold text-slate-900 truncate">
                     عقد بيع بالتقسيط رقم: {selectedContractForView.contractNumber}
                   </h3>
                   <div className="text-xs text-slate-500">تاريخ التحرير: {selectedContractForView.date}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="btn-3d btn-3d-white flex items-center gap-1.5 px-3.5 py-2 text-slate-700 text-xs font-bold cursor-pointer"
+                  className="btn-3d btn-3d-white flex items-center gap-1.5 px-3 sm:px-3.5 py-2 text-slate-700 text-xs font-bold cursor-pointer"
                 >
                   <Printer size={15} />
-                  <span>طباعة العقد</span>
+                  <span className="hidden sm:inline">طباعة العقد</span>
                 </button>
                 <button
                   type="button"
@@ -1724,7 +1760,7 @@ export default function InstallmentsScreen() {
             </div>
 
             {/* Contract Body (Printable) */}
-            <div className="space-y-6 text-xs sm:text-sm">
+            <div className="space-y-6 text-xs sm:text-sm overflow-y-auto flex-1 pr-0.5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <div>
                   <h5 className="font-bold text-slate-900 mb-2">طرف أول (البائع / الدائن):</h5>
@@ -1845,18 +1881,30 @@ export default function InstallmentsScreen() {
 
       {/* MODAL 4: PRINT PROMISSORY NOTE (Official Legal Template) */}
       {isPrintNoteModalOpen && selectedNoteForPrint && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 my-auto text-right">
-            <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200 print:hidden">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+        <div 
+          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsPrintNoteModalOpen(false);
+          }}
+        >
+          <div 
+            className="bg-white rounded-t-3xl sm:rounded-3xl max-w-2xl w-full p-4 sm:p-6 md:p-8 shadow-2xl border border-slate-200 text-right max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-modalIn"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+
+            <div className="flex items-center justify-between pb-3 sm:pb-4 mb-3 sm:mb-4 border-b border-slate-200 print:hidden shrink-0">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
                 <FileCheck className="text-emerald-600" size={18} />
-                معاينة السند الإذني / الكمبيالة القانونية
+                <span>معاينة السند الإذني / الكمبيالة القانونية</span>
               </h3>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="btn-3d btn-3d-emerald flex items-center gap-1 px-3.5 py-1.5 text-xs font-bold shadow-xs cursor-pointer"
+                  className="btn-3d btn-3d-emerald flex items-center gap-1 px-3 sm:px-3.5 py-1.5 text-xs font-bold shadow-xs cursor-pointer"
                 >
                   <Printer size={14} />
                   <span>طباعة الورقة</span>
@@ -1864,14 +1912,15 @@ export default function InstallmentsScreen() {
                 <button
                   type="button"
                   onClick={() => setIsPrintNoteModalOpen(false)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
             </div>
 
-            {/* Official Legal Promissory Note Sheet */}
+            {/* Official Legal Promissory Note Sheet (Scrollable) */}
+            <div className="overflow-y-auto flex-1 pr-0.5 space-y-4">
             <div className="border-4 border-double border-slate-800 p-6 sm:p-8 rounded-2xl bg-[#fffdf8] text-slate-950 space-y-6">
               <div className="text-center border-b-2 border-slate-800 pb-4">
                 <div className="text-xs tracking-widest text-slate-600 font-bold mb-1">المملكة العربية السعودية - نظام الأوراق التجارية</div>
@@ -1930,29 +1979,42 @@ export default function InstallmentsScreen() {
                 </div>
               </div>
             </div>
+            </div>
           </div>
         </div>
       )}
 
       {/* MODAL 5: NEW FREE PROMISSORY NOTE */}
       {isNewNoteModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 my-auto text-right">
-            <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+        <div 
+          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsNewNoteModalOpen(false);
+          }}
+        >
+          <div 
+            className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-200 text-right max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-modalIn"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+
+            <div className="flex items-center justify-between pb-3 sm:pb-4 mb-3 sm:mb-4 border-b border-slate-200 shrink-0">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
                 <FileCheck className="text-emerald-600" size={20} />
-                تحرير كمبيالة أو سند لأمر مستقل
+                <span>تحرير كمبيالة أو سند لأمر مستقل</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setIsNewNoteModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveFreeNote} className="space-y-4 text-xs sm:text-sm">
+            <form onSubmit={handleSaveFreeNote} className="space-y-4 text-xs sm:text-sm overflow-y-auto flex-1 pr-0.5">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-700 font-semibold mb-1">نوع الورقة التجارية</label>
@@ -2076,7 +2138,7 @@ export default function InstallmentsScreen() {
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsNewNoteModalOpen(false)}

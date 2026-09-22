@@ -84,25 +84,34 @@ ${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-6 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-fadeIn print-preview-modal-root">
+    <div 
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn print-preview-modal-root"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div 
-        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl overflow-hidden flex flex-col max-h-[94vh]"
+        className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200/90 w-full max-w-3xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] md:max-h-[90vh] animate-modalIn text-right"
         onClick={e => e.stopPropagation()}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
+        {/* Mobile Handle */}
+        <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0 print:hidden" />
+
         {/* Top Control Bar (Hidden on Print) */}
-        <div className="bg-slate-900 text-white p-3 sm:p-5 flex flex-wrap items-center justify-between gap-3 shrink-0 print:hidden">
-          <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="bg-slate-900 text-white p-3.5 sm:p-5 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 shrink-0 print:hidden border-b border-slate-800">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30 shrink-0">
               <FileCheck size={18} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm sm:text-base text-white">خطاب مصادقة وتأكيد رصيد</h3>
-                <span className="bg-indigo-500/20 text-indigo-300 text-[10px] px-2 py-0.5 rounded border border-indigo-400/30 font-semibold">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-sm sm:text-base text-white truncate">خطاب مصادقة وتأكيد رصيد</h3>
+                <span className="bg-indigo-500/20 text-indigo-300 text-[10px] px-2 py-0.5 rounded border border-indigo-400/30 font-semibold shrink-0">
                   {isCustomer ? 'عميل' : 'مورد'}
                 </span>
               </div>
-              <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 hidden xs:block">
+              <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate sm:overflow-visible sm:whitespace-normal">
                 نموذج محاسبي رسمي لمصادقة وتدقيق الأرصدة الدورية
               </p>
             </div>
@@ -311,22 +320,22 @@ ${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 
         </div>
 
         {/* Modal Footer (Hidden on Print) */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs print:hidden shrink-0">
-          <span className="text-slate-500">
+        <div className="p-3.5 sm:p-4 bg-slate-50/95 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs print:hidden shrink-0">
+          <span className="text-slate-500 text-[11px] sm:text-xs">
             يمكن طباعة الخطاب كنسخة PDF أو مشاركة النص المعتمد عبر واتساب مباشرة.
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <button
               type="button"
               onClick={onClose}
-              className="btn-3d btn-3d-white px-4 py-2 text-xs font-black hover:scale-105 active:scale-95 transition-all"
+              className="flex-1 sm:flex-none btn-3d btn-3d-white px-4 py-2.5 sm:py-2 text-xs font-black hover:scale-105 active:scale-95 transition-all"
             >
               إغلاق
             </button>
             <button
               type="button"
               onClick={handlePrint}
-              className="btn-3d btn-3d-blue px-4 py-2 text-xs font-black flex items-center gap-1.5 hover:scale-105 active:scale-95 transition-all"
+              className="flex-1 sm:flex-none btn-3d btn-3d-blue px-4 py-2.5 sm:py-2 text-xs font-black flex items-center justify-center gap-1.5 hover:scale-105 active:scale-95 transition-all"
             >
               <Printer size={14} />
               <span>طباعة المستند</span>

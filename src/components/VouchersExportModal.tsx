@@ -203,45 +203,57 @@ export default function VouchersExportModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
+    <div 
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div 
-        className="bg-white w-full max-w-5xl max-h-[92vh] rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden text-right" 
+        className="bg-white w-full max-w-5xl rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200/90 flex flex-col max-h-[92vh] sm:max-h-[88vh] md:max-h-[90vh] overflow-hidden text-right animate-modalIn" 
         dir="rtl"
+        onClick={e => e.stopPropagation()}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
-        {/* Modal Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-4 sm:p-5 flex items-center justify-between gap-3 shrink-0 border-b border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl">
+        {/* Mobile Handle */}
+        <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
+        {/* Modal Header (Fixed) */}
+        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-3.5 sm:p-5 flex items-center justify-between gap-3 shrink-0 border-b border-slate-700">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="p-2 sm:p-2.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl shrink-0">
               <FileSpreadsheet size={22} className="animate-pulse" />
             </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm sm:text-base md:text-lg font-black text-white flex items-center gap-2 flex-wrap truncate">
                 <span>{title}</span>
-                <span className="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-mono font-bold">
+                <span className="text-[10px] sm:text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-mono font-bold shrink-0">
                   EXCEL / CSV / PDF
                 </span>
               </h2>
-              <p className="text-xs text-slate-300 mt-0.5">
+              <p className="text-xs text-slate-300 mt-0.5 truncate sm:overflow-visible sm:whitespace-normal">
                 تصدير مجمّع وجداول بيانات دقيقة مع الفلترة حسب التاريخ، الحساب المالي، وحالة الترحيل المحاسبي
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               type="button"
               onClick={handleRefresh}
-              className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer hover:scale-105 active:scale-95"
               title="تحديث البيانات من السجلات"
+              aria-label="تحديث البيانات"
             >
-              <RefreshCw size={18} />
+              <RefreshCw size={17} />
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer hover:scale-105 active:scale-95"
               title="إغلاق"
+              aria-label="إغلاق"
             >
-              <X size={20} />
+              <X size={18} />
             </button>
           </div>
         </div>
@@ -527,18 +539,18 @@ export default function VouchersExportModal({
           </div>
         </div>
 
-        {/* Modal Action Footer */}
-        <div className="bg-slate-100 p-4 sm:p-5 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-          <div className="text-xs text-slate-600">
+        {/* Modal Action Footer (Fixed) */}
+        <div className="bg-slate-100/95 px-4 py-3 sm:px-6 sm:py-3.5 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+          <div className="text-xs text-slate-600 hidden md:block">
             <span className="font-bold text-slate-800">الملف المصدّر: </span>
             <span>يشمل {filteredVouchers.length} سند، بإجمالي حركة {stats.totalReceipts.toLocaleString()} مقبوضات و {stats.totalPayments.toLocaleString()} مدفوعات</span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
             <button
               type="button"
               onClick={onClose}
-              className="btn-3d btn-3d-white h-10 px-4 text-xs font-bold text-slate-700"
+              className="flex-1 sm:flex-none btn-3d btn-3d-white h-10 px-3.5 text-xs font-bold text-slate-700"
             >
               إلغاء
             </button>
@@ -548,11 +560,11 @@ export default function VouchersExportModal({
               type="button"
               onClick={handleExportCSV}
               disabled={filteredVouchers.length === 0 || isExporting}
-              className="btn-3d btn-3d-blue h-10 px-3.5 text-xs font-black flex items-center gap-2 disabled:opacity-50 disabled:pointer-events-none"
+              className="flex-1 sm:flex-none btn-3d btn-3d-blue h-10 px-3 text-xs font-black flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:pointer-events-none"
               title="تصدير كشف البيانات بصيغة CSV المتوافقة مع كافة جداول البيانات"
             >
-              <FileText size={16} />
-              <span>تصدير CSV</span>
+              <FileText size={15} />
+              <span>CSV</span>
             </button>
 
             {/* Export PDF Button */}
@@ -560,11 +572,11 @@ export default function VouchersExportModal({
               type="button"
               onClick={handleExportPDF}
               disabled={filteredVouchers.length === 0 || isExporting}
-              className="btn-3d btn-3d-rose h-10 px-3.5 text-xs font-black flex items-center gap-2 disabled:opacity-50 disabled:pointer-events-none"
+              className="flex-1 sm:flex-none btn-3d btn-3d-rose h-10 px-3 text-xs font-black flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:pointer-events-none"
               title="تصدير تقرير وكشف السندات بصيغة PDF للطباعة والتدقيق"
             >
-              <Printer size={16} />
-              <span>تصدير كشف PDF</span>
+              <Printer size={15} />
+              <span>PDF</span>
             </button>
 
             {/* Main Export XLSX Button */}
@@ -572,10 +584,10 @@ export default function VouchersExportModal({
               type="button"
               onClick={handleExportXLSX}
               disabled={filteredVouchers.length === 0 || isExporting}
-              className="btn-3d btn-3d-emerald h-10 px-5 text-xs font-black flex items-center gap-2 shadow-md disabled:opacity-50 disabled:pointer-events-none"
+              className="w-full sm:w-auto btn-3d btn-3d-emerald h-10 px-5 text-xs font-black flex items-center justify-center gap-2 shadow-md disabled:opacity-50 disabled:pointer-events-none"
               title="تصدير جدول السندات إلى ملف Microsoft Excel"
             >
-              <FileSpreadsheet size={18} className="text-emerald-200" />
+              <FileSpreadsheet size={17} className="text-emerald-200" />
               <span>تصدير Excel</span>
             </button>
           </div>

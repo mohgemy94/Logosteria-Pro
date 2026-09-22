@@ -77,28 +77,61 @@ body {
   scrollbar-color: #94a3b8 #f1f5f9;
 }
 
-/* Mobile: Do NOT make modal headers fixed/sticky on mobile screens (exclude fullscreen preview modals) */
+/* -------------------------------------------------------------------------- */
+/* FLUID & SECURE RESPONSIVE MODAL SYSTEM (MOBILE & DESKTOP 100% RESPONSIVE)  */
+/* -------------------------------------------------------------------------- */
+@keyframes modalIn {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleUp {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-modalIn {
+  animation: modalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.18s ease-out forwards;
+}
+
+.animate-scaleUp {
+  animation: scaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Safe viewport height handling for mobile devices & virtual keyboards */
+:root {
+  --app-height: 100vh;
+}
+
+/* Touch friendly target sizes on mobile */
 @media (max-width: 640px) {
-  .fixed.inset-0:not(.print-preview-modal-root) {
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
-    align-items: flex-start !important;
-    padding-top: 1rem !important;
-    padding-bottom: 2rem !important;
-  }
-
-  .fixed.inset-0:not(.print-preview-modal-root) > div {
-    max-height: none !important;
-    overflow: visible !important;
-  }
-
-  /* Make modal headers and table thead flow naturally on mobile screens */
-  .modal-header,
-  [data-modal-header],
-  .fixed.inset-0:not(.print-preview-modal-root) thead.sticky,
-  .fixed.inset-0:not(.print-preview-modal-root) .sticky.top-0 {
-    position: static !important;
-    top: auto !important;
+  button, 
+  [role="button"],
+  select,
+  input[type="button"],
+  input[type="submit"] {
+    touch-action: manipulation;
   }
 }
 

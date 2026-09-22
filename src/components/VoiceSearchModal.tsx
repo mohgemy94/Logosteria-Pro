@@ -489,34 +489,38 @@ export default function VoiceSearchModal({
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-md animate-fadeIn print-preview-modal-root"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-md animate-fadeIn"
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-3xl shadow-2xl border border-slate-200/90 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] text-right font-sans animate-scaleUp"
+        className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200/90 w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] md:max-h-[90vh] text-right font-sans animate-modalIn"
         onClick={e => e.stopPropagation()}
         dir="rtl"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
+        {/* Mobile Handle */}
+        <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
         {/* Top Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-4 sm:p-5 flex items-center justify-between shrink-0 border-b border-indigo-950/60">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-inner transition-all duration-300 ${
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-3.5 sm:p-5 flex items-center justify-between shrink-0 border-b border-indigo-950/60">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-inner transition-all duration-300 shrink-0 ${
               isListening 
                 ? 'bg-rose-500 text-white animate-pulse shadow-rose-500/50' 
                 : 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/30'
             }`}>
               {isListening ? <Mic size={20} /> : <Sparkles size={20} />}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-base sm:text-lg text-white tracking-wide">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-extrabold text-sm sm:text-base md:text-lg text-white tracking-wide truncate">
                   البحث الصوتي الذكي
                 </h3>
-                <span className="bg-indigo-500/20 text-indigo-300 text-[10px] px-2.5 py-0.5 rounded-full border border-indigo-400/30 font-bold">
+                <span className="bg-indigo-500/20 text-indigo-300 text-[10px] px-2.5 py-0.5 rounded-full border border-indigo-400/30 font-bold shrink-0">
                   Voice Assistant
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-400 mt-0.5 truncate sm:overflow-visible sm:whitespace-normal">
                 تحدث باسم أي شاشة أو رقم أو اسم حساب للوصول الفوري
               </p>
             </div>
@@ -525,10 +529,11 @@ export default function VoiceSearchModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shrink-0"
             title="إغلاق (Esc)"
+            aria-label="إغلاق"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 

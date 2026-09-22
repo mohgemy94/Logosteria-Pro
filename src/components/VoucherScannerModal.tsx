@@ -139,27 +139,37 @@ export default function VoucherScannerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xs p-4 animate-fadeIn">
+    <div 
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-xs p-0 sm:p-4 md:p-6 animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div 
         dir="rtl"
-        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200/90 w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] md:max-h-[90vh] animate-modalIn text-right"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
-        {/* Modal Header */}
-        <div className="bg-slate-900 text-white p-4 sm:p-5 flex items-center justify-between border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-3">
+        {/* Mobile handle */}
+        <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
+        {/* Modal Header (Fixed) */}
+        <div className="bg-slate-900 text-white p-3.5 sm:p-5 flex items-center justify-between border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="w-10 h-10 rounded-xl bg-purple-600/30 border border-purple-500/40 text-purple-300 flex items-center justify-center shrink-0">
               <Scan size={22} className="animate-pulse" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base sm:text-lg font-black text-white">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm sm:text-base md:text-lg font-black text-white truncate">
                   التحقق الضوئي والمطابقة لمنع التلاعب
                 </h3>
-                <span className="text-[10px] bg-purple-900/80 text-purple-300 px-2 py-0.5 rounded font-bold border border-purple-700/50">
+                <span className="text-[10px] bg-purple-900/80 text-purple-300 px-2 py-0.5 rounded font-bold border border-purple-700/50 shrink-0">
                   Barcode & QR Scanner
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-400 mt-0.5 truncate sm:overflow-visible sm:whitespace-normal">
                 قراءة الباركود أو كود الـ QR للتحقق الفوري من أصالة ومطابقة السند المحاسبي
               </p>
             </div>
@@ -167,9 +177,10 @@ export default function VoucherScannerModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center hover:bg-slate-700 transition-colors cursor-pointer shrink-0 hover:scale-105 active:scale-95"
+            aria-label="إغلاق"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
@@ -408,16 +419,16 @@ export default function VoucherScannerModal({
           )}
         </div>
 
-        {/* Modal Footer */}
-        <div className="bg-slate-50 p-4 border-t border-slate-200 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <ShieldCheck size={16} className="text-purple-600" />
+        {/* Modal Footer (Fixed) */}
+        <div className="bg-slate-50/95 px-4 py-3 sm:px-6 sm:py-3.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2 text-xs text-slate-500 hidden sm:flex">
+            <ShieldCheck size={16} className="text-purple-600 shrink-0" />
             <span>نظام الحماية والمطابقة الرقمية لمنع التلاعب في السندات المحاسبية</span>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-800 text-white font-bold text-xs hover:bg-slate-700 transition-colors cursor-pointer"
+            className="w-full sm:w-auto px-5 py-2.5 sm:py-2 rounded-xl bg-slate-800 text-white font-bold text-xs hover:bg-slate-700 transition-all cursor-pointer hover:scale-105 active:scale-95"
           >
             إغلاق
           </button>

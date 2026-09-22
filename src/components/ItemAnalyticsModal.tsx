@@ -607,21 +607,30 @@ export default function ItemAnalyticsModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-[100] overflow-y-auto flex items-start sm:items-center justify-center p-2 sm:p-4 md:p-6">
+    <div 
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       {/* Background Overlay */}
       <div 
-        className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200" 
+        className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs" 
         onClick={onClose}
       />
       
       {/* Modal Container */}
       <div 
-        className="relative bg-white w-full max-w-6xl min-h-[50vh] rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 flex flex-col text-right animate-in fade-in zoom-in-95 duration-200 max-h-none sm:max-h-[92vh] sm:overflow-hidden my-2 sm:my-auto z-10"
+        className="relative bg-white w-full max-w-6xl rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 flex flex-col text-right animate-modalIn max-h-[92vh] sm:max-h-[88vh] md:max-h-[90vh] overflow-hidden z-10"
         onClick={e => e.stopPropagation()}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
-        {/* Modal Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-3 sm:px-6 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 border-b border-indigo-900/50 static sm:sticky sm:top-0 z-20">
-          <div className="flex items-start sm:items-center gap-2.5 sm:gap-3">
+        {/* Mobile Handle */}
+        <div className="w-12 h-1.5 bg-white/40 rounded-full mx-auto my-2 sm:hidden shrink-0 absolute top-0 left-1/2 -translate-x-1/2 z-20" />
+
+        {/* Modal Header (Fixed) */}
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-3.5 sm:px-6 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 border-b border-indigo-900/50 z-20 pt-4 sm:pt-4">
+          <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 shadow-inner shrink-0 mt-0.5 sm:mt-0">
               <BarChart3 size={20} />
             </div>
@@ -1430,8 +1439,8 @@ export default function ItemAnalyticsModal({
           )}
         </div>
 
-        {/* Modal Footer */}
-        <div className="bg-slate-100 p-3 sm:px-6 sm:py-3.5 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0 static sm:sticky sm:bottom-0 z-20">
+        {/* Modal Footer (Fixed) */}
+        <div className="bg-slate-100 p-3 sm:px-6 sm:py-3.5 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0 z-20">
           <div className="text-xs text-slate-500 flex items-center gap-1.5">
             <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
             <span className="truncate">
@@ -1442,7 +1451,7 @@ export default function ItemAnalyticsModal({
             <button
               type="button"
               onClick={() => window.print()}
-              className="flex-1 sm:flex-none px-3.5 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+              className="flex-1 sm:flex-none px-3.5 py-2 sm:py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
             >
               <Printer size={14} />
               <span className="hidden xs:inline">طباعة التقرير الشامل</span>
@@ -1451,7 +1460,7 @@ export default function ItemAnalyticsModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 sm:flex-none px-5 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-medium hover:bg-slate-900 transition-colors cursor-pointer text-center"
+              className="flex-1 sm:flex-none px-5 py-2 sm:py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-900 transition-colors cursor-pointer text-center"
             >
               إغلاق
             </button>

@@ -555,10 +555,22 @@ export default function Customers() {
 
       {/* Add Customer Modal */}
       {isAdding && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+        <div 
+          className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsAdding(false);
+          }}
+        >
+          <div 
+            className="bg-white rounded-t-3xl sm:rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] animate-modalIn text-right"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
             <div className="flex justify-between items-center p-4 border-b border-slate-100 shrink-0">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm sm:text-base">
                 <Users size={18} className="text-blue-600" /> إضافة عميل جديد
               </h3>
               <button 
@@ -570,7 +582,7 @@ export default function Customers() {
                 <X size={16} />
               </button>
             </div>
-            <div className="p-0 overflow-y-auto">
+            <div className="p-0 overflow-y-auto flex-1">
               <div className="p-4 sm:p-6">
                 <AddCustomerForm 
                   initialCode={generateCustomerCode()}
@@ -585,15 +597,27 @@ export default function Customers() {
 
       {/* Edit Customer Modal */}
       {editingCustomer && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+        <div 
+          className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setEditingCustomer(null);
+          }}
+        >
+          <div 
+            className="bg-white rounded-t-3xl sm:rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] animate-modalIn text-right"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Mobile Handle */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
             <div className="flex justify-between items-center p-4 sm:p-6 pb-4 border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
                   <Edit3 size={16} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">تعديل بيانات العميل</h3>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900">تعديل بيانات العميل</h3>
                   <p className="text-[11px] text-slate-400">تحديث معلومات الاتصال، الشروط الائتمانية، والرقم الضريبي</p>
                 </div>
               </div>
@@ -607,7 +631,7 @@ export default function Customers() {
               </button>
             </div>
 
-            <div className="p-4 sm:p-6 overflow-y-auto">
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
               <form onSubmit={handleUpdateCustomer} className="space-y-4 text-xs">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
