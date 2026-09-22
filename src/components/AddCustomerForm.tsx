@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Save } from 'lucide-react';
+import { useSystemCurrency } from '../utils/currency';
 
 interface AddCustomerFormProps {
   initialCode?: string;
@@ -18,6 +19,7 @@ interface AddCustomerFormProps {
 }
 
 export default function AddCustomerForm({ initialCode, onSave, onCancel }: AddCustomerFormProps) {
+  const { symbol: currencySymbol } = useSystemCurrency();
   const [newCustomer, setNewCustomer] = useState({ 
     code: initialCode || '',
     name: '', 
@@ -156,7 +158,7 @@ export default function AddCustomerForm({ initialCode, onSave, onCancel }: AddCu
 
         {/* Credit Limit */}
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold uppercase text-slate-500">حد الائتمان المسموح (ريال)</label>
+          <label className="text-[10px] font-bold uppercase text-slate-500">حد الائتمان المسموح ({currencySymbol})</label>
           <input 
             type="number"
             step="0.01"
@@ -188,7 +190,7 @@ export default function AddCustomerForm({ initialCode, onSave, onCancel }: AddCu
 
         {/* Opening Balance Amount */}
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold uppercase text-slate-500">الرصيد الافتتاحي السابق (ريال)</label>
+          <label className="text-[10px] font-bold uppercase text-slate-500">الرصيد الافتتاحي السابق ({currencySymbol})</label>
           <input 
             type="number"
             step="0.01"

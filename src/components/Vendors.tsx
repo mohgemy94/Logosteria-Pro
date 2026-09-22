@@ -19,8 +19,10 @@ import {
   syncPartnerRecord
 } from '../utils/partnerLedger';
 import ExportButtonGroup from './ExportButtonGroup';
+import { useSystemCurrency } from '../utils/currency';
 
 export default function Vendors() {
+  const { symbol: currencySymbol } = useSystemCurrency();
   const [vendors, setVendors] = useState<Partner[]>(() => loadVendors());
   const [isAdding, setIsAdding] = useState(false);
   const [editingVendor, setEditingVendor] = useState<Partner | null>(null);
@@ -363,7 +365,7 @@ export default function Vendors() {
               <span className="text-[11px] sm:text-xs text-rose-800 font-bold group-hover:text-rose-700 transition-colors truncate">مستحقات (علينا)</span>
             </div>
             <div className="text-base sm:text-xl lg:text-2xl font-bold font-mono text-rose-600 mt-0.5 sm:mt-1 truncate">
-              {overallStats.netPayables.toLocaleString(undefined, { minimumFractionDigits: 2 })} ريال
+              {overallStats.netPayables.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
             </div>
             <div className="text-[10px] sm:text-[11px] text-rose-600 font-medium mt-0.5 flex items-center gap-1 truncate">
               <span>{overallStats.creditorsCount} مورد دائن</span>
@@ -386,7 +388,7 @@ export default function Vendors() {
               <span className="text-[11px] sm:text-xs text-emerald-800 font-bold group-hover:text-emerald-700 transition-colors truncate">دفعات مقدمة (لنا)</span>
             </div>
             <div className="text-base sm:text-xl lg:text-2xl font-bold font-mono text-emerald-700 mt-0.5 sm:mt-1 truncate">
-              {overallStats.totalAdvances.toLocaleString(undefined, { minimumFractionDigits: 2 })} ريال
+              {overallStats.totalAdvances.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
             </div>
             <div className="text-[10px] sm:text-[11px] text-emerald-600 font-medium mt-0.5 flex items-center gap-1 truncate">
               <span>{overallStats.debtorsCount} مورد مدين</span>
@@ -409,7 +411,7 @@ export default function Vendors() {
               <span className="text-[11px] sm:text-xs text-slate-500 font-bold group-hover:text-indigo-600 transition-colors truncate">إجمالي التوريدات</span>
             </div>
             <div className="text-base sm:text-xl lg:text-2xl font-bold font-mono text-slate-800 mt-0.5 sm:mt-1 truncate">
-              {overallStats.totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 })} ريال
+              {overallStats.totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
             </div>
             <div className="text-[10px] sm:text-[11px] text-indigo-600 font-medium mt-0.5 flex items-center gap-1 truncate">
               <span>تحليل كبار الموردين</span>
@@ -717,7 +719,7 @@ export default function Vendors() {
                 </div>
 
                 <div className="pt-2">
-                  <label className="block text-slate-600 font-bold mb-1">الرصيد الافتتاحي السابق (ريال):</label>
+                  <label className="block text-slate-600 font-bold mb-1">الرصيد الافتتاحي السابق ({currencySymbol}):</label>
                   <input
                     type="number"
                     step="0.01"
@@ -883,7 +885,7 @@ export default function Vendors() {
                       ? 'text-emerald-700'
                       : 'text-slate-600'
                   }`}>
-                    {statement.balanceFormatted} ريال
+                    {statement.balanceFormatted} {currencySymbol}
                   </div>
                   <div className="text-[10px] text-slate-400">
                     {statement.balanceType === 'CREDIT' ? 'مستحق له (علينا)' : statement.balanceType === 'DEBIT' ? 'دفعة مقدمة (لنا)' : 'حساب متوازن'}
@@ -893,7 +895,7 @@ export default function Vendors() {
                 <div className="text-left border-r border-slate-200 pr-2">
                   <div className="text-[11px] text-slate-500 font-bold">سقف الائتمان والشروط</div>
                   <div className="text-xs font-mono font-bold text-slate-700 mt-0.5">
-                    {v.creditLimit ? `${v.creditLimit.toLocaleString()} ريال` : 'مفتوح'}
+                    {v.creditLimit ? `${v.creditLimit.toLocaleString()} ${currencySymbol}` : 'مفتوح'}
                   </div>
                   <div className="text-[10px] text-slate-500">
                     {v.paymentTermsDays ? `سداد ${v.paymentTermsDays} يوم • ` : ''}
@@ -1072,7 +1074,7 @@ export default function Vendors() {
                       <div className="flex flex-col items-center">
                         {v.creditLimit ? (
                           <span className="font-mono font-bold text-xs text-slate-700">
-                            {v.creditLimit.toLocaleString()} ريال
+                            {v.creditLimit.toLocaleString()} {currencySymbol}
                           </span>
                         ) : (
                           <span className="text-slate-400 text-[11px]">مفتوح</span>
@@ -1102,7 +1104,7 @@ export default function Vendors() {
                             ? 'text-emerald-700' 
                             : 'text-slate-500'
                         }`}>
-                          {statement.balanceFormatted} ريال
+                          {statement.balanceFormatted} {currencySymbol}
                         </span>
                         <div className="flex items-center gap-1 mt-0.5">
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${

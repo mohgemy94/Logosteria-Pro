@@ -6,7 +6,9 @@ import {
   AlertTriangle, 
   Printer, 
   ShieldCheck, 
-  Barcode
+  Barcode,
+  Camera,
+  CameraOff
 } from 'lucide-react';
 import { 
   verifyScannedVoucher, 
@@ -14,6 +16,7 @@ import {
 } from '../utils/voucherBarcode';
 import { BarcodeImage } from './VoucherBarcodeView';
 import type { PrintPreviewData } from './PrintPreviewModal';
+import { useSystemCurrency } from '../utils/currency';
 
 interface VoucherScannerModalProps {
   isOpen: boolean;
@@ -26,20 +29,62 @@ export default function VoucherScannerModal({
   onClose,
   onSelectVoucherForPrint
 }: VoucherScannerModalProps) {
+  const { symbol: currencySymbol } = useSystemCurrency();
   const [inputValue, setInputValue] = useState<string>('');
   const [result, setResult] = useState<ScannedVerificationResult | null>(null);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Stop camera helper
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  // Start phone camera
+  const startCamera = async () => {
+    setCameraError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } }
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setIsCameraActive(true);
+    } catch (err: any) {
+      console.error('Camera access error:', err);
+      setCameraError(
+        err.name === 'NotAllowedError'
+          ? 'تم رفض إذن الكاميرا. يرجى السماح بالوصول للكاميرا من إعدادات المتصفح/الهاتف.'
+          : 'تعذر تشغيل الكاميرا على هذا الجهاز.'
+      );
+    }
+  };
 
   // Auto-focus the input field when opened so physical barcode guns can immediately write to it
   useEffect(() => {
     if (isOpen) {
       setResult(null);
       setInputValue('');
+      setCameraError(null);
       setTimeout(() => {
         inputRef.current?.focus();
       }, 100);
+    } else {
+      stopCamera();
     }
+    return () => {
+      stopCamera();
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -155,6 +200,28 @@ export default function VoucherScannerModal({
                 <Scan size={18} className="absolute right-3 top-3.5 text-slate-400" />
               </div>
               <button
+                type="button"
+                onClick={isCameraActive ? stopCamera : startCamera}
+                className={`px-4 py-3 text-xs sm:text-sm font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                  isCameraActive 
+                    ? 'bg-rose-50 text-rose-700 border-2 border-rose-300 hover:bg-rose-100' 
+                    : 'bg-indigo-50 text-indigo-700 border-2 border-indigo-200 hover:bg-indigo-100'
+                }`}
+                title={isCameraActive ? 'إيقاف الكاميرا' : 'تشغيل كاميرا الهاتف'}
+              >
+                {isCameraActive ? (
+                  <>
+                    <CameraOff size={16} />
+                    <span>إيقاف</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera size={16} />
+                    <span>الكاميرا</span>
+                  </>
+                )}
+              </button>
+              <button
                 type="submit"
                 disabled={isVerifying || !inputValue.trim()}
                 className="btn-3d btn-3d-purple px-5 py-3 text-xs sm:text-sm font-black disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
@@ -163,6 +230,31 @@ export default function VoucherScannerModal({
               </button>
             </div>
           </form>
+
+          {/* Camera Viewport (When Active) */}
+          {isCameraActive && (
+            <div className="bg-slate-950 rounded-2xl overflow-hidden border-2 border-indigo-500 relative flex flex-col items-center justify-center p-3 animate-in zoom-in-95">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full max-h-56 object-cover rounded-xl shadow-lg"
+              />
+              <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 h-1 bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse pointer-events-none" />
+              <div className="mt-2 text-center">
+                <span className="text-[11px] text-indigo-200 font-semibold bg-indigo-950/80 px-3 py-1 rounded-full border border-indigo-700/50">
+                  وجه الكاميرا نحو باركود أو QR السند لقراءته فورياً
+                </span>
+              </div>
+            </div>
+          )}
+
+          {cameraError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
+              {cameraError}
+            </div>
+          )}
 
           {/* Quick Examples */}
           <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
@@ -223,7 +315,7 @@ export default function VoucherScannerModal({
                     <div className="bg-white p-2.5 rounded-xl border border-emerald-200">
                       <span className="text-slate-500 block text-[10px]">المبلغ المعتمد:</span>
                       <span className="font-mono font-black text-emerald-700 text-base block mt-0.5">
-                        {result.voucher.amount.toLocaleString()} ريال
+                        {result.voucher.amount.toLocaleString()} {currencySymbol}
                       </span>
                       <span className="text-[10px] text-slate-500">
                         {result.voucher.status === 'POSTED' ? 'مرحل بالحسابات' : 'مسودة غير مرحلة'}

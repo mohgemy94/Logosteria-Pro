@@ -100,7 +100,7 @@ function loadStoredInternalPayments(): StoredInternalPaymentVoucher[] {
 }
 
 export default function InternalPaymentVoucher() {
-  const { fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
+  const { symbol: currencySymbol, fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
   const [savedVouchers, setSavedVouchers] = useState<StoredInternalPaymentVoucher[]>(() => loadStoredInternalPayments());
   const [showHistory, setShowHistory] = useState(false);
   const [editingVoucherId, setEditingVoucherId] = useState<string | null>(null);
@@ -508,7 +508,7 @@ export default function InternalPaymentVoucher() {
     setVoucherStatus(targetStatus);
 
     if (isPost) {
-      alert(`✅ تم ترحيل سند الصرف الداخلي رقم (${finalNumber}) بنجاح في الحسابات!\n\nتم خصم وقيد المبلغ (${numAmount.toLocaleString()} ريال) من حساب (${fromAccName}) ودفتر الأستاذ العام وميزان المراجعة.`);
+      alert(`✅ تم ترحيل سند الصرف الداخلي رقم (${finalNumber}) بنجاح في الحسابات!\n\nتم خصم وقيد المبلغ (${numAmount.toLocaleString()} ${currencySymbol}) من حساب (${fromAccName}) ودفتر الأستاذ العام وميزان المراجعة.`);
     } else {
       alert(`📝 تم حفظ سند الصرف الداخلي رقم (${finalNumber}) كمسودة (غير مرحل) بنجاح!\n\nلم يتم إثبات أي أثر في دفتر الأستاذ حتى تضغط على زر [ترحيل السند في الحسابات].`);
     }
@@ -952,7 +952,7 @@ export default function InternalPaymentVoucher() {
                       <td className="py-2 text-slate-500">
                         {PAYMENT_EXPENSE_TYPES.find(s => s.id === v.expenseType)?.label || v.expenseType}
                       </td>
-                      <td className="py-2 font-mono font-bold text-rose-700">{v.amount.toLocaleString()} ريال</td>
+                      <td className="py-2 font-mono font-bold text-rose-700">{v.amount.toLocaleString()} {currencySymbol}</td>
                       <td className="py-2 text-slate-500">{v.date}</td>
                       <td className="py-2 text-slate-500 truncate max-w-xs">{v.description}</td>
                       <td className="py-2 text-center">
@@ -1290,7 +1290,7 @@ export default function InternalPaymentVoucher() {
                   required
                   className="w-full px-3 py-2 text-base font-mono font-bold rounded-lg border border-rose-300 bg-rose-50/30 text-rose-800 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none pl-12"
                 />
-                <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">ريال</span>
+                <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">{currencySymbol}</span>
               </div>
               {/* Tafqeet in Words */}
               <div className="mt-1.5 p-2 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center gap-1.5 text-xs text-slate-600">

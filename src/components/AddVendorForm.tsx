@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Save } from 'lucide-react';
+import { useSystemCurrency } from '../utils/currency';
 
 interface AddVendorFormProps {
   initialCode?: string;
@@ -18,6 +19,7 @@ interface AddVendorFormProps {
 }
 
 export default function AddVendorForm({ initialCode, onSave, onCancel }: AddVendorFormProps) {
+  const { symbol: currencySymbol } = useSystemCurrency();
   const [newVendor, setNewVendor] = useState({ 
     code: initialCode || '',
     name: '', 
@@ -150,7 +152,7 @@ export default function AddVendorForm({ initialCode, onSave, onCancel }: AddVend
 
         {/* Credit Limit (سقف الالتزام أو الائتمان الممنوح) */}
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold uppercase text-slate-500">سقف الائتمان الممنوح (ريال)</label>
+          <label className="text-[10px] font-bold uppercase text-slate-500">سقف الائتمان الممنوح ({currencySymbol})</label>
           <input 
             type="number"
             step="0.01"
@@ -183,7 +185,7 @@ export default function AddVendorForm({ initialCode, onSave, onCancel }: AddVend
 
         {/* Opening Balance Amount */}
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold uppercase text-slate-500">الرصيد الافتتاحي السابق (ريال)</label>
+          <label className="text-[10px] font-bold uppercase text-slate-500">الرصيد الافتتاحي السابق ({currencySymbol})</label>
           <input 
             type="number"
             step="0.01"

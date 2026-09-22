@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas-pro';
 import { getSystemSettings } from './settings';
+import { saveOrShareBlob } from './fileSaver';
 
 export interface ExportColumnDef {
   header: string;
@@ -418,16 +419,10 @@ async function captureAndSavePdf(element: HTMLElement, filename: string, orienta
     heightLeft -= (pageHeight - 16);
   }
 
-  pdf.save(filename);
+  const pdfBlob = pdf.output('blob');
+  await saveOrShareBlob(pdfBlob, filename, 'application/pdf');
 }
 
-function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+async function downloadBlob(blob: Blob, filename: string): Promise<void> {
+  await saveOrShareBlob(blob, filename);
 }

@@ -24,6 +24,7 @@ import { exportElementToPdf } from '../utils/pdfExport';
 import { loadChartOfAccounts, saveChartOfAccounts } from '../utils/trialBalanceStore';
 import { AccountType, BalanceType } from '../types/accounting';
 import ExportButtonGroup from './ExportButtonGroup';
+import { useSystemCurrency } from '../utils/currency';
 
 export interface AccountTreeNode {
   id: string;
@@ -59,7 +60,8 @@ function TreeNodeItem({
   toggleExpand,
   onInspectRollup,
   onAddChild,
-  onEditNode
+  onEditNode,
+  currencySymbol = 'ر.س'
 }: {
   node: AccountTreeNode;
   searchTerm: string;
@@ -68,6 +70,7 @@ function TreeNodeItem({
   onInspectRollup: (code: string) => void;
   onAddChild: (node: AccountTreeNode) => void;
   onEditNode: (node: AccountTreeNode) => void;
+  currencySymbol?: string;
 }) {
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expandedIds.has(node.id);
@@ -226,7 +229,7 @@ function TreeNodeItem({
             <span className="text-[10px] text-slate-400 block font-sans">الرصيد الصافي</span>
             <span className={`font-extrabold text-sm ${getBalanceColor(node.balance, node.type)}`}>
               {formatCurrency(node.balance)}
-              <span className="text-[10px] text-slate-400 font-sans mr-1">ر.س</span>
+              <span className="text-[10px] text-slate-400 font-sans mr-1">{currencySymbol}</span>
             </span>
           </div>
 
@@ -279,8 +282,9 @@ function TreeNodeItem({
                 expandedIds={expandedIds}
                 toggleExpand={toggleExpand}
                 onInspectRollup={onInspectRollup}
-            onAddChild={onAddChild}
-            onEditNode={onEditNode}
+                onAddChild={onAddChild}
+                onEditNode={onEditNode}
+                currencySymbol={currencySymbol}
               />
             ))}
           </div>
@@ -291,6 +295,7 @@ function TreeNodeItem({
 }
 
 export default function ChartOfAccountsTree() {
+  const { symbol: currencySymbol } = useSystemCurrency();
   const [treeData, setTreeData] = useState<AccountTreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -773,25 +778,25 @@ export default function ChartOfAccountsTree() {
           <div className="bg-white/5 border border-white/10 rounded-xl p-3">
             <span className="text-xs text-slate-400 block font-medium">إجمالي الأصول (L1: 1)</span>
             <span className="text-lg font-bold font-mono text-blue-400">
-              {new Intl.NumberFormat('ar-SA').format(totalAssets)} <span className="text-xs font-sans text-slate-400">ر.س</span>
+              {new Intl.NumberFormat('ar-SA').format(totalAssets)} <span className="text-xs font-sans text-slate-400">{currencySymbol}</span>
             </span>
           </div>
           <div className="bg-white/5 border border-white/10 rounded-xl p-3">
             <span className="text-xs text-slate-400 block font-medium">إجمالي الخصوم (L1: 2)</span>
             <span className="text-lg font-bold font-mono text-purple-400">
-              {new Intl.NumberFormat('ar-SA').format(totalLiabilities)} <span className="text-xs font-sans text-slate-400">ر.س</span>
+              {new Intl.NumberFormat('ar-SA').format(totalLiabilities)} <span className="text-xs font-sans text-slate-400">{currencySymbol}</span>
             </span>
           </div>
           <div className="bg-white/5 border border-white/10 rounded-xl p-3">
             <span className="text-xs text-slate-400 block font-medium">إجمالي الإيرادات (L1: 4)</span>
             <span className="text-lg font-bold font-mono text-emerald-400">
-              {new Intl.NumberFormat('ar-SA').format(totalRevenue)} <span className="text-xs font-sans text-slate-400">ر.س</span>
+              {new Intl.NumberFormat('ar-SA').format(totalRevenue)} <span className="text-xs font-sans text-slate-400">{currencySymbol}</span>
             </span>
           </div>
           <div className="bg-white/5 border border-white/10 rounded-xl p-3">
             <span className="text-xs text-slate-400 block font-medium">إجمالي المصروفات (L1: 5)</span>
             <span className="text-lg font-bold font-mono text-rose-400">
-              {new Intl.NumberFormat('ar-SA').format(totalExpenses)} <span className="text-xs font-sans text-slate-400">ر.س</span>
+              {new Intl.NumberFormat('ar-SA').format(totalExpenses)} <span className="text-xs font-sans text-slate-400">{currencySymbol}</span>
             </span>
           </div>
         </div>
@@ -955,6 +960,7 @@ export default function ChartOfAccountsTree() {
                 onInspectRollup={handleInspectRollup}
                 onAddChild={handleOpenAdd}
                 onEditNode={handleOpenEdit}
+                currencySymbol={currencySymbol}
               />
             ))}
           </div>

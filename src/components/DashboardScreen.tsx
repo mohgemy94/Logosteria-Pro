@@ -37,7 +37,7 @@ import DashboardAlertsCenter from './DashboardAlertsCenter';
 import ItemAnalyticsModal from './ItemAnalyticsModal';
 import { SystemSettings } from '../types/accounting';
 import { useSystemCurrency } from '../utils/currency';
-import { calculateTrialBalance } from '../utils/trialBalanceStore';
+import { calculateTrialBalance, computeDashboardKPIsLocally } from '../utils/trialBalanceStore';
 import { loadBankChecks, getCheckStats } from '../utils/checkStore';
 import { 
   DB_SALES_INVOICES_KEY, 
@@ -144,32 +144,34 @@ export default function DashboardScreen({ onNavigate, systemSettings }: Dashboar
   useEffect(() => {
     const fetchKPIs = async () => {
       setIsLoadingKPIs(true);
+      let totals = null;
+
       try {
-        let res = null;
-        try {
-          res = await fetch('/api/dashboard/kpis?year=' + selectedYear, { headers: { 'Accept': 'application/json' } });
-        } catch (err) {
-          console.warn("First fetch failed, retrying in 1s...");
-          await new Promise(r => setTimeout(r, 1000));
-          res = await fetch('/api/dashboard/kpis?year=' + selectedYear, { headers: { 'Accept': 'application/json' } });
+        const res = await fetch('/api/dashboard/kpis?year=' + selectedYear, { headers: { 'Accept': 'application/json' } });
+        if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+          const json = await res.json();
+          if (json && json.success && json.data) {
+            totals = {
+              sales: json.data.totalSales ?? json.data.sales ?? 0,
+              expenses: json.data.totalExpenses ?? json.data.expenses ?? 0,
+              netProfit: json.data.netProfit ?? 0,
+              inventoryValuation: json.data.inventoryValuation ?? 0,
+              cashAndBank: json.data.cashAndBank ?? 0,
+              accountsReceivable: json.data.accountsReceivable ?? 0,
+              accountsPayable: json.data.accountsPayable ?? 0
+            };
+          }
         }
-        const json = await res.json();
-        if (json.success && json.data) {
-          setFinancialTotals({
-            sales: json.data.totalSales,
-            expenses: json.data.totalExpenses,
-            netProfit: json.data.netProfit,
-            inventoryValuation: json.data.inventoryValuation,
-            cashAndBank: json.data.cashAndBank,
-            accountsReceivable: json.data.accountsReceivable,
-            accountsPayable: json.data.accountsPayable
-          });
-        }
-      } catch (e) {
-        console.error('Failed to fetch dashboard KPIs', e); alert('Failed to fetch dashboard KPIs: ' + (e instanceof Error ? e.message : String(e)));
-      } finally {
-        setIsLoadingKPIs(false);
+      } catch {
+        // Fetch endpoint not active or not returning JSON; fall back silently to local calculation
       }
+
+      if (!totals) {
+        totals = computeDashboardKPIsLocally(selectedYear);
+      }
+
+      setFinancialTotals(totals);
+      setIsLoadingKPIs(false);
     };
     fetchKPIs();
   }, [selectedYear, dataVersion]);

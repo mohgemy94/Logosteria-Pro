@@ -8,6 +8,7 @@ import {
 } from './sequences';
 import { getSystemSettings } from './settings';
 import { exportElementToPdf, printElementDirectly } from './pdfExport';
+import { saveOrShareBlob } from './fileSaver';
 
 export type VoucherUnifiedCategory = 
   | 'EXTERNAL_RECEIPT' 
@@ -512,15 +513,8 @@ export function exportVouchersToXLSX(
   const dateSlug = new Date().toISOString().split('T')[0];
   const filename = `كشف_السندات_المالية_${dateSlug}.xlsx`;
 
-  // Trigger Download
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  // Trigger Download or Mobile Share
+  saveOrShareBlob(blob, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 }
 
 /**
@@ -598,14 +592,7 @@ export function exportVouchersToCSV(
   const dateSlug = new Date().toISOString().split('T')[0];
   const filename = `كشف_السندات_المالية_${dateSlug}.csv`;
 
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
-  link.setAttribute('download', filename);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  saveOrShareBlob(blob, filename, 'text/csv;charset=utf-8');
 }
 
 /**

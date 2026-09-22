@@ -100,7 +100,7 @@ function loadStoredInternalReceipts(): StoredInternalReceiptVoucher[] {
 }
 
 export default function InternalReceiptVoucher() {
-  const { fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
+  const { symbol: currencySymbol, fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
   const [savedVouchers, setSavedVouchers] = useState<StoredInternalReceiptVoucher[]>(() => loadStoredInternalReceipts());
   const [showHistory, setShowHistory] = useState(false);
   const [editingVoucherId, setEditingVoucherId] = useState<string | null>(null);
@@ -509,7 +509,7 @@ export default function InternalReceiptVoucher() {
     setVoucherStatus(targetStatus);
 
     if (isPost) {
-      alert(`✅ تم ترحيل سند القبض الداخلي رقم (${finalNumber}) بنجاح في الحسابات!\n\nتم قيد وتأثير المبلغ (${numAmount.toLocaleString()} ريال) في حساب (${toAccName}) ودفتر الأستاذ العام وميزان المراجعة.`);
+      alert(`✅ تم ترحيل سند القبض الداخلي رقم (${finalNumber}) بنجاح في الحسابات!\n\nتم قيد وتأثير المبلغ (${numAmount.toLocaleString()} ${currencySymbol}) في حساب (${toAccName}) ودفتر الأستاذ العام وميزان المراجعة.`);
     } else {
       alert(`📝 تم حفظ سند القبض الداخلي رقم (${finalNumber}) كمسودة (غير مرحل) بنجاح!\n\nلم يتم إثبات أي أثر في دفتر الأستاذ حتى تضغط على زر [ترحيل السند في الحسابات].`);
     }
@@ -953,7 +953,7 @@ export default function InternalReceiptVoucher() {
                       <td className="py-2 text-slate-500">
                         {RECEIPT_SOURCE_TYPES.find(s => s.id === v.sourceType)?.label || v.sourceType}
                       </td>
-                      <td className="py-2 font-mono font-bold text-emerald-700">{v.amount.toLocaleString()} ريال</td>
+                      <td className="py-2 font-mono font-bold text-emerald-700">{v.amount.toLocaleString()} {currencySymbol}</td>
                       <td className="py-2 text-slate-500">{v.date}</td>
                       <td className="py-2 text-slate-500 truncate max-w-xs">{v.description}</td>
                       <td className="py-2 text-center">
@@ -1292,7 +1292,7 @@ export default function InternalReceiptVoucher() {
                   required
                   className="w-full px-3 py-2 text-base font-mono font-bold rounded-lg border border-emerald-300 bg-emerald-50/30 text-emerald-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none pl-12"
                 />
-                <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">ريال</span>
+                <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">{currencySymbol}</span>
               </div>
               {/* Tafqeet in Words */}
               <div className="mt-1.5 p-2 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center gap-1.5 text-xs text-slate-600">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Landmark, Plus, Trash2, Check } from 'lucide-react';
+import { Plus, Trash2, Check, Coins } from 'lucide-react';
 import { CurrencySetting } from '../types/accounting';
 
 interface CurrencySettingsPanelProps {
@@ -91,20 +91,36 @@ export default function CurrencySettingsPanel({
 
   return (
     <div className="space-y-6" dir="rtl">
-      {/* Overview Info Banner */}
-      <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl p-4 flex items-start gap-3">
-        <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-          <Landmark size={18} />
+      {/* Overview Info Banner & Quick Base Currency Switcher */}
+      <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-start gap-3 flex-1">
+          <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <Coins size={20} />
+          </div>
+          <div className="text-xs text-indigo-900 leading-relaxed">
+            <p className="font-bold text-sm text-indigo-950 mb-0.5">
+              إدارة العملة الرسمية للنظام وأسعار الصرف (System Base Currency)
+            </p>
+            <p className="text-slate-600">
+              العملة المختارة هنا كـ <strong className="text-indigo-800 font-bold">عملة أساسية</strong> يتم تطبيقها تلقائياً وفورياً على جميع شاشات النظام، التقارير المالية، شجرة الحسابات، السندات، الفواتير، ونقاط البيع.
+            </p>
+          </div>
         </div>
-        <div className="flex-1 text-xs text-indigo-900 leading-relaxed">
-          <p className="font-bold text-sm text-indigo-950 mb-0.5">
-            إدارة العملات المتعددة وأسعار الصرف (Multi-Currency Support)
-          </p>
-          <p className="text-slate-600">
-            تتيح لك هذه اللوحة تفعيل إصدار الفواتير وسندات القبض والصرف بعملات متعددة، مع تحديد سعر الصرف اليومي مقابل العملة الأساسية للمنشأة (
-            <span className="font-bold text-indigo-700">{baseCurrency}</span>
-            ). يتم تقييم القيود المالية تلقائياً بالعملة الأساسية.
-          </p>
+
+        {/* Quick Base Currency Selector Dropdown */}
+        <div className="bg-white/90 backdrop-blur-xs p-2.5 rounded-xl border border-indigo-200 shrink-0 flex items-center gap-2.5 shadow-xs w-full md:w-auto">
+          <span className="text-xs font-bold text-indigo-950 whitespace-nowrap">العملة الأساسية للنظام:</span>
+          <select
+            value={baseCurrency}
+            onChange={e => handleSetAsBase(e.target.value)}
+            className="px-3 py-1.5 bg-indigo-50/70 border border-indigo-300 rounded-lg text-xs font-bold text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans cursor-pointer"
+          >
+            {currencies.map(c => (
+              <option key={c.code} value={c.code}>
+                {c.nameAr} ({c.symbol}) - {c.code}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

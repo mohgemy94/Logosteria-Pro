@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, type KeyboardEvent, type ChangeEv
 import { Package, Tag, Check, Layers } from 'lucide-react';
 import { Item } from './Items';
 import { searchItems, loadStoredItems } from '../utils/itemsStore';
+import { useSystemCurrency } from '../utils/currency';
 
 interface ItemAutocompleteProps {
   value: string;
@@ -25,6 +26,7 @@ export default function ItemAutocomplete({
   className = '',
   itemsList
 }: ItemAutocompleteProps) {
+  const { symbol: currencySymbol } = useSystemCurrency();
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [cachedItems, setCachedItems] = useState<Item[]>(() => (itemsList && itemsList.length > 0 ? itemsList : loadStoredItems()));
@@ -212,7 +214,7 @@ export default function ItemAutocomplete({
                         )}
                         {item.costPrice !== undefined && (
                           <span className="bg-amber-50 text-amber-800 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-mono font-medium" title="متوسط سعر التكلفة (م.س.ت)">
-                            م.س.ت: {item.costPrice.toLocaleString()} ر.س
+                            م.س.ت: {item.costPrice.toLocaleString()} {currencySymbol}
                           </span>
                         )}
                       </div>
@@ -220,7 +222,7 @@ export default function ItemAutocomplete({
 
                     <div className="text-left shrink-0 pl-1">
                       <div className="text-xs font-bold font-mono text-blue-700">
-                        {displayPrice.toLocaleString()} <span className="text-[10px] font-normal text-slate-500">ر.س</span>
+                        {displayPrice.toLocaleString()} <span className="text-[10px] font-normal text-slate-500">{currencySymbol}</span>
                       </div>
                       <div className="text-[9px] text-slate-400">
                         {mode === 'SALES' ? 'سعر البيع' : 'سعر الشراء'}

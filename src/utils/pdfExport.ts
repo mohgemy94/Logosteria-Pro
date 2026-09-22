@@ -8,6 +8,7 @@ import {
   applyPrintPageStyle,
   getSavedPrintColorMode
 } from './printPaperFormats';
+import { saveOrShareBlob, type SaveResult } from './fileSaver';
 
 export interface PdfExportOptions {
   filename?: string;
@@ -177,7 +178,7 @@ export function printElementDirectly(
 export async function exportElementToPdf(
   element?: HTMLElement | null,
   options: PdfExportOptions = {}
-): Promise<void> {
+): Promise<SaveResult> {
   const {
     filename = 'invoice.pdf',
     format = 'A4',
@@ -340,7 +341,8 @@ export async function exportElementToPdf(
     });
 
     pdf.addImage(imgData, 'PNG', 0, 0, widthMm, isContinuous ? pageHeightMm : calculatedHeightMm, undefined, 'SLOW');
-    pdf.save(safeFilename);
+    const pdfBlob = pdf.output('blob');
+    return await saveOrShareBlob(pdfBlob, safeFilename, 'application/pdf');
   } else {
     // Multi-page document (e.g. multi-page invoice or long statement of account)
     const pageHeightMm = def.heightMm ?? 297;
@@ -366,7 +368,18 @@ export async function exportElementToPdf(
       heightLeftMm -= pageHeightMm;
     }
 
-    pdf.save(safeFilename);
+    const pdfBlob = pdf.output('blob');
+    return await saveOrShareBlob(pdfBlob, safeFilename, 'application/pdf');
   }
 }
+
+/**
+ * Universal helper to save or share any jsPDF instance across Desktop, Mobile, and PWA
+ */
+export async function saveOrSharePdf(pdf: jsPDF, filename: string): Promise<SaveResult> {
+  const safeFilename = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
+  const pdfBlob = pdf.output('blob');
+  return await saveOrShareBlob(pdfBlob, safeFilename, 'application/pdf');
+}
+
 

@@ -16,8 +16,10 @@ import {
   RotateCcw,
   Download,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  Monitor
 } from 'lucide-react';
+import MobilePermissionsModal from './MobilePermissionsModal';
 import { SystemSettings, CurrencySetting, UserPermission, CreditAndStockControlSettings, BrandingSettings } from '../types/accounting';
 import { getSystemSettings, saveSystemSettings, DEFAULT_SETTINGS } from '../utils/settings';
 import { getSequences, type SequencesStore } from '../utils/sequences';
@@ -52,7 +54,8 @@ type SettingsPortal =
   | 'backup_cloud' 
   | 'users_permissions' 
   | 'master_data_engine' 
-  | 'approvals_and_reset';
+  | 'approvals_and_reset'
+  | 'mobile_permissions';
 
 interface SettingsProps {
   onNavigateToDashboard?: () => void;
@@ -352,6 +355,18 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
         { label: 'حد الاعتماد:', value: `${(settings.approvalWorkflow?.minAmountThreshold || 5000).toLocaleString()} ر.س` },
         { label: 'ضبط المصنع:', value: 'حماية وتأكيد أمني' },
       ]
+    },
+    {
+      id: 'mobile_permissions' as SettingsPortal,
+      title: 'أذونات سطح المكتب والموبايل (Desktop & Mobile)',
+      description: 'إدارة وتفعيل أذونات سطح المكتب (المجلد الصامت، الميكروفون، التخزين الدائم، الطباعة المباشرة) وأذونات الموبايل (الكاميرا، البلوتوث، الموقع).',
+      icon: Monitor,
+      color: 'indigo',
+      highlights: [
+        { label: 'سطح المكتب:', value: 'مجلد صامت وبحث صوتي' },
+        { label: 'الموبايل:', value: 'كاميرا وبلوتوث وموقع' },
+        { label: 'التخزين والطباعة:', value: 'دائم ونوافذ منبثقة' },
+      ]
     }
   ];
 
@@ -524,6 +539,14 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
             <Users size={14} />
             إدارة الصلاحيات
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveSection('mobile_permissions')}
+            className="btn-3d btn-3d-blue px-3.5 py-2 text-xs font-bold flex items-center gap-1.5"
+          >
+            <Monitor size={14} />
+            أذونات سطح المكتب والموبايل
+          </button>
         </div>
       </div>
 
@@ -543,6 +566,7 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
                   {activeSection === 'users_permissions' && <Users size={20} />}
                   {activeSection === 'master_data_engine' && <HardDrive size={20} />}
                   {activeSection === 'approvals_and_reset' && <ShieldCheck size={20} />}
+                  {activeSection === 'mobile_permissions' && <Monitor size={20} />}
                 </div>
                 <div>
                   <h3 className="text-base sm:text-lg font-bold text-slate-900">
@@ -554,6 +578,7 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
                     {activeSection === 'users_permissions' && 'إدارة المستخدمين ومصفوفة الصلاحيات (RBAC)'}
                     {activeSection === 'master_data_engine' && 'الجداول التعريفية ومحرك الحسابات المالي'}
                     {activeSection === 'approvals_and_reset' && 'الرقابة الإدارية ودورة الاعتماد والتصفير الآمن'}
+                    {activeSection === 'mobile_permissions' && 'أذونات وإعدادات سطح المكتب وتطبيق الموبايل (Desktop & Mobile)'}
                   </h3>
                   <p className="text-[11px] text-slate-500 mt-0.5">
                     قم بإجراء التعديلات المطلوبة ثم اضغط على حفظ الإعدادات لتطبيقها في كامل النظام.
@@ -864,6 +889,11 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* 9. ANDROID & MOBILE PERMISSIONS (THE 5 KEY PERMISSIONS) */}
+              {activeSection === 'mobile_permissions' && (
+                <MobilePermissionsModal />
               )}
             </div>
 

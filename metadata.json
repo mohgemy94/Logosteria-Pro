@@ -1,6 +1,6 @@
 {
   "name": "لوجوستريا - النظام المحاسبي المتكامل",
   "description": "برنامج لوجوستريا المحاسبي المتكامل بنظام القيد المزدوج، البحث والتحكم الصوتي الذكي للوصول السريع إلى شاشات النظام وشجرة الحسابات، تقارير أعمار الديون المتقدمة (Aging Reports)، خطابات مصادقة الأرصدة الدورية للعملاء والموردين، تصدير كشوفات السندات والعمليات إلى Excel (.xlsx) المتوافق مع Google Sheets و CSV و PDF، وتوليد باركود ورمز استجابة سريعة (QR Code).",
-  "requestFramePermissions": ["microphone"],
+  "requestFramePermissions": ["microphone", "camera", "geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

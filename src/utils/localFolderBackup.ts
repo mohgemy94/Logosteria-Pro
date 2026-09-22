@@ -4,6 +4,8 @@
  * with IndexedDB persistence for seamless background auto-saving to a user-selected local folder.
  */
 
+import { saveOrShareBlob } from './fileSaver';
+
 export interface AutoSaveConfig {
   enabled: boolean;
   intervalMinutes: number; // e.g. 1, 3, 5, 10, 15, 30
@@ -559,17 +561,11 @@ export function downloadBackupDirectly(): void {
   const backup = collectSystemBackupData();
   const jsonStr = JSON.stringify(backup, null, 2);
   const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
   const now = new Date();
   const dateStr = now.toISOString().split('T')[0];
   const timeStr = `${now.getHours().toString().padStart(2, '0')}-${now.getMinutes().toString().padStart(2, '0')}`;
-  a.href = url;
-  a.download = `logustria_full_backup_${dateStr}_${timeStr}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const filename = `logustria_full_backup_${dateStr}_${timeStr}.json`;
+  saveOrShareBlob(blob, filename, 'application/json');
 }
 
 /**

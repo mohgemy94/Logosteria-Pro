@@ -17,6 +17,7 @@ import {
   PendingApprovalItem 
 } from '../utils/voucherApproval';
 import { SystemSettings } from '../types/accounting';
+import { useSystemCurrency } from '../utils/currency';
 
 export interface VouchersApprovalCenterModalProps {
   isOpen: boolean;
@@ -33,6 +34,7 @@ export default function VouchersApprovalCenterModal({
   onOpenSettings,
   onSelectVoucher
 }: VouchersApprovalCenterModalProps) {
+  const { symbol: currencySymbol } = useSystemCurrency();
   const [settings] = useState<SystemSettings>(() => systemSettings || getSystemSettings());
   const workflow = settings.approvalWorkflow;
   const [pendingItems, setPendingItems] = useState<PendingApprovalItem[]>([]);
@@ -327,7 +329,7 @@ export default function VouchersApprovalCenterModal({
                   <div className="text-left md:text-right">
                     <span className="text-[10px] text-slate-400 block">مبلغ السند</span>
                     <span className="text-base font-black text-emerald-700 font-mono">
-                      {item.amount.toLocaleString()} <span className="text-xs">ر.س</span>
+                      {item.amount.toLocaleString()} <span className="text-xs">{currencySymbol}</span>
                     </span>
                   </div>
 
@@ -431,7 +433,7 @@ export default function VouchersApprovalCenterModal({
                 </div>
                 <div className="flex justify-between font-bold">
                   <span>المبلغ:</span>
-                  <span className="font-mono text-emerald-700 font-black">{activeItem.amount.toLocaleString()} ر.س</span>
+                  <span className="font-mono text-emerald-700 font-black">{activeItem.amount.toLocaleString()} {currencySymbol}</span>
                 </div>
               </div>
 

@@ -303,9 +303,9 @@ export default function PrintPreviewModal({
       const safeNumber = data.docNumber ? `_${data.docNumber}` : '';
       const filename = `${safeTitle}${safeNumber}.pdf`;
 
-      setFeedbackToast('جاري إنشاء وتنزيل ملف الـ PDF مباشرة على جهازك...');
+      setFeedbackToast('جاري تجهيز ملف الـ PDF بالمقاس المعتمد...');
 
-      await exportElementToPdf(printAreaRef.current, {
+      const result = await exportElementToPdf(printAreaRef.current, {
         filename,
         format,
         customSize,
@@ -313,11 +313,21 @@ export default function PrintPreviewModal({
       });
 
       setIsExportSuccess(true);
-      setFeedbackToast(`تم تنزيل ملف PDF (${filename}) بنجاح!`);
+      if (result?.method === 'share') {
+        setFeedbackToast(
+          result.cancelled
+            ? 'تم إغلاق نافذة المشاركة'
+            : `تم تجهيز ملف PDF (${filename}) - تم فتح قائمة الحفظ والمشاركة!`
+        );
+      } else if (result?.method === 'open') {
+        setFeedbackToast(`تم فتح ملف الـ PDF (${filename}) للمعاينة والحفظ`);
+      } else {
+        setFeedbackToast(`تم تنزيل ملف PDF (${filename}) بنجاح!`);
+      }
       setTimeout(() => {
         setIsExportSuccess(false);
         setFeedbackToast(null);
-      }, 3500);
+      }, 4000);
     } catch (err) {
       console.error('PDF Export error:', err);
       setFeedbackToast('حدث تنبيه أثناء التصدير المباشر، جاري فتح نافذة الطباعة...');

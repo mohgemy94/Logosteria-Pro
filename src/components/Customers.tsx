@@ -19,10 +19,12 @@ import {
   syncPartnerRecord
 } from '../utils/partnerLedger';
 import ExportButtonGroup from './ExportButtonGroup';
+import { useSystemCurrency } from '../utils/currency';
 
 export type CustomerFilterTab = 'ALL' | 'DEBTORS' | 'CREDITORS' | 'ZERO';
 
 export default function Customers() {
+  const { symbol: currencySymbol } = useSystemCurrency();
   const [customers, setCustomers] = useState<Partner[]>(() => loadCustomers());
   const [isAdding, setIsAdding] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Partner | null>(null);
@@ -364,7 +366,7 @@ export default function Customers() {
               <span className="text-[11px] sm:text-xs text-emerald-800 font-bold group-hover:text-emerald-700 transition-colors truncate">مستحقات (لنا)</span>
             </div>
             <div className="text-base sm:text-xl lg:text-2xl font-bold font-mono text-emerald-700 mt-0.5 sm:mt-1 truncate">
-              {overallStats.netReceivables.toLocaleString(undefined, { minimumFractionDigits: 2 })} ريال
+              {overallStats.netReceivables.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
             </div>
             <div className="text-[10px] sm:text-[11px] text-emerald-600 font-medium mt-0.5 flex items-center gap-1 truncate">
               <span>{overallStats.debtorsCount} عميل مدين</span>
@@ -387,7 +389,7 @@ export default function Customers() {
               <span className="text-[11px] sm:text-xs text-purple-800 font-bold group-hover:text-purple-700 transition-colors truncate">أرصدة دائنة (مقدماً)</span>
             </div>
             <div className="text-base sm:text-xl lg:text-2xl font-bold font-mono text-purple-700 mt-0.5 sm:mt-1 truncate">
-              {overallStats.totalCreditBalances.toLocaleString(undefined, { minimumFractionDigits: 2 })} ريال
+              {overallStats.totalCreditBalances.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
             </div>
             <div className="text-[10px] sm:text-[11px] text-purple-600 font-medium mt-0.5 flex items-center gap-1 truncate">
               <span>{overallStats.creditorsCount} عميل دائن</span>
@@ -410,7 +412,7 @@ export default function Customers() {
               <span className="text-[11px] sm:text-xs text-slate-500 font-bold group-hover:text-indigo-600 transition-colors truncate">إجمالي مبيعات العملاء</span>
             </div>
             <div className="text-base sm:text-xl lg:text-2xl font-bold font-mono text-slate-800 mt-0.5 sm:mt-1 truncate">
-              {overallStats.totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2 })} ريال
+              {overallStats.totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
             </div>
             <div className="text-[10px] sm:text-[11px] text-indigo-600 font-medium mt-0.5 flex items-center gap-1 truncate">
               <span>تحليل كبار العملاء</span>
@@ -713,7 +715,7 @@ export default function Customers() {
                 </div>
 
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1">الرصيد الافتتاحي السابق (ريال):</label>
+                  <label className="block text-slate-600 font-bold mb-1">الرصيد الافتتاحي السابق ({currencySymbol}):</label>
                   <input
                     type="number"
                     step="0.01"
@@ -799,7 +801,7 @@ export default function Customers() {
                 {isOverCreditLimit && (
                   <div className="mb-2 px-2.5 py-1 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-[11px] font-bold flex items-center gap-1.5">
                     <ShieldAlert size={14} className="text-rose-600 shrink-0" />
-                    <span>تجاوز الحد الائتماني المسموح ({c.creditLimit?.toLocaleString()} ريال)</span>
+                    <span>تجاوز الحد الائتماني المسموح ({c.creditLimit?.toLocaleString()} {currencySymbol})</span>
                   </div>
                 )}
 
@@ -858,7 +860,7 @@ export default function Customers() {
                     <span className={`font-mono text-base font-black ${
                       statement.balanceType === 'DEBIT' ? 'text-emerald-700' : statement.balanceType === 'CREDIT' ? 'text-purple-700' : 'text-slate-600'
                     }`}>
-                      {statement.balanceFormatted} <span className="text-xs font-normal">ريال</span>
+                      {statement.balanceFormatted} <span className="text-xs font-normal">{currencySymbol}</span>
                     </span>
                   </div>
                   <div className="text-left text-[11px] text-slate-500">
@@ -866,7 +868,7 @@ export default function Customers() {
                       {statement.transactions.length} حركات
                     </div>
                     {c.creditLimit ? (
-                      <span className="text-[10px] text-slate-400">سقف: {c.creditLimit.toLocaleString()} ريال</span>
+                      <span className="text-[10px] text-slate-400">سقف: {c.creditLimit.toLocaleString()} {currencySymbol}</span>
                     ) : (
                       <span className="text-[10px] text-slate-400">ائتمان مفتوح</span>
                     )}
@@ -1034,7 +1036,7 @@ export default function Customers() {
                       <div className="flex flex-col items-center">
                         {c.creditLimit ? (
                           <span className="font-mono font-bold text-xs text-slate-700">
-                            {c.creditLimit.toLocaleString()} ريال
+                            {c.creditLimit.toLocaleString()} {currencySymbol}
                           </span>
                         ) : (
                           <span className="text-slate-400 text-[11px]">مفتوح</span>
@@ -1064,7 +1066,7 @@ export default function Customers() {
                             ? 'text-purple-700' 
                             : 'text-slate-500'
                         }`}>
-                          {statement.balanceFormatted} ريال
+                          {statement.balanceFormatted} {currencySymbol}
                         </span>
                         <div className="flex items-center gap-1 mt-0.5">
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${

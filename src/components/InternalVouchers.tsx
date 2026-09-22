@@ -70,7 +70,7 @@ function loadStoredInternalVouchers(): StoredInternalVoucher[] {
 import { useSystemCurrency } from '../utils/currency';
 
 export default function InternalVouchers() {
-  const { fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
+  const { symbol: currencySymbol, fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
   const [savedVouchers, setSavedVouchers] = useState<StoredInternalVoucher[]>(() => loadStoredInternalVouchers());
   const [showHistory, setShowHistory] = useState(false);
   const [editingVoucherId, setEditingVoucherId] = useState<string | null>(null);
@@ -360,7 +360,7 @@ export default function InternalVouchers() {
     const toAccName = getAccountName(toAccountId);
 
     if (isPost) {
-      alert(`✅ تم ترحيل سند التحويل الداخلي رقم (${finalNumber}) بنجاح في الحسابات!\n\nتم قيد وتأثير المبلغ (${numAmount.toLocaleString()} ريال) في حركة الحسابات من (${fromAccName}) إلى (${toAccName}) وميزان المراجعة.`);
+      alert(`✅ تم ترحيل سند التحويل الداخلي رقم (${finalNumber}) بنجاح في الحسابات!\n\nتم قيد وتأثير المبلغ (${numAmount.toLocaleString()} ${currencySymbol}) في حركة الحسابات من (${fromAccName}) إلى (${toAccName}) وميزان المراجعة.`);
     } else {
       alert(`📝 تم حفظ سند التحويل الداخلي رقم (${finalNumber}) كمسودة (غير مرحل) بنجاح!\n\nلم يتم إثبات أي أثر في الحسابات حتى تضغط على زر [ترحيل السند في الحسابات].`);
     }
@@ -751,7 +751,7 @@ export default function InternalVouchers() {
                           </td>
                           <td className="py-2.5 text-slate-700 font-medium">{getAccountName(v.fromAccountId)}</td>
                           <td className="py-2.5 text-slate-700 font-medium">{getAccountName(v.toAccountId)}</td>
-                          <td className="py-2.5 font-mono font-bold text-slate-800">{v.amount.toLocaleString()} ريال</td>
+                          <td className="py-2.5 font-mono font-bold text-slate-800">{v.amount.toLocaleString()} {currencySymbol}</td>
                           <td className="py-2.5 text-slate-500">{v.date}</td>
                           <td className="py-2.5 text-slate-500 truncate max-w-xs">{v.description}</td>
                           <td className="py-2.5 text-center">

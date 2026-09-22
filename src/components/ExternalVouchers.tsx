@@ -75,7 +75,7 @@ export interface ExternalVouchersProps {
 }
 
 export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = {}) {
-  const { fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
+  const { symbol: currencySymbol, fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
   const [type, setType] = useState<VoucherType>(() => fixedType || VoucherType.Receipt);
   const [receiptVouchers, setReceiptVouchers] = useState<StoredExternalVoucher[]>(() => loadStoredVouchers(DB_RECEIPT_VOUCHERS_KEY));
   const [paymentVouchers, setPaymentVouchers] = useState<StoredExternalVoucher[]>(() => loadStoredVouchers(DB_PAYMENT_VOUCHERS_KEY));
@@ -759,7 +759,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
     setVoucherStatus(targetStatus);
 
     if (isPost) {
-      alert(`✅ تم ترحيل ${isReceipt ? 'سند القبض' : 'سند الصرف'} رقم (${finalNumber}) بنجاح بقيمة ${numAmount.toLocaleString()} ريال!\n\nتم ترحيل السند رسمياً في حساب (${partner?.name}) وتحديث الرصيد ودفتر الأستاذ.`);
+      alert(`✅ تم ترحيل ${isReceipt ? 'سند القبض' : 'سند الصرف'} رقم (${finalNumber}) بنجاح بقيمة ${numAmount.toLocaleString()} ${currencySymbol}!\n\nتم ترحيل السند رسمياً في حساب (${partner?.name}) وتحديث الرصيد ودفتر الأستاذ.`);
     } else {
       if (finalRequiresApproval && finalApprovalStatus === 'PENDING_APPROVAL') {
         alert(`📝 تم حفظ ${isReceipt ? 'سند القبض' : 'سند الصرف'} رقم (${finalNumber}) كمسودة بانتظار الاعتماد!\n\n⚠️ يتطلب السند موافقة الإدارة المالية لاعتماده قبل إمكانية الترحيل والصرف الفعلي.`);
@@ -1430,14 +1430,14 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                             <span className="text-[10px] text-slate-400 font-medium">عام</span>
                           )}
                         </td>
-                        <td className="py-2 font-mono font-bold text-slate-800">{v.amount.toLocaleString()} ريال</td>
+                        <td className="py-2 font-mono font-bold text-slate-800">{v.amount.toLocaleString()} {currencySymbol}</td>
                         <td className="py-2 text-slate-500 font-mono">{v.date}</td>
                         <td className="py-2 text-slate-500 truncate max-w-xs">{v.description}</td>
                         <td className="py-2 text-center">
                           {v.allocations && v.allocations.length > 0 ? (
                             <span 
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 cursor-help"
-                              title={v.allocations.map(a => `فاتورة #${a.invoiceNumber} (${a.allocatedAmount.toLocaleString()} ريال)`).join('\n')}
+                              title={v.allocations.map(a => `فاتورة #${a.invoiceNumber} (${a.allocatedAmount.toLocaleString()} ${currencySymbol})`).join('\n')}
                             >
                               <Layers size={11} className="text-indigo-600" />
                               <span>{v.allocations.length} {v.allocations.length === 1 ? 'فاتورة' : 'فواتير'}</span>
@@ -1813,7 +1813,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 <div className="flex flex-col">
                   <span className="text-[10px] text-slate-400 font-medium">قيمة السند الحالي:</span>
                   <span className={`font-bold font-mono text-sm ${isReceipt ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {isReceipt ? '+' : '-'} {balanceSimulation.voucherImpact.toLocaleString(undefined, { minimumFractionDigits: 2 })} ريال
+                    {isReceipt ? '+' : '-'} {balanceSimulation.voucherImpact.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
                   </span>
                   <span className="text-[10px] text-slate-500">{isReceipt ? 'مقبوضات تسدد الحساب' : 'مدفوعات تصرف للطرف'}</span>
                 </div>
@@ -1824,7 +1824,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 <div className="flex flex-col bg-slate-50 p-1.5 rounded-lg border border-slate-100">
                   <span className="text-[10px] text-indigo-600 font-bold">الرصيد المتوقع بعد الترحيل:</span>
                   <span className="font-bold font-mono text-indigo-700 text-sm">
-                    {balanceSimulation.projectedNetFormatted} ريال
+                    {balanceSimulation.projectedNetFormatted} {currencySymbol}
                   </span>
                   <span className="text-[10px] text-slate-600 font-semibold">{balanceSimulation.projectedLabel}</span>
                 </div>
@@ -2239,7 +2239,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                         <div className="flex items-center gap-2">
                           <AlertTriangle size={16} className="text-rose-600 shrink-0" />
                           <span>
-                            تنبيه: مجموع المبالغ المخصصة للفواتير ({totalAllocatedAmount.toLocaleString()} ريال) أكبر من مبلغ السند ({voucherNumericAmount.toLocaleString()} ريال)!
+                            تنبيه: مجموع المبالغ المخصصة للفواتير ({totalAllocatedAmount.toLocaleString()} {currencySymbol}) أكبر من مبلغ السند ({voucherNumericAmount.toLocaleString()} {currencySymbol})!
                           </span>
                         </div>
                         {!isCurrentVoucherPosted && (

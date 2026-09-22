@@ -1,4 +1,4 @@
-import { Account, AccountType, BalanceType, JournalEntry, JournalEntryStatus } from '../types/accounting';
+import { Account, AccountType, BalanceType, JournalEntry, JournalEntryStatus, JournalItem } from '../types/accounting';
 import { 
   DB_SALES_INVOICES_KEY, 
   DB_PURCHASES_INVOICES_KEY,
@@ -1403,3 +1403,126 @@ export function getDiscountsSummary(): DiscountsSummary {
     netDiscountImpact: Math.round((earnedTotal - allowedTotal) * 100) / 100
   };
 }
+
+export interface DashboardKPIsData {
+  sales: number;
+  expenses: number;
+  netProfit: number;
+  inventoryValuation: number;
+  cashAndBank: number;
+  accountsReceivable: number;
+  accountsPayable: number;
+}
+
+export function computeDashboardKPIsLocally(selectedYear: number): DashboardKPIsData {
+  const startDate = `${selectedYear}-01-01`;
+  const endDate = `${selectedYear}-12-31`;
+
+  const tb = calculateTrialBalance(startDate, endDate);
+
+  // Total Sales (Revenue accounts code starting with '4')
+  const sales = tb.rows
+    .filter(r => r.account.code.startsWith('4'))
+    .reduce((sum, r) => sum + (r.creditMovement - r.debitMovement + (r.account.type === AccountType.Revenue ? (r.openingCredit - r.openingDebit) : 0)), 0);
+
+  // Total Expenses (Expense accounts code starting with '5')
+  const expenses = tb.rows
+    .filter(r => r.account.code.startsWith('5'))
+    .reduce((sum, r) => sum + (r.debitMovement - r.creditMovement + (r.account.type === AccountType.Expense ? (r.openingDebit - r.openingCredit) : 0)), 0);
+
+  const netProfit = sales - expenses;
+
+  // Inventory Valuation (1301)
+  const invRow = tb.rows.find(r => r.account.code === '1301');
+  let inventoryValuation = invRow ? Math.max(0, invRow.endingDebit - invRow.endingCredit) : 0;
+  if (inventoryValuation === 0 && typeof window !== 'undefined') {
+    try {
+      const rawWh = localStorage.getItem('alpha_warehouse_balances_v2') || localStorage.getItem('items');
+      if (rawWh) {
+        const parsed = JSON.parse(rawWh);
+        if (Array.isArray(parsed)) {
+          inventoryValuation = parsed.reduce((sum, item) => sum + (Number(item.stock || item.quantity || 0) * Number(item.costPrice || item.purchasePrice || 0)), 0);
+        }
+      }
+    } catch {}
+  }
+
+  // Cash and Bank (1101 & 1102)
+  const cashBankRows = tb.rows.filter(r => r.account.code.startsWith('1101') || r.account.code.startsWith('1102'));
+  const cashAndBank = cashBankRows.reduce((sum, r) => sum + (r.endingDebit - r.endingCredit), 0);
+
+  // AR (1201)
+  const arRows = tb.rows.filter(r => r.account.code.startsWith('1201'));
+  const accountsReceivable = arRows.reduce((sum, r) => sum + (r.endingDebit - r.endingCredit), 0);
+
+  // AP (2101)
+  const apRows = tb.rows.filter(r => r.account.code.startsWith('2101'));
+  const accountsPayable = apRows.reduce((sum, r) => sum + (r.endingCredit - r.endingDebit), 0);
+
+  return {
+    sales: Math.max(0, sales),
+    expenses: Math.max(0, expenses),
+    netProfit,
+    inventoryValuation,
+    cashAndBank,
+    accountsReceivable,
+    accountsPayable
+  };
+}
+
+export function closeYearLocally(selectedYear: number): void {
+  const kpis = computeDashboardKPIsLocally(selectedYear);
+  const accounts = loadChartOfAccounts();
+  const retainedAcc = accounts.find(a => a.code === '3201') || accounts.find(a => a.type === AccountType.Equity);
+
+  const items: JournalItem[] = [];
+  // Zero out revenues (debit revenue accounts)
+  if (kpis.sales > 0) {
+    const revAcc = accounts.find(a => a.code === '4101') || accounts.find(a => a.type === AccountType.Revenue);
+    if (revAcc) {
+      items.push({
+        id: 'close_rev_' + Date.now(),
+        accountId: revAcc.id,
+        debit: kpis.sales,
+        credit: 0
+      });
+    }
+  }
+
+  // Zero out expenses (credit expense accounts)
+  if (kpis.expenses > 0) {
+    const expAcc = accounts.find(a => a.code === '5101') || accounts.find(a => a.type === AccountType.Expense);
+    if (expAcc) {
+      items.push({
+        id: 'close_exp_' + Date.now(),
+        accountId: expAcc.id,
+        debit: 0,
+        credit: kpis.expenses
+      });
+    }
+  }
+
+  // Net Profit to Retained Earnings
+  if (retainedAcc && kpis.netProfit !== 0) {
+    items.push({
+      id: 'close_ret_' + Date.now(),
+      accountId: retainedAcc.id,
+      debit: kpis.netProfit < 0 ? Math.abs(kpis.netProfit) : 0,
+      credit: kpis.netProfit > 0 ? kpis.netProfit : 0
+    });
+  }
+
+  if (items.length > 0) {
+    const closingEntry: JournalEntry = {
+      id: `CLOSE-${selectedYear}-${Date.now()}`,
+      entryNumber: `YE-${selectedYear}`,
+      date: `${selectedYear}-12-31`,
+      reference: `YE-CLOSE-${selectedYear}`,
+      description: `قيد إقفال السنة المالية ${selectedYear}`,
+      items,
+      status: JournalEntryStatus.Posted
+    };
+    saveJournalEntry(closingEntry);
+  }
+}
+

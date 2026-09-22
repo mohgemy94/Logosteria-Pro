@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { SystemSettings, VoucherApprovalStatus } from '../types/accounting';
 import { getSystemSettings } from '../utils/settings';
+import { useSystemCurrency } from '../utils/currency';
 import { 
   isApprovalRequired, 
   approveVoucherRecord, 
@@ -50,6 +51,7 @@ export interface VoucherApprovalStepperProps {
 }
 
 export default function VoucherApprovalStepper(props: VoucherApprovalStepperProps) {
+  const { symbol: currencySymbol } = useSystemCurrency();
   const {
     onApprovalChanged,
     onOpenSettings,
@@ -218,7 +220,7 @@ export default function VoucherApprovalStepper(props: VoucherApprovalStepperProp
             </div>
             <p className="text-[11px] text-slate-500 mt-0.5">
               {isWorkflowEnabled 
-                ? `تتطلب السندات بمبلغ ${workflow?.minAmountThreshold?.toLocaleString()} ر.س فأكثر موافقة المدير المالي/العام قبل الترحيل والصرف.`
+                ? `تتطلب السندات بمبلغ ${workflow?.minAmountThreshold?.toLocaleString()} ${currencySymbol} فأكثر موافقة المدير المالي/العام قبل الترحيل والصرف.`
                 : 'يمكنك تفعيل دورة المستويات الثلاثية من شاشة إعدادات النظام للمبالغ الكبيرة.'}
             </p>
           </div>
