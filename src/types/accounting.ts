@@ -79,6 +79,7 @@ export interface Partner {
   type: 'CUSTOMER' | 'VENDOR' | 'EMPLOYEE';
   taxNumber?: string | undefined;
   phone?: string | undefined;
+  country?: string | undefined;
   address?: string | undefined;
   email?: string | undefined;
   creditLimit?: number | undefined;
@@ -179,6 +180,7 @@ export interface SystemSettings {
     address: string;
     city: string;
     postalCode: string;
+    country?: string;
     logoUrl?: string;
     stampUrl?: string;
   };

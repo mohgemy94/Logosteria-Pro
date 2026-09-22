@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: SystemSettings = {
     address: 'طريق الملك فهد، حي الصحافة',
     city: 'الرياض',
     postalCode: '13315',
+    country: 'SA',
     logoUrl: '',
     stampUrl: '',
   },

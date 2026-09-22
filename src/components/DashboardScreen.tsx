@@ -420,6 +420,14 @@ export default function DashboardScreen({ onNavigate, systemSettings }: Dashboar
 
           <button
             type="button"
+            onClick={() => onNavigate('analytics')}
+            className="btn-3d btn-3d-blue px-3.5 py-1.5 text-xs font-black flex items-center gap-1.5"
+          >
+            <BarChart3 size={14} />
+            <span>الرسوم البيانية والذكاء التجاري (BI)</span>
+          </button>
+          <button
+            type="button"
             onClick={() => onNavigate('companyProfile')}
             className="btn-3d btn-3d-amber px-3.5 py-1.5 text-xs font-black flex items-center gap-1.5"
           >

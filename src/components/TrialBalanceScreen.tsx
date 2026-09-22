@@ -249,38 +249,6 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
       />
       <div className="flex flex-col flex-1 p-3 sm:p-6 space-y-5 max-w-[1600px] mx-auto w-full">
         
-        {/* Printable Area Wrapper for window.print and PDF Export */}
-        <div ref={printAreaRef} id="trial-balance-export-area" className="flex flex-col space-y-5 bg-white p-2">
-        {/* Printable Header Section */}
-        <div className={`${isExportingPdf ? 'block' : 'hidden print:block'} text-slate-900 pb-4 mb-4 border-b border-slate-300`}>
-          <div className="flex justify-between items-start gap-4 mb-4">
-            <div className="flex items-start gap-3 flex-1 min-w-0">
-              {systemSettings.company?.logoUrl && (
-                <img src={systemSettings.company.logoUrl} alt="Logo" className="h-12 w-auto object-contain rounded shrink-0" />
-              )}
-              <div className="space-y-0.5 min-w-0 flex-1">
-                <h1 className="text-xl font-bold">{systemSettings.company.nameAr || 'لوجوستريا للمحاسبة والأنظمة المالية'}</h1>
-                {systemSettings.company.nameEn && (
-                  <p className="text-xs text-indigo-900 font-sans font-semibold">{systemSettings.company.nameEn}</p>
-                )}
-                <p className="text-xs text-slate-600">{systemSettings.company.branchName ? `${systemSettings.company.branchName} - ` : ''}{systemSettings.company.address || 'الفرع الرئيسي - المملكة العربية السعودية'}</p>
-                <div className="text-xs text-slate-600 font-mono flex flex-wrap gap-3">
-                  <span>الرقم الضريبي: {systemSettings.company.taxNumber || '310123456700003'}</span>
-                  {systemSettings.company.commercialRegister && <span>س.ت: {systemSettings.company.commercialRegister}</span>}
-                  {systemSettings.company.phone && <span>الهاتف: {systemSettings.company.phone}</span>}
-                </div>
-              </div>
-            </div>
-            <div className="text-left shrink-0">
-              <h2 className="text-xl font-bold text-blue-900">ميزان المراجعة بالمجاميع والأرصدة</h2>
-              <p className="text-xs text-slate-500 mt-1">تاريخ الطباعة: {new Date().toLocaleDateString('ar-SA')}</p>
-              <p className="text-xs text-slate-500">
-                الفترة: {startDate || 'من بداية النظام'} إلى {endDate || 'حتى تاريخه'}
-              </p>
-            </div>
-          </div>
-        </div>
-
       {/* Screen Top Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
         <div>
@@ -1061,6 +1029,38 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
 
         </div>
       </div>
+
+      {/* Printable Area Wrapper for window.print and PDF Export */}
+      <div ref={printAreaRef} id="trial-balance-export-area" className="flex flex-col space-y-5 bg-white p-2 sm:p-4 rounded-2xl border border-slate-200">
+        {/* Printable Header Section */}
+        <div className={`${isExportingPdf ? 'block' : 'hidden print:block'} text-slate-900 pb-4 mb-4 border-b border-slate-300`}>
+          <div className="flex justify-between items-start gap-4 mb-4">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              {systemSettings.company?.logoUrl && (
+                <img src={systemSettings.company.logoUrl} alt="Logo" className="h-12 w-auto object-contain rounded shrink-0" />
+              )}
+              <div className="space-y-0.5 min-w-0 flex-1">
+                <h1 className="text-xl font-bold">{systemSettings.company.nameAr || 'لوجوستريا للمحاسبة والأنظمة المالية'}</h1>
+                {systemSettings.company.nameEn && (
+                  <p className="text-xs text-indigo-900 font-sans font-semibold">{systemSettings.company.nameEn}</p>
+                )}
+                <p className="text-xs text-slate-600">{systemSettings.company.branchName ? `${systemSettings.company.branchName} - ` : ''}{systemSettings.company.address || 'الفرع الرئيسي - المملكة العربية السعودية'}</p>
+                <div className="text-xs text-slate-600 font-mono flex flex-wrap gap-3">
+                  <span>الرقم الضريبي: {systemSettings.company.taxNumber || '310123456700003'}</span>
+                  {systemSettings.company.commercialRegister && <span>س.ت: {systemSettings.company.commercialRegister}</span>}
+                  {systemSettings.company.phone && <span>الهاتف: {systemSettings.company.phone}</span>}
+                </div>
+              </div>
+            </div>
+            <div className="text-left shrink-0">
+              <h2 className="text-xl font-bold text-blue-900">ميزان المراجعة بالمجاميع والأرصدة</h2>
+              <p className="text-xs text-slate-500 mt-1">تاريخ الطباعة: {new Date().toLocaleDateString('ar-SA')}</p>
+              <p className="text-xs text-slate-500">
+                الفترة: {startDate || 'من بداية النظام'} إلى {endDate || 'حتى تاريخه'}
+              </p>
+            </div>
+          </div>
+        </div>
 
       {/* Main Trial Balance Table */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden flex flex-col">

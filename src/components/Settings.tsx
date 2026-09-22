@@ -17,8 +17,10 @@ import {
   Download,
   AlertTriangle,
   CheckCircle2,
-  Monitor
+  Monitor,
+  Globe
 } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 import MobilePermissionsModal from './MobilePermissionsModal';
 import { SystemSettings, CurrencySetting, UserPermission, CreditAndStockControlSettings, BrandingSettings } from '../types/accounting';
 import { getSystemSettings, saveSystemSettings, DEFAULT_SETTINGS } from '../utils/settings';
@@ -40,6 +42,7 @@ import InvoicingControlPanel from './InvoicingControlPanel';
 import PrintingBrandingPanel from './PrintingBrandingPanel';
 import UsersPermissionsPanel from './UsersPermissionsPanel';
 import CompanyLogoUploader from './CompanyLogoUploader';
+import { COUNTRIES_LIST } from '../utils/countries';
 import { 
   savePrintPaperFormat, 
   applyPrintPageStyle, 
@@ -62,6 +65,7 @@ interface SettingsProps {
 }
 
 export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) {
+  const { language, dir, toggleLanguage, t } = useLanguage();
   const [settings, setSettings] = useState<SystemSettings>(() => getSystemSettings());
   const [activeSection, setActiveSection] = useState<SettingsPortal | null>(null);
   const [isSaved, setIsSaved] = useState(false);
@@ -262,116 +266,134 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
   const settingsPortals = [
     {
       id: 'company' as SettingsPortal,
-      title: 'بيانات المنشأة والهوية المؤسسية',
-      description: 'الاسم الرسمي بالعربية والإنجليزية، السجل التجاري، الرقم الضريبي، بيانات الاتصال، الفروع، وشعار وختم المنشأة.',
+      title: language === 'ar' ? 'بيانات المنشأة والهوية المؤسسية' : 'Company Info & Corporate Identity',
+      description: language === 'ar' 
+        ? 'الاسم الرسمي بالعربية والإنجليزية، السجل التجاري، الرقم الضريبي، بيانات الاتصال، الفروع، وشعار وختم المنشأة.'
+        : 'Official Arabic & English names, CR number, VAT tax number, contacts, branches, logo and official stamp.',
       icon: Building2,
       color: 'blue',
       highlights: [
-        { label: 'المنشأة:', value: settings.company.nameAr || 'لوجوستريا' },
-        { label: 'الرقم الضريبي:', value: settings.company.taxNumber || 'غير مسجل' },
-        { label: 'الفرع الرئيسي:', value: settings.company.branchName || 'الرياض' },
+        { label: language === 'ar' ? 'المنشأة:' : 'Company:', value: (language === 'ar' ? settings.company.nameAr : settings.company.nameEn) || settings.company.nameAr || 'Logustria' },
+        { label: language === 'ar' ? 'الرقم الضريبي:' : 'VAT Number:', value: settings.company.taxNumber || (language === 'ar' ? 'غير مسجل' : 'Not registered') },
+        { label: language === 'ar' ? 'الفرع الرئيسي:' : 'Main Branch:', value: settings.company.branchName || (language === 'ar' ? 'الرياض' : 'Riyadh') },
       ]
     },
     {
       id: 'financial_currency' as SettingsPortal,
-      title: 'المعايير المحاسبية والعملات المتعددة',
-      description: 'السنة المالية وفترات الإقفال، تقييم المخزون (متوسط مرجح/FIFO)، الخانات العشرية، وجدول أسعار صرف العملات الأجنبية.',
+      title: language === 'ar' ? 'المعايير المحاسبية والعملات المتعددة' : 'Accounting Standards & Currencies',
+      description: language === 'ar'
+        ? 'السنة المالية وفترات الإقفال، تقييم المخزون (متوسط مرجح/FIFO)، الخانات العشرية، وجدول أسعار صرف العملات الأجنبية.'
+        : 'Fiscal year, stock valuation (Weighted Avg/FIFO), decimal places, and multi-currency exchange rates table.',
       icon: Landmark,
       color: 'indigo',
       highlights: [
-        { label: 'العملة الأساسية:', value: `${settings.financial.currency} (${settings.financial.currencySymbol})` },
-        { label: 'تقييم المخزون:', value: settings.financial.costMethod === 'WEIGHTED_AVG' ? 'متوسط مرجح' : settings.financial.costMethod === 'FIFO' ? 'FIFO' : 'LIFO' },
-        { label: 'العملات النشطة:', value: `${(settings.currencies || []).filter(c => c.isEnabled).length} عملات مسجلة` },
+        { label: language === 'ar' ? 'العملة الأساسية:' : 'Base Currency:', value: `${settings.financial.currency} (${settings.financial.currencySymbol})` },
+        { label: language === 'ar' ? 'تقييم المخزون:' : 'Costing Method:', value: settings.financial.costMethod === 'WEIGHTED_AVG' ? (language === 'ar' ? 'متوسط مرجح' : 'Weighted Avg') : settings.financial.costMethod === 'FIFO' ? 'FIFO' : 'LIFO' },
+        { label: language === 'ar' ? 'العملات النشطة:' : 'Active Currencies:', value: `${(settings.currencies || []).filter(c => c.isEnabled).length} ${language === 'ar' ? 'عملات مسجلة' : 'currencies'}` },
       ]
     },
     {
       id: 'invoicing_control' as SettingsPortal,
-      title: 'الفوترة والضرائب والرقابة الائتمانية',
-      description: 'ضريبة 15%، باركود هيئة الزكاة (ZATCA QR)، بادئات الترقيم، القيم الافتراضية، وفحص الحد الائتماني ومنع البيع بالسالب.',
+      title: language === 'ar' ? 'الفوترة والضرائب والرقابة الائتمانية' : 'Invoicing, VAT & Credit Control',
+      description: language === 'ar'
+        ? 'ضريبة 15%، باركود هيئة الزكاة (ZATCA QR)، بادئات الترقيم، القيم الافتراضية، وفحص الحد الائتماني ومنع البيع بالسالب.'
+        : '15% VAT, ZATCA QR code compliance, numbering prefixes, defaults, credit limit enforcement, and negative stock controls.',
       icon: Receipt,
       color: 'emerald',
       highlights: [
-        { label: 'الضريبة (VAT):', value: settings.taxAndInvoice.enableVat ? `${settings.taxAndInvoice.defaultVatRate}%` : 'معطلة' },
-        { label: 'باركود ZATCA:', value: settings.taxAndInvoice.enableQrCode ? 'مفعل ومطابق' : 'معطل' },
-        { label: 'الحد الائتماني:', value: settings.controlAndLimits?.enforceCreditLimit ? `مفعل (${settings.controlAndLimits.creditLimitAction === 'BLOCK' ? 'حظر' : 'تحذير'})` : 'غير مقيد' },
+        { label: language === 'ar' ? 'الضريبة (VAT):' : 'VAT Rate:', value: settings.taxAndInvoice.enableVat ? `${settings.taxAndInvoice.defaultVatRate}%` : (language === 'ar' ? 'معطلة' : 'Disabled') },
+        { label: language === 'ar' ? 'باركود ZATCA:' : 'ZATCA QR:', value: settings.taxAndInvoice.enableQrCode ? (language === 'ar' ? 'مفعل ومطابق' : 'Active & Compliant') : (language === 'ar' ? 'معطل' : 'Disabled') },
+        { label: language === 'ar' ? 'الحد الائتماني:' : 'Credit Limit:', value: settings.controlAndLimits?.enforceCreditLimit ? `${language === 'ar' ? 'مفعل' : 'Enforced'} (${settings.controlAndLimits.creditLimitAction === 'BLOCK' ? (language === 'ar' ? 'حظر' : 'Block') : (language === 'ar' ? 'تحذير' : 'Warn')})` : (language === 'ar' ? 'غير مقيد' : 'Unrestricted') },
       ]
     },
     {
       id: 'printing_branding' as SettingsPortal,
-      title: 'قوالب وتفضيلات الطباعة والهوية',
-      description: 'مقاس الورق (A4 / A5 / رول حراري 80mm)، اللون المؤسسي، اختيار الخط العربي، الترويسة والتذييل، والشروط والأحكام.',
+      title: language === 'ar' ? 'قوالب وتفضيلات الطباعة والهوية' : 'Printing Templates & Branding',
+      description: language === 'ar'
+        ? 'مقاس الورق (A4 / A5 / رول حراري 80mm)، اللون المؤسسي، اختيار الخط العربي، الترويسة والتذييل، والشروط والأحكام.'
+        : 'Paper format (A4 / A5 / Thermal Roll 80mm), brand colors, font family, headers/footers, and terms & conditions.',
       icon: Printer,
       color: 'amber',
       highlights: [
-        { label: 'مقاس المطبوعات:', value: settings.printing.defaultFormat === 'RECEIPT' ? 'إيصالات حرارية 80mm' : settings.printing.defaultFormat },
-        { label: 'اللون المؤسسي:', value: settings.branding?.primaryColor || '#1e293b' },
-        { label: 'الخط العربي:', value: settings.branding?.fontFamily || 'Tajawal' },
+        { label: language === 'ar' ? 'مقاس المطبوعات:' : 'Print Size:', value: settings.printing.defaultFormat === 'RECEIPT' ? (language === 'ar' ? 'إيصالات حرارية 80mm' : 'Thermal 80mm') : settings.printing.defaultFormat },
+        { label: language === 'ar' ? 'اللون المؤسسي:' : 'Brand Color:', value: settings.branding?.primaryColor || '#1e293b' },
+        { label: language === 'ar' ? 'الخط:' : 'Font:', value: settings.branding?.fontFamily || 'Tajawal' },
       ]
     },
     {
       id: 'backup_cloud' as SettingsPortal,
-      title: 'النسخ الاحتياطي والمزامنة السحابية',
-      description: 'الحفظ التلقائي في مجلد محلي، تصدير واسترجاع JSON، والمزامنة السحابية عبر Google Drive واقتران نقاط البيع بـ QR.',
+      title: language === 'ar' ? 'النسخ الاحتياطي والمزامنة السحابية' : 'Backup & Cloud Synchronization',
+      description: language === 'ar'
+        ? 'الحفظ التلقائي في مجلد محلي، تصدير واسترجاع JSON، والمزامنة السحابية عبر Google Drive واقتران نقاط البيع بـ QR.'
+        : 'Local folder auto-save, JSON backup/restore, Google Drive cloud sync, and QR device pairing for POS terminals.',
       icon: Database,
       color: 'sky',
       highlights: [
-        { label: 'الحفظ المحلي:', value: 'حفظ دوري للمجلد' },
-        { label: 'المزامنة السحابية:', value: 'Google Drive Sync' },
-        { label: 'اقتران الأجهزة:', value: 'كود QR آمن' },
+        { label: language === 'ar' ? 'الحفظ المحلي:' : 'Local Folder:', value: language === 'ar' ? 'حفظ دوري للمجلد' : 'Active Local Auto-Save' },
+        { label: language === 'ar' ? 'المزامنة السحابية:' : 'Cloud Sync:', value: 'Google Drive Sync' },
+        { label: language === 'ar' ? 'اقتران الأجهزة:' : 'Device Pairing:', value: language === 'ar' ? 'كود QR آمن' : 'Encrypted QR' },
       ]
     },
     {
       id: 'users_permissions' as SettingsPortal,
-      title: 'إدارة المستخدمين ومصفوفة الصلاحيات (RBAC)',
-      description: 'حسابات المستخدمين والأدوار (مدير، محاسب، كاشير، أمين مستودع، مدقق) ومصفوفة أذونات الإضافة والتعديل والحذف والترحيل.',
+      title: language === 'ar' ? 'إدارة المستخدمين ومصفوفة الصلاحيات (RBAC)' : 'Users & Permissions Matrix (RBAC)',
+      description: language === 'ar'
+        ? 'حسابات المستخدمين والأدوار (مدير، محاسب، كاشير، أمين مستودع، مدقق) ومصفوفة أذونات الإضافة والتعديل والحذف والترحيل.'
+        : 'User accounts, role assignments (Admin, Accountant, Cashier, Warehouse, Auditor), and granular action permissions.',
       icon: Users,
       color: 'purple',
       highlights: [
-        { label: 'المستخدمون:', value: `${(settings.users || []).length} حسابات` },
-        { label: 'المصفوفة:', value: 'تحكم دقيق بالعمليات' },
-        { label: 'الأدوار:', value: '5 مستويات وظيفية' },
+        { label: language === 'ar' ? 'المستخدمون:' : 'Users:', value: `${(settings.users || []).length} ${language === 'ar' ? 'حسابات' : 'accounts'}` },
+        { label: language === 'ar' ? 'المصفوفة:' : 'Matrix:', value: language === 'ar' ? 'تحكم دقيق بالعمليات' : 'Granular RBAC' },
+        { label: language === 'ar' ? 'الأدوار:' : 'Roles:', value: language === 'ar' ? '5 مستويات وظيفية' : '5 Standard Roles' },
       ]
     },
     {
       id: 'master_data_engine' as SettingsPortal,
-      title: 'الجداول التعريفية ومحرك الحسابات',
-      description: 'قواعد البيانات الأساسية (الإدارات، الوظائف، المخازن، المناطق)، توليد الأكواد التحليلية م5، وفحص التوازن الذري.',
+      title: language === 'ar' ? 'الجداول التعريفية ومحرك الحسابات' : 'Master Data & Accounting Engine',
+      description: language === 'ar'
+        ? 'قواعد البيانات الأساسية (الإدارات، الوظائف، المخازن، المناطق)، توليد الأكواد التحليلية م5، وفحص التوازن الذري.'
+        : 'Master dictionaries (departments, jobs, stores, areas), level-5 analytical codes generation, and atomic balance validator.',
       icon: HardDrive,
       color: 'cyan',
       highlights: [
-        { label: 'الجداول التعريفية:', value: '11 قاعدة مرجعية' },
-        { label: 'محرك الحسابات:', value: 'توليد وفحص ذري' },
-        { label: 'الدليل المحاسبي:', value: 'ربط مباشر بالشجرة' },
+        { label: language === 'ar' ? 'الجداول التعريفية:' : 'Master Tables:', value: language === 'ar' ? '11 قاعدة مرجعية' : '11 Reference Tables' },
+        { label: language === 'ar' ? 'محرك الحسابات:' : 'Account Engine:', value: language === 'ar' ? 'توليد وفحص ذري' : 'Atomic Validation' },
+        { label: language === 'ar' ? 'الدليل المحاسبي:' : 'Chart of Accounts:', value: language === 'ar' ? 'ربط مباشر بالشجرة' : 'Direct Tree Binding' },
       ]
     },
     {
       id: 'approvals_and_reset' as SettingsPortal,
-      title: 'الرقابة الإدارية ودورة الاعتماد والتصفير',
-      description: 'هرمية اعتماد السندات الكبيرة (محاسب -> مدير مالي -> مدير عام)، وتصفير العمليات الآمن وضبط المصنع مع ضمانات الحماية.',
+      title: language === 'ar' ? 'الرقابة الإدارية ودورة الاعتماد والتصفير' : 'Approvals Workflow & System Reset',
+      description: language === 'ar'
+        ? 'هرمية اعتماد السندات الكبيرة (محاسب -> مدير مالي -> مدير عام)، وتصفير العمليات الآمن وضبط المصنع مع ضمانات الحماية.'
+        : 'Hierarchical voucher approvals (Accountant -> Financial Mgr -> General Mgr), safe transaction reset, and factory reset.',
       icon: ShieldCheck,
       color: 'rose',
       highlights: [
-        { label: 'دورة الاعتماد:', value: settings.approvalWorkflow?.enabled ? 'مفعلة' : 'معطلة' },
-        { label: 'حد الاعتماد:', value: `${(settings.approvalWorkflow?.minAmountThreshold || 5000).toLocaleString()} ر.س` },
-        { label: 'ضبط المصنع:', value: 'حماية وتأكيد أمني' },
+        { label: language === 'ar' ? 'دورة الاعتماد:' : 'Workflow:', value: settings.approvalWorkflow?.enabled ? (language === 'ar' ? 'مفعلة' : 'Enabled') : (language === 'ar' ? 'معطلة' : 'Disabled') },
+        { label: language === 'ar' ? 'حد الاعتماد:' : 'Approval Limit:', value: `${(settings.approvalWorkflow?.minAmountThreshold || 5000).toLocaleString()} ${settings.financial.currencySymbol || 'SAR'}` },
+        { label: language === 'ar' ? 'ضبط المصنع:' : 'Reset Guard:', value: language === 'ar' ? 'حماية وتأكيد أمني' : 'Protected 2-Step' },
       ]
     },
     {
       id: 'mobile_permissions' as SettingsPortal,
-      title: 'أذونات سطح المكتب والموبايل (Desktop & Mobile)',
-      description: 'إدارة وتفعيل أذونات سطح المكتب (المجلد الصامت، الميكروفون، التخزين الدائم، الطباعة المباشرة) وأذونات الموبايل (الكاميرا، البلوتوث، الموقع).',
+      title: language === 'ar' ? 'أذونات سطح المكتب والموبايل (Desktop & Mobile)' : 'Desktop & Mobile Permissions',
+      description: language === 'ar'
+        ? 'إدارة وتفعيل أذونات سطح المكتب (المجلد الصامت، الميكروفون، التخزين الدائم، الطباعة المباشرة) وأذونات الموبايل (الكاميرا، البلوتوث، الموقع).'
+        : 'Manage desktop permissions (silent local folder, microphone, persistent storage, print) and mobile device permissions.',
       icon: Monitor,
       color: 'indigo',
       highlights: [
-        { label: 'سطح المكتب:', value: 'مجلد صامت وبحث صوتي' },
-        { label: 'الموبايل:', value: 'كاميرا وبلوتوث وموقع' },
-        { label: 'التخزين والطباعة:', value: 'دائم ونوافذ منبثقة' },
+        { label: language === 'ar' ? 'سطح المكتب:' : 'Desktop:', value: language === 'ar' ? 'مجلد صامت وبحث صوتي' : 'Local folder & mic' },
+        { label: language === 'ar' ? 'الموبايل:' : 'Mobile:', value: language === 'ar' ? 'كاميرا وبلوتوث وموقع' : 'Camera, Bluetooth, GPS' },
+        { label: language === 'ar' ? 'التخزين والطباعة:' : 'Storage & Print:', value: language === 'ar' ? 'دائم ونوافذ منبثقة' : 'Persistent storage' },
       ]
     }
   ];
 
   return (
-    <div className="flex flex-col flex-1 pb-12" dir="rtl">
+    <div className="flex flex-col flex-1 pb-12" dir={dir}>
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
@@ -382,41 +404,58 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
                 onClick={onNavigateToDashboard}
                 className="text-xs uppercase font-bold tracking-tight text-slate-500 hover:text-blue-600 cursor-pointer"
               >
-                الرئيسية
+                {t('home', 'الرئيسية')}
               </button>
             ) : (
-              <span className="text-xs uppercase font-bold tracking-tight">النظام والإدارة</span>
+              <span className="text-xs uppercase font-bold tracking-tight">{language === 'ar' ? 'النظام والإدارة' : 'System & Admin'}</span>
             )}
             <span className="text-xs">/</span>
-            <span className="text-xs font-semibold text-blue-600">لوحة الإعدادات المركزية (8 بوابات موحدة)</span>
+            <span className="text-xs font-semibold text-blue-600">
+              {language === 'ar' ? 'لوحة الإعدادات المركزية (8 بوابات موحدة)' : 'Central Settings Hub (8 Unified Portals)'}
+            </span>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-slate-800">إعدادات النظام الشاملة</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-800">
+            {language === 'ar' ? 'إعدادات النظام الشاملة' : 'Enterprise System Settings'}
+          </h2>
           <p className="text-slate-500 mt-1 text-xs sm:text-sm">
-            تم تنظيم الإعدادات في 8 بوابات متكاملة تمنع التكرار وتوفر تحكماً دقيقاً في الهوية، العملات، الفوترة، والصلاحيات.
+            {language === 'ar'
+              ? 'تم تنظيم الإعدادات في 8 بوابات متكاملة تمنع التكرار وتوفر تحكماً دقيقاً في الهوية، العملات، الفوترة، والصلاحيات.'
+              : 'Configured into 8 streamlined portals providing complete governance over corporate identity, currencies, taxation, and permissions.'}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Language Switcher in Settings */}
+          <button
+            type="button"
+            onClick={toggleLanguage}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all border border-slate-300 cursor-pointer"
+            title={language === 'ar' ? 'Switch to English' : 'التحويل إلى اللغة العربية'}
+          >
+            <Globe size={15} className="text-blue-600" />
+            <span>{language === 'ar' ? 'English (EN)' : 'العربية (AR)'}</span>
+          </button>
+
           {isSaved && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-medium animate-in fade-in">
               <CheckCircle size={14} className="text-emerald-600" />
-              تم حفظ الإعدادات بنجاح
+              {t('savedSuccess', 'تم حفظ الإعدادات بنجاح')}
             </div>
           )}
 
           {hasChanges && !isSaved && (
             <span className="text-xs text-amber-600 font-medium bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
-              يوجد تعديلات غير محفوظة
+              {language === 'ar' ? 'يوجد تعديلات غير محفوظة' : 'Unsaved changes'}
             </span>
           )}
 
           <button
             type="button"
             onClick={() => handleSaveSettings()}
-            className="btn-3d btn-3d-blue flex items-center gap-2 px-5 py-2.5 text-sm font-semibold"
+            className="btn-3d btn-3d-blue flex items-center gap-2 px-5 py-2.5 text-sm font-semibold cursor-pointer"
           >
             <Save size={16} />
-            حفظ كافة الإعدادات
+            {language === 'ar' ? 'حفظ كافة الإعدادات' : 'Save All Settings'}
           </button>
         </div>
       </div>
@@ -691,6 +730,20 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
                           onChange={e => handleCompanyChange('website', e.target.value)}
                           className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg text-slate-900 font-mono"
                         />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">الدولة</label>
+                        <select
+                          value={settings.company.country || 'SA'}
+                          onChange={e => handleCompanyChange('country', e.target.value)}
+                          className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg text-slate-900 font-medium"
+                        >
+                          {COUNTRIES_LIST.map((c) => (
+                            <option key={c.code} value={c.code}>
+                              {c.flag} {c.nameAr} ({c.iso3})
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-slate-700 mb-1">المدينة والرمز البريدي</label>

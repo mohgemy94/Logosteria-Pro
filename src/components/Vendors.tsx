@@ -20,6 +20,7 @@ import {
 } from '../utils/partnerLedger';
 import ExportButtonGroup from './ExportButtonGroup';
 import { useSystemCurrency } from '../utils/currency';
+import { COUNTRIES_LIST } from '../utils/countries';
 
 export default function Vendors() {
   const { symbol: currencySymbol } = useSystemCurrency();
@@ -692,6 +693,21 @@ export default function Vendors() {
                       className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
                       dir="ltr"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-600 font-bold mb-1">الدولة:</label>
+                    <select
+                      value={editingVendor.country || 'SA'}
+                      onChange={(e) => setEditingVendor({...editingVendor, country: e.target.value})}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+                    >
+                      {COUNTRIES_LIST.map((c) => (
+                        <option key={c.code} value={c.code}>
+                          {c.flag} {c.nameAr} ({c.iso3})
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>

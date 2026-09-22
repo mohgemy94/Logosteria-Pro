@@ -19,8 +19,14 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Landmark,
-  Mic
+  Mic,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  BarChart3
 } from 'lucide-react';
+import AnalyticsScreen from './components/AnalyticsScreen';
 import VoiceSearchModal from './components/VoiceSearchModal';
 import { GlobalSyncIndicator } from './components/GlobalSyncIndicator';
 import LocalFolderBackupManager from './components/LocalFolderBackupManager';
@@ -61,6 +67,13 @@ export default function App() {
   const [activeView, setActiveView] = useState<string | null>('companyProfile');
   const [systemSettings, setSystemSettings] = useState(() => getSystemSettings());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(() => {
+    try {
+      return localStorage.getItem('logosteria_sidebar_open') !== 'false';
+    } catch {
+      return true;
+    }
+  });
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [showVoiceSearch, setShowVoiceSearch] = useState(false);
   const [autoSaveConfig, setAutoSaveConfig] = useState<AutoSaveConfig>(() => getAutoSaveConfig());
@@ -71,7 +84,23 @@ export default function App() {
     type: 'success' | 'info';
   } | null>(null);
 
-  // Global Keyboard Shortcut: Ctrl + K or Alt + V to toggle voice search
+  const toggleSidebar = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsMobileMenuOpen(prev => !prev);
+    } else {
+      setIsDesktopSidebarOpen(prev => {
+        const next = !prev;
+        try {
+          localStorage.setItem('logosteria_sidebar_open', String(next));
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+    }
+  };
+
+  // Global Keyboard Shortcuts: Ctrl + K (Voice Search) & Ctrl + B / Alt + B (Toggle Sidebar)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -80,6 +109,9 @@ export default function App() {
       } else if (e.altKey && (e.key.toLowerCase() === 'v' || e.key === 'ر')) {
         e.preventDefault();
         setShowVoiceSearch(prev => !prev);
+      } else if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') || (e.altKey && (e.key.toLowerCase() === 'b' || e.key === 'لا'))) {
+        e.preventDefault();
+        toggleSidebar();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -168,8 +200,10 @@ export default function App() {
           systemSettings={systemSettings} 
           onNavigateToSettings={() => handleNavigate('settings')} 
           onNavigateToDashboard={() => handleNavigate(null)}
+          onNavigate={(view) => handleNavigate(view)}
         />
       );
+      case 'analytics': return <AnalyticsScreen onNavigate={(view) => handleNavigate(view)} />;
       case 'journal': return <NewJournalEntry />;
       case 'chartTree': return <ChartOfAccountsTree />;
       case 'trialBalance': return <TrialBalanceScreen onNavigate={(view) => handleNavigate(view)} />;
@@ -222,26 +256,27 @@ export default function App() {
       case 'companyProfile': return t('nav_companyProfile', 'الواجهة الرئيسية (بيانات الشركة)');
       case 'settings': return t('nav_settings', 'إعدادات النظام');
       case 'journal': return t('nav_journal', 'القيود اليومية');
-      case 'chartTree': return 'دليل وشجرة الحسابات المالية (Chart of Accounts Tree)';
+      case 'chartTree': return language === 'ar' ? 'دليل وشجرة الحسابات المالية (Tree)' : 'Chart of Accounts Tree';
       case 'trialBalance': return t('nav_trialBalance', 'ميزان المراجعة');
-      case 'financialReports': return 'التقارير المالية الختامية (Income & Balance Sheet)';
-      case "yearEndClosing": return "الإقفال السنوي (Year-End Closing)";
+      case 'financialReports': return language === 'ar' ? 'التقارير المالية الختامية (قائمة الدخل والميزانية)' : 'Financial Statements (Income & Balance Sheet)';
+      case "yearEndClosing": return language === 'ar' ? 'الإقفال السنوي وترحيل الأرصدة' : 'Year-End Closing & Balance Roll-forward';
       case 'customers': return t('nav_customers', 'إدارة العملاء');
       case 'sales': return t('nav_sales', 'فواتير المبيعات');
-      case 'installments': return t('nav_installments', 'إدارة التقسيط والكمبيالات والسندات لأمر');
+      case 'installments': return language === 'ar' ? 'إدارة التقسيط والكمبيالات والسندات لأمر' : 'Installments & Promissory Notes';
       case 'vendors': return t('nav_vendors', 'إدارة الموردين');
       case 'purchases': return t('nav_purchases', 'فواتير المشتريات');
       case 'partnerBalances': return t('nav_partnerBalances', 'أرصدة العملاء والموردين');
       case 'warehouseBalances': return t('nav_warehouseBalances', 'أرصدة المخزن');
-      case 'inventoryCount': return 'الجرد المخزني الدوري والتسويات الدفترية';
+      case 'inventoryCount': return language === 'ar' ? 'الجرد المخزني الدوري والتسويات الدفترية' : 'Inventory Stock Count & Adjustments';
       case 'items': return t('nav_items', 'إدارة الأصناف');
-      case 'manufacturing': return t('nav_manufacturing', 'إدارة التصنيع والإنتاج وقوائم التكاليف (BOM)');
-      case 'payroll': return t('nav_payroll', 'الموظفون والأجور والمكافآت والبدلات والخصومات');
+      case 'manufacturing': return language === 'ar' ? 'إدارة التصنيع والإنتاج وقوائم التكاليف (BOM)' : 'Manufacturing Orders & Bill of Materials (BOM)';
+      case 'payroll': return language === 'ar' ? 'الموظفون والأجور والمكافآت والبدلات ومسير الرواتب' : 'Employees & Payroll Management';
       case 'externalReceipt': return t('nav_externalReceipt', 'سند قبض خارجي');
       case 'externalPayment': return t('nav_externalPayment', 'سند صرف خارجي');
       case 'internalReceipt': return t('nav_internalReceipt', 'سند قبض داخلي');
       case 'internalPayment': return t('nav_internalPayment', 'سند صرف داخلي');
-      case 'bankChecks': return 'دورة حياة وحافظة الشيكات البنكية (Check Tracking & Clearance)';
+      case 'bankChecks': return language === 'ar' ? 'دورة حياة وحافظة الشيكات البنكية' : 'Bank Check Portfolio & Tracking';
+      case 'analytics': return language === 'ar' ? 'الرسوم البيانية والتحليلات (BI Hub)' : 'Visual BI & Analytics Hub';
       case 'external': return t('nav_externalReceipt', 'سند قبض خارجي');
       case 'internal': return t('nav_internalReceipt', 'سند قبض داخلي');
       default: return '';
@@ -252,15 +287,39 @@ export default function App() {
     <div className="flex flex-col h-screen bg-[#f8fafc] font-sans text-slate-900" dir={dir}>
       {/* Header */}
       <header className="h-16 bg-[#1e293b] text-white flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-slate-700 shrink-0 print:hidden z-20">
-        <div className="flex items-center gap-2.5 sm:gap-4">
-          {/* Mobile Menu Hamburger Toggle */}
+        <div className="flex items-center gap-2 sm:gap-3.5">
+          {/* Sidebar Toggle Button (Mobile drawer / Desktop toggle) */}
           <button
             type="button"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            aria-label={t('systemMenu', 'القائمة الرئيسية')}
-            className="md:hidden p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+            onClick={toggleSidebar}
+            aria-label={
+              (isMobileMenuOpen || isDesktopSidebarOpen)
+                ? t('hideSidebar', 'إخفاء القائمة الجانبية (Ctrl+B)')
+                : t('showSidebar', 'إظهار القائمة الجانبية (Ctrl+B)')
+            }
+            title={
+              (isMobileMenuOpen || isDesktopSidebarOpen)
+                ? (language === 'ar' ? 'إخفاء القائمة الجانبية (Ctrl+B)' : 'Hide Sidebar (Ctrl+B)')
+                : (language === 'ar' ? 'إظهار القائمة الجانبية (Ctrl+B)' : 'Show Sidebar (Ctrl+B)')
+            }
+            className={`p-2 rounded-lg transition-all cursor-pointer flex items-center justify-center border shadow-2xs ${
+              !isDesktopSidebarOpen
+                ? 'bg-amber-500/20 text-amber-300 border-amber-400/50 hover:bg-amber-500/30'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border-slate-700'
+            }`}
           >
-            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            {/* Mobile Icon */}
+            <span className="md:hidden flex items-center justify-center">
+              {isMobileMenuOpen ? <X size={19} /> : <Menu size={19} />}
+            </span>
+            {/* Desktop Icon */}
+            <span className="hidden md:flex items-center justify-center">
+              {isDesktopSidebarOpen ? (
+                isRtl ? <PanelRightClose size={19} /> : <PanelLeftClose size={19} />
+              ) : (
+                isRtl ? <PanelRightOpen size={19} /> : <PanelLeftOpen size={19} />
+              )}
+            </span>
           </button>
 
           <div 
@@ -274,13 +333,13 @@ export default function App() {
             <div>
               <h1 className="text-sm sm:text-base md:text-lg font-semibold leading-tight line-clamp-1">
                 {language === 'ar' 
-                  ? (systemSettings.company.nameAr || 'لوجوستريا للمحاسبة') 
-                  : (systemSettings.company.nameEn || 'Logustria ERP')}
+                  ? (systemSettings.company.nameAr || 'لوجوستريا للمحاسبة والأنظمة المالية') 
+                  : (systemSettings.company.nameEn || systemSettings.company.nameAr || 'Logustria ERP & Financial Systems')}
               </h1>
               <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wider mt-0.5 line-clamp-1">
                 {language === 'ar' 
-                  ? (systemSettings.company.nameEn || 'النظام المالي المؤسسي') 
-                  : 'Enterprise Financial & Accounting ERP'}
+                  ? (systemSettings.company.nameEn || 'Logustria ERP & Financial Systems') 
+                  : (systemSettings.company.nameAr || 'لوجوستريا للمحاسبة والأنظمة المالية')}
               </p>
             </div>
           </div>
@@ -325,33 +384,61 @@ export default function App() {
           />
         )}
 
-        {/* Sidebar (Responsive: Permanent on Desktop, Slide-over Drawer on Mobile) */}
+        {/* Sidebar (Responsive: Permanent/Toggleable on Desktop, Slide-over Drawer on Mobile) */}
         <nav className={`
           fixed md:static inset-y-0 ${isRtl ? 'right-0' : 'left-0'} z-50
-          w-72 sm:w-80 md:w-64
-          bg-[#0f172a] text-slate-300 p-4 flex flex-col gap-1 shrink-0 overflow-y-auto print:hidden
-          transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none
+          w-72 sm:w-80
+          bg-[#0f172a] text-slate-300 flex flex-col gap-1 shrink-0 overflow-y-auto print:hidden
+          transition-all duration-300 ease-in-out shadow-2xl md:shadow-none
           ${isMobileMenuOpen 
-            ? 'translate-x-0' 
+            ? 'translate-x-0 p-4' 
             : isRtl ? 'translate-x-full md:translate-x-0' : '-translate-x-full md:translate-x-0'}
+          ${isDesktopSidebarOpen 
+            ? 'md:w-64 md:p-4 md:opacity-100 md:visible' 
+            : 'md:w-0 md:p-0 md:opacity-0 md:invisible md:overflow-hidden md:pointer-events-none md:border-none'}
         `}>
-          {/* Mobile Drawer Header */}
-          <div className="md:hidden flex items-center justify-between pb-3 mb-2 border-b border-slate-800">
-            <div className="flex items-center gap-2">
-              <div className="px-2 py-0.5 bg-linear-to-r from-amber-500 to-amber-400 rounded-md flex items-center justify-center font-bold text-[11px] text-slate-950">
+          {/* Unified Sidebar Header */}
+          <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-800 shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="px-2 py-0.5 bg-linear-to-r from-amber-500 to-amber-400 rounded-md flex items-center justify-center font-bold text-[11px] text-slate-950 shrink-0">
                 {language === 'ar' ? 'لوجوستريا' : 'LOGUSTRIA'}
               </div>
-              <span className="font-bold text-xs text-white">{t('systemMenu', 'قائمة النظام المحاسبي')}</span>
+              <div className="min-w-0">
+                <span className="font-bold text-xs text-white truncate block">
+                  {language === 'ar' 
+                    ? (systemSettings.company.nameAr || 'لوجوستريا للمحاسبة') 
+                    : (systemSettings.company.nameEn || systemSettings.company.nameAr || 'Logustria ERP')}
+                </span>
+                <span className="text-[9px] text-slate-400 truncate block">
+                  {language === 'ar' 
+                    ? (systemSettings.company.nameEn || 'قائمة النظام المحاسبي') 
+                    : (systemSettings.company.nameAr || 'ERP Navigation Menu')}
+                </span>
+              </div>
             </div>
+            
+            {/* Mobile Close Button */}
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(false)}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              title={language === 'ar' ? 'إغلاق القائمة' : 'Close Menu'}
             >
               <X size={18} />
             </button>
+
+            {/* Desktop Collapse Button */}
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="hidden md:flex p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              title={language === 'ar' ? 'طي وإخفاء القائمة الجانبية (Ctrl+B)' : 'Hide Sidebar (Ctrl+B)'}
+            >
+              {isRtl ? <PanelRightClose size={17} /> : <PanelLeftClose size={17} />}
+            </button>
           </div>
 
+          {/* 1. الرئيسية وبيانات المنشأة */}
           <div className="text-[10px] uppercase font-bold text-slate-500 px-3 mt-1 mb-2 tracking-wider">
             {t('nav_general', 'الرئيسية وبيانات المنشأة')}
           </div>
@@ -363,38 +450,15 @@ export default function App() {
             <LayoutDashboard size={15} className="opacity-80 shrink-0" /> 
             <span>{t('nav_dashboard', 'لوحة المؤشرات')}</span>
           </div>
-
-          <div className="mt-4 text-[10px] uppercase font-bold text-slate-500 px-3 mb-2 tracking-wider">
-            {t('nav_generalAccounting', 'المحاسبة العامة')}
-          </div>
-          <div onClick={() => handleNavigate('journal')} className={navItemClass('journal')}>
-            <span className="text-xs font-mono bg-slate-800 px-1 rounded">GL</span> 
-            <span>{t('nav_journal', 'القيود اليومية')}</span>
-          </div>
-          <div onClick={() => handleNavigate('chartTree')} className={navItemClass('chartTree')}>
-            <span className="text-xs font-mono bg-slate-800 text-indigo-400 px-1 rounded">COA</span> 
-            <span>شجرة الحسابات المالية (Tree)</span>
-          </div>
-          <div onClick={() => handleNavigate('trialBalance')} className={navItemClass('trialBalance')}>
-            <span className="text-xs font-mono bg-slate-800 text-amber-400 px-1 rounded">TB</span> 
-            <span>{t('nav_trialBalance', 'ميزان المراجعة')}</span>
-          </div>
-          <div onClick={() => handleNavigate('financialReports')} className={navItemClass('financialReports')}>
-            <span className="text-xs font-mono bg-slate-800 text-blue-400 px-1 rounded">FS</span> 
-            <span>التقارير المالية الختامية</span>
-          </div>
-          <div onClick={() => handleNavigate('costCenters')} className={navItemClass('costCenters')}>
-            <span className="text-xs font-mono bg-slate-800 text-purple-400 px-1 rounded">CC</span> 
+          <div onClick={() => handleNavigate('analytics')} className={navItemClass('analytics')}>
+            <BarChart3 size={15} className="text-blue-400 shrink-0" /> 
             <span className="flex items-center justify-between flex-1">
-              <span>{t('nav_costCenters', 'مراكز التكلفة والمشاريع')}</span>
-              <span className="text-[10px] font-bold text-purple-300 bg-purple-900/60 px-1.5 py-0.5 rounded border border-purple-700/50">أرباح وخسائر</span>
+              <span>{language === 'ar' ? 'الرسوم البيانية والتحليلات' : 'Analytics & Charts'}</span>
+              <span className="text-[10px] font-bold text-blue-300 bg-blue-950/80 px-1.5 py-0.5 rounded border border-blue-700/60">BI Hub</span>
             </span>
           </div>
-          <div onClick={() => handleNavigate("yearEndClosing")} className={navItemClass("yearEndClosing")}>
-            <span className="text-xs font-mono bg-slate-800 text-rose-400 px-1 rounded">YC</span>
-            <span>الإقفال السنوي</span>
-          </div>
-          
+
+          {/* 2. العملاء والمبيعات والتقسيط */}
           <div className="mt-4 text-[10px] uppercase font-bold text-slate-500 px-3 mb-2 tracking-wider">
             {t('nav_salesGroup', 'العملاء والمبيعات والتقسيط')}
           </div>
@@ -411,6 +475,7 @@ export default function App() {
             <span>{t('nav_installments', 'التقسيط والكمبيالات')}</span>
           </div>
 
+          {/* 3. الموردون والمشتريات */}
           <div className="mt-4 text-[10px] uppercase font-bold text-slate-500 px-3 mb-2 tracking-wider">
             {t('nav_purchasesGroup', 'الموردون والمشتريات')}
           </div>
@@ -423,6 +488,47 @@ export default function App() {
             <span>{t('nav_purchases', 'فواتير المشتريات')}</span>
           </div>
 
+          {/* 4. الخزينة والبنوك */}
+          <div className="mt-4 text-[10px] uppercase font-bold text-slate-500 px-3 mb-2 tracking-wider">
+            {t('nav_treasuryGroup', 'الخزينة والبنوك')}
+          </div>
+          <div onClick={() => handleNavigate('externalReceipt')} className={navItemClass('externalReceipt')}>
+            <ArrowDownLeft size={15} className="text-emerald-400 shrink-0" />
+            <span className="flex items-center justify-between flex-1">
+              <span>{t('nav_externalReceipt', 'سند قبض خارجي')}</span>
+              <span className="text-[10px] text-slate-400 font-normal">تحصيل عملاء</span>
+            </span>
+          </div>
+          <div onClick={() => handleNavigate('externalPayment')} className={navItemClass('externalPayment')}>
+            <ArrowUpRight size={15} className="text-rose-400 shrink-0" />
+            <span className="flex items-center justify-between flex-1">
+              <span>{t('nav_externalPayment', 'سند صرف خارجي')}</span>
+              <span className="text-[10px] text-slate-400 font-normal">سداد موردين ومصاريف</span>
+            </span>
+          </div>
+          <div onClick={() => handleNavigate('internalReceipt')} className={navItemClass('internalReceipt')}>
+            <ArrowDownLeft size={15} className="text-teal-400 shrink-0" />
+            <span className="flex items-center justify-between flex-1">
+              <span>{t('nav_internalReceipt', 'سند قبض داخلي')}</span>
+              <span className="text-[10px] text-slate-400 font-normal">تحويل بين الخزن</span>
+            </span>
+          </div>
+          <div onClick={() => handleNavigate('internalPayment')} className={navItemClass('internalPayment')}>
+            <ArrowUpRight size={15} className="text-amber-400 shrink-0" />
+            <span className="flex items-center justify-between flex-1">
+              <span>{t('nav_internalPayment', 'سند صرف داخلي')}</span>
+              <span className="text-[10px] text-slate-400 font-normal">تحويل بين الخزن</span>
+            </span>
+          </div>
+          <div onClick={() => handleNavigate('bankChecks')} className={navItemClass('bankChecks')}>
+            <Landmark size={15} className="text-blue-400 shrink-0" />
+            <span className="flex items-center justify-between flex-1">
+              <span>{t('nav_bankChecks', 'حافظة ودورة الشيكات')}</span>
+              <span className="text-[10px] font-mono bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded font-bold">CHQ</span>
+            </span>
+          </div>
+
+          {/* 5. الأرصدة والذمم المالية */}
           <div className="mt-4 text-[10px] uppercase font-bold text-slate-500 px-3 mb-2 tracking-wider">
             {t('nav_balancesGroup', 'الأرصدة والذمم المالية')}
           </div>
@@ -431,6 +537,7 @@ export default function App() {
             <span>{t('nav_partnerBalances', 'أرصدة العملاء والموردين')}</span>
           </div>
 
+          {/* 6. المخزون والتصنيع والأصناف */}
           <div className="mt-4 text-[10px] uppercase font-bold text-slate-500 px-3 mb-2 tracking-wider">
             {t('nav_inventoryGroup', 'المخزون والتصنيع والأصناف')}
           </div>
@@ -440,7 +547,7 @@ export default function App() {
           </div>
           <div onClick={() => handleNavigate('inventoryCount')} className={navItemClass('inventoryCount')}>
             <ClipboardCheck size={15} className="text-emerald-400 shrink-0" /> 
-            <span>الجرد الدوري والتسويات</span>
+            <span>{t('nav_inventoryCount', 'الجرد الدوري والتسويات')}</span>
           </div>
           <div onClick={() => handleNavigate('items')} className={navItemClass('items')}>
             <span className="text-xs opacity-80 font-mono bg-slate-800 px-1 rounded">ITM</span> 
@@ -451,41 +558,51 @@ export default function App() {
             <span>{t('nav_manufacturing', 'إدارة التصنيع والإنتاج (BOM)')}</span>
           </div>
 
+          {/* 7. الموارد البشرية والأجور */}
           <div className="mt-4 text-[10px] uppercase font-bold text-slate-500 px-3 mb-2 tracking-wider">
             {t('nav_hrGroup', 'الموارد البشرية والأجور')}
           </div>
           <div onClick={() => handleNavigate('payroll')} className={navItemClass('payroll')}>
             <Users size={15} className="text-blue-400 shrink-0" /> 
-            <span>{t('nav_payroll', 'الموظفون والأجور والبدلات')}</span>
-          </div>
-
-          <div className="mt-4 text-[10px] uppercase font-bold text-slate-500 px-3 mb-2 tracking-wider">
-            {t('nav_treasuryGroup', 'الخزينة والبنوك')}
-          </div>
-          <div onClick={() => handleNavigate('externalReceipt')} className={navItemClass('externalReceipt')}>
-            <ArrowDownLeft size={15} className="text-emerald-400 shrink-0" />
-            <span>{t('nav_externalReceipt', 'سند قبض خارجي')}</span>
-          </div>
-          <div onClick={() => handleNavigate('externalPayment')} className={navItemClass('externalPayment')}>
-            <ArrowUpRight size={15} className="text-rose-400 shrink-0" />
-            <span>{t('nav_externalPayment', 'سند صرف خارجي')}</span>
-          </div>
-          <div onClick={() => handleNavigate('internalReceipt')} className={navItemClass('internalReceipt')}>
-            <ArrowDownLeft size={15} className="text-teal-400 shrink-0" />
-            <span>{t('nav_internalReceipt', 'سند قبض داخلي')}</span>
-          </div>
-          <div onClick={() => handleNavigate('internalPayment')} className={navItemClass('internalPayment')}>
-            <ArrowUpRight size={15} className="text-amber-400 shrink-0" />
-            <span>{t('nav_internalPayment', 'سند صرف داخلي')}</span>
-          </div>
-          <div onClick={() => handleNavigate('bankChecks')} className={navItemClass('bankChecks')}>
-            <Landmark size={15} className="text-blue-400 shrink-0" />
             <span className="flex items-center justify-between flex-1">
-              <span>{t('nav_bankChecks', 'حافظة ودورة الشيكات')}</span>
-              <span className="text-[10px] font-mono bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded">CHQ</span>
+              <span>{t('nav_payroll', 'الموظفون والأجور والبدلات (مسير الرواتب)')}</span>
+              <span className="text-[10px] font-mono bg-slate-800 text-blue-300 px-1 rounded font-bold">HR</span>
             </span>
           </div>
 
+          {/* 8. المحاسبة العامة */}
+          <div className="mt-4 text-[10px] uppercase font-bold text-slate-500 px-3 mb-2 tracking-wider">
+            {t('nav_generalAccounting', 'المحاسبة العامة')}
+          </div>
+          <div onClick={() => handleNavigate('journal')} className={navItemClass('journal')}>
+            <span className="text-xs font-mono bg-slate-800 px-1 rounded">GL</span> 
+            <span>{t('nav_journal', 'القيود اليومية')}</span>
+          </div>
+          <div onClick={() => handleNavigate('chartTree')} className={navItemClass('chartTree')}>
+            <span className="text-xs font-mono bg-slate-800 text-indigo-400 px-1 rounded">COA</span> 
+            <span>{t('nav_chartTree', 'شجرة الحسابات المالية (Tree)')}</span>
+          </div>
+          <div onClick={() => handleNavigate('trialBalance')} className={navItemClass('trialBalance')}>
+            <span className="text-xs font-mono bg-slate-800 text-amber-400 px-1 rounded">TB</span> 
+            <span>{t('nav_trialBalance', 'ميزان المراجعة')}</span>
+          </div>
+          <div onClick={() => handleNavigate('financialReports')} className={navItemClass('financialReports')}>
+            <span className="text-xs font-mono bg-slate-800 text-blue-400 px-1 rounded">FS</span> 
+            <span>{t('nav_financialReports', 'التقارير المالية الختامية')}</span>
+          </div>
+          <div onClick={() => handleNavigate('costCenters')} className={navItemClass('costCenters')}>
+            <span className="text-xs font-mono bg-slate-800 text-purple-400 px-1 rounded">CC</span> 
+            <span className="flex items-center justify-between flex-1">
+              <span>{t('nav_costCenters', 'مراكز التكلفة والمشاريع')}</span>
+              <span className="text-[10px] font-bold text-purple-300 bg-purple-900/60 px-1.5 py-0.5 rounded border border-purple-700/50">{t('nav_costCentersBadge', 'أرباح وخسائر')}</span>
+            </span>
+          </div>
+          <div onClick={() => handleNavigate("yearEndClosing")} className={navItemClass("yearEndClosing")}>
+            <span className="text-xs font-mono bg-slate-800 text-rose-400 px-1 rounded">YC</span>
+            <span>{t('nav_yearEndClosing', 'الإقفال السنوي')}</span>
+          </div>
+
+          {/* الإدارة والنظام */}
           <div className="mt-4 text-[10px] uppercase font-bold text-slate-500 px-3 mb-2 tracking-wider">
             {t('nav_adminGroup', 'الإدارة والنظام')}
           </div>
@@ -610,6 +727,17 @@ export default function App() {
                 {/* View Top Bar with Return to Company Profile / Dashboard Button */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 sm:pb-4 mb-4 sm:mb-6 border-b border-slate-200 print:hidden">
                   <div className="flex items-center gap-2 w-full sm:w-auto">
+                    {!isDesktopSidebarOpen && (
+                      <button
+                        type="button"
+                        onClick={toggleSidebar}
+                        className="hidden md:flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 px-3 py-2 rounded-xl transition-all shadow-2xs cursor-pointer"
+                        title={language === 'ar' ? 'إظهار القائمة الجانبية (Ctrl+B)' : 'Show Sidebar (Ctrl+B)'}
+                      >
+                        {isRtl ? <PanelRightOpen size={16} className="text-amber-500" /> : <PanelLeftOpen size={16} className="text-amber-500" />}
+                        <span>{language === 'ar' ? 'إظهار القائمة' : 'Show Menu'}</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={closeModal}
@@ -630,7 +758,7 @@ export default function App() {
                     )}
                   </div>
                   <div className="flex items-center justify-between sm:justify-end gap-2 text-xs text-slate-400">
-                    <span>{language === 'ar' ? (systemSettings.company.nameAr || 'نظام لوجوستريا') : (systemSettings.company.nameEn || 'Logustria ERP')}</span>
+                    <span>{language === 'ar' ? (systemSettings.company.nameAr || 'نظام لوجوستريا') : (systemSettings.company.nameEn || systemSettings.company.nameAr || 'Logustria ERP')}</span>
                     <span>/</span>
                     <span className="font-bold text-slate-700">
                       {getViewTitle()}

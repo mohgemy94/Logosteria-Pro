@@ -295,7 +295,31 @@ export async function exportElementToPdf(
         `;
         clonedDoc.head.appendChild(highResStyle);
 
-        // 4. Strip transforms or zoom from preview container
+        // 4. Strip print-hidden elements and force print-specific display rules in clonedDoc
+        try {
+          // Remove all elements explicitly marked with print:hidden or data-print-ignore
+          const printHiddenElements = clonedDoc.querySelectorAll('.print\\:hidden, [data-print-ignore="true"]');
+          printHiddenElements.forEach((el) => {
+            el.remove();
+          });
+
+          // Ensure any elements styled as print:block or print:flex are visible
+          const printBlockElements = clonedDoc.querySelectorAll<HTMLElement>('.print\\:block');
+          printBlockElements.forEach((el) => {
+            el.style.display = 'block';
+            el.classList.remove('hidden');
+          });
+
+          const printFlexElements = clonedDoc.querySelectorAll<HTMLElement>('.print\\:flex');
+          printFlexElements.forEach((el) => {
+            el.style.display = 'flex';
+            el.classList.remove('hidden');
+          });
+        } catch (e) {
+          console.warn('Error cleaning print elements in clonedDoc:', e);
+        }
+
+        // 5. Strip transforms or zoom from preview container
         clonedElement.style.transform = 'none';
         clonedElement.style.margin = '0 auto';
         clonedElement.style.boxShadow = 'none';

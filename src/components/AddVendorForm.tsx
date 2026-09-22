@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Save } from 'lucide-react';
 import { useSystemCurrency } from '../utils/currency';
+import { COUNTRIES_LIST } from '../utils/countries';
 
 interface AddVendorFormProps {
   initialCode?: string;
@@ -9,6 +10,7 @@ interface AddVendorFormProps {
     name: string; 
     taxNumber: string; 
     phone: string; 
+    country?: string | undefined;
     address?: string | undefined;
     email?: string | undefined;
     creditLimit?: number | undefined;
@@ -25,6 +27,7 @@ export default function AddVendorForm({ initialCode, onSave, onCancel }: AddVend
     name: '', 
     taxNumber: '', 
     phone: '', 
+    country: 'SA',
     address: '',
     email: '',
     creditLimit: '',
@@ -64,6 +67,7 @@ export default function AddVendorForm({ initialCode, onSave, onCancel }: AddVend
         name: newVendor.name.trim(),
         taxNumber: newVendor.taxNumber.trim(),
         phone: newVendor.phone.trim(),
+        country: newVendor.country,
         address: newVendor.address.trim(),
         email: newVendor.email.trim() || undefined,
         creditLimit: limitVal !== undefined && !isNaN(limitVal) ? limitVal : undefined,
@@ -124,6 +128,22 @@ export default function AddVendorForm({ initialCode, onSave, onCancel }: AddVend
             placeholder="05XXXXXXXX" 
             dir="ltr"
           />
+        </div>
+
+        {/* Country */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-bold uppercase text-slate-500">الدولة</label>
+          <select
+            value={newVendor.country}
+            onChange={e => setNewVendor({...newVendor, country: e.target.value})}
+            className="border border-slate-200 p-2 rounded-lg text-xs focus:outline-none focus:border-blue-500 bg-white"
+          >
+            {COUNTRIES_LIST.map(c => (
+              <option key={c.code} value={c.code}>
+                {c.flag} {c.nameAr} ({c.iso3})
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Email */}

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { 
   Building2, 
   MapPin, 
@@ -14,48 +13,23 @@ import {
   LayoutDashboard
 } from 'lucide-react';
 import { SystemSettings } from '../types/accounting';
-import { saveSystemSettings } from '../utils/settings';
 import { useLanguage } from '../i18n/LanguageContext';
-import CompanyLogoUploader from './CompanyLogoUploader';
+import { getCountryByCodeOrName } from '../utils/countries';
 
 interface CompanyProfileScreenProps {
   systemSettings: SystemSettings;
   onNavigateToSettings: () => void;
   onNavigateToDashboard: () => void;
+  onNavigate?: (view: string) => void;
 }
 
 export default function CompanyProfileScreen({
-  systemSettings: initialSettings,
+  systemSettings,
   onNavigateToSettings,
-  onNavigateToDashboard,
+  onNavigateToDashboard
 }: CompanyProfileScreenProps) {
-  const [settings, setSettings] = useState<SystemSettings>(initialSettings);
-  const { company, financial } = settings;
+  const { company, financial } = systemSettings;
   const { language, dir } = useLanguage();
-
-  const handleLogoChange = (newLogoUrl: string) => {
-    const updated = {
-      ...settings,
-      company: {
-        ...settings.company,
-        logoUrl: newLogoUrl
-      }
-    };
-    setSettings(updated);
-    saveSystemSettings(updated);
-  };
-
-  const handleStampChange = (newStampUrl: string) => {
-    const updated = {
-      ...settings,
-      company: {
-        ...settings.company,
-        stampUrl: newStampUrl
-      }
-    };
-    setSettings(updated);
-    saveSystemSettings(updated);
-  };
 
   return (
     <div className="w-full flex flex-col gap-6 print:p-0" dir={dir}>
@@ -77,7 +51,7 @@ export default function CompanyProfileScreen({
                   {company.logoUrl ? (
                     <img 
                       src={company.logoUrl} 
-                      alt={company.nameAr} 
+                      alt={language === 'ar' ? (company.nameAr || 'شعار المنشأة') : (company.nameEn || company.nameAr || 'Company Logo')} 
                       className="max-h-full max-w-full object-contain rounded"
                       referrerPolicy="no-referrer" 
                     />
@@ -93,12 +67,12 @@ export default function CompanyProfileScreen({
                   )}
                 </div>
               </div>
-              <div className="absolute -bottom-2 -left-2 bg-emerald-600 text-white rounded-full p-1 border-2 border-slate-900 shadow-xs" title="منشأة معتمدة ونشطة">
+              <div className="absolute -bottom-2 -left-2 bg-emerald-600 text-white rounded-full p-1 border-2 border-slate-900 shadow-xs" title={language === 'ar' ? 'منشأة معتمدة ونشطة' : 'Certified & Active Enterprise'}>
                 <ShieldCheck size={14} />
               </div>
             </div>
 
-            {/* Typography Section with Arabic Diwani Display */}
+            {/* Typography Section with Arabic Diwani / Modern English Display */}
             <div className="flex flex-col">
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 mb-2">
                 <span className="px-3 py-0.5 rounded-full text-[11px] font-bold bg-amber-400/15 text-amber-300 border border-amber-400/30">
@@ -109,7 +83,7 @@ export default function CompanyProfileScreen({
                 </span>
               </div>
 
-              {/* Company Arabic Name in Artistic Diwani Script */}
+              {/* Company Main Display Name (Switches between Arabic and English) */}
               <h1 
                 className="font-diwani text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-amber-200 drop-shadow-[0_2px_10px_rgba(251,191,36,0.25)] leading-tight tracking-wide py-1"
                 style={{ 
@@ -119,11 +93,11 @@ export default function CompanyProfileScreen({
               >
                 {language === 'ar' 
                   ? (company.nameAr || 'شركة لوجوستريا للمحاسبة والحلول المالية')
-                  : (company.nameEn || 'Logustria Financial & ERP Solutions Co.')}
+                  : (company.nameEn || company.nameAr || 'Logustria Financial & ERP Solutions Co.')}
               </h1>
 
-              {/* Secondary English Name */}
-              {(language === 'ar' ? company.nameEn : company.nameAr) && (
+              {/* Secondary Alternate Name */}
+              {(language === 'ar' ? (company.nameEn || '') : (company.nameAr || '')) && (
                 <p className="text-sm sm:text-base text-slate-300 font-medium tracking-wide mt-1">
                   {language === 'ar' ? company.nameEn : company.nameAr}
                 </p>
@@ -163,16 +137,6 @@ export default function CompanyProfileScreen({
           </div>
         </div>
       </div>
-
-      {/* Company Logo & Stamp Uploader Section */}
-      <CompanyLogoUploader
-        logoUrl={company.logoUrl || ''}
-        onLogoChange={handleLogoChange}
-        stampUrl={company.stampUrl || ''}
-        onStampChange={handleStampChange}
-        title="شعار وختم الشركة المعتمد المطبوع"
-        mode="both"
-      />
 
       {/* Structured Company Details Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -325,6 +289,15 @@ export default function CompanyProfileScreen({
 
             <div className="space-y-3.5 text-xs">
               <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                <div className="text-slate-500 font-medium mb-1">الدولة:</div>
+                <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                  <span>{getCountryByCodeOrName(company.country || 'SA').flag}</span>
+                  <span>{getCountryByCodeOrName(company.country || 'SA').nameAr}</span>
+                  <span className="text-xs font-mono text-slate-400">({getCountryByCodeOrName(company.country || 'SA').iso3})</span>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
                 <div className="text-slate-500 font-medium mb-1">الشارع والحي:</div>
                 <div className="font-bold text-slate-800 text-sm">
                   {company.address || 'طريق الملك فهد، حي الصحافة'}
@@ -359,11 +332,15 @@ export default function CompanyProfileScreen({
           </div>
 
           <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between">
-            <span>العنوان الوطني المسجل</span>
-            <span className="text-slate-500 font-mono">KSA</span>
+            <span>العنوان المسجل</span>
+            <span className="text-slate-600 font-mono font-bold flex items-center gap-1.5">
+              <span>{getCountryByCodeOrName(company.country || 'SA').flag}</span>
+              <span>{getCountryByCodeOrName(company.country || 'SA').iso3}</span>
+            </span>
           </div>
         </div>
       </div>
     </div>
   );
 }
+
