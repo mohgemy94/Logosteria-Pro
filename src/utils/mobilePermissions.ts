@@ -13,9 +13,10 @@ export type PlatformTarget = 'mobile' | 'desktop';
 export type PermissionKey = 
   // Mobile Keys
   | 'camera' 
+  | 'microphone'
   | 'storage' 
+  | 'notifications'
   | 'bluetooth' 
-  | 'notifications' 
   | 'geolocation'
   // Desktop Keys
   | 'desktop_directory'
@@ -52,15 +53,26 @@ export const PERMISSIONS_CONFIG: Record<PermissionKey, Omit<AppPermissionInfo, '
     howToGrantAr: 'عند الضغط على "طلب الإذن الآن" أو أيقونة الكاميرا، اختر "أثناء استخدام التطبيق فقط" (While using the app).',
     isEssential: true
   },
+  microphone: {
+    key: 'microphone',
+    platform: 'mobile',
+    titleAr: 'إذن المايكروفون والبحث الصوتي (Microphone & Voice)',
+    categoryAr: 'الأوامر الصوتية والمساعد الذكي',
+    iconName: 'Mic',
+    descriptionAr: 'البحث الصوتي الذكي في الحسابات والأصناف، والإملاء الصوتي لبيانات الفواتير والسندات على الهاتف.',
+    purposeAr: 'تشغيل المساعد الصوتي والبحث بالصوت داخل التطبيق واستقبال الأوامر الصوتية باللغة العربية.',
+    howToGrantAr: 'اضغط "طلب الإذن" واختر "سماح" (Allow) أو "أثناء استخدام التطبيق" لمنح صلاحية الميكروفون.',
+    isEssential: false
+  },
   storage: {
     key: 'storage',
     platform: 'mobile',
-    titleAr: 'إذن التخزين والملفات (Storage & Files)',
-    categoryAr: 'الملفات والنسخ الاحتياطي',
+    titleAr: 'إذن التخزين وحماية الملفات (Storage & Persistence)',
+    categoryAr: 'الملفات والنسخ الاحتياطي للأندرويد',
     iconName: 'HardDrive',
-    descriptionAr: 'تنزيل وحفظ ملفات الفواتير والسندات بصيغة PDF و Excel/CSV في جهازك، وتشغيل النسخ الاحتياطي التلقائي.',
-    purposeAr: 'تنزيل ملفات الـ PDF وكشوفات Excel/CSV، وتخزين ملفات النسخ الاحتياطي التلقائي محلياً على ذاكرة الهاتف.',
-    howToGrantAr: 'الموافقة على تنزيل الملفات أو تفعيل إذن الوصول للملفات من إعدادات التطبيق في أندرويد.',
+    descriptionAr: 'تفعيل التخزين الدائم لحماية السجلات والنسخ الاحتياطي من الحذف التلقائي، وتنزيل ملفات PDF/Excel مباشرة إلى مجلد التنزيلات (Downloads).',
+    purposeAr: 'حفظ وتنزيل كشوف الحسابات وملفات الـ JSON للنسخ الاحتياطي، وحماية قاعدة البيانات المحلية من أدوات تنظيف الذاكرة بأندرويد.',
+    howToGrantAr: 'اضغط "طلب الإذن الآن" لتثبيت التخزين الدائم، أو قم بتفعيل إذن (الملفات والوسائط / Storage) من إعدادات تطبيق أندرويد.',
     isEssential: true
   },
   bluetooth: {
@@ -238,6 +250,7 @@ export async function checkPermissionStatus(key: PermissionKey): Promise<Permiss
         return 'prompt';
       }
 
+      case 'microphone':
       case 'desktop_microphone': {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           return 'unsupported';
@@ -310,23 +323,14 @@ export async function requestAppPermission(key: PermissionKey): Promise<{ succes
         if ('storage' in navigator && navigator.storage && typeof navigator.storage.persist === 'function') {
           const persisted = await navigator.storage.persist();
           if (persisted) {
-            details = 'تم تفعيل التخزين الدائم (Persistent Storage) لحماية النسخ الاحتياطي من الحذف التلقائي.';
+            details = 'تم تفعيل التخزين الدائم (Persistent Storage) بنجاح لحماية قاعدة البيانات وملفات النسخ الاحتياطي من الحذف التلقائي بنظام أندرويد.';
           }
         }
-        const win = window as any;
-        if (typeof win.showDirectoryPicker === 'function') {
-          try {
-            await win.showDirectoryPicker();
-            details = 'تم منح إذن المجلد التخزيني المباشر بنجاح.';
-          } catch (e: any) {
-            if (e.name !== 'AbortError') {
-              console.warn(e);
-            }
-          }
-        }
+        
+        // On mobile we don't prompt showDirectoryPicker because Android Scoped Storage rejects it
         return { 
           success: true, 
-          message: details || 'إذن التخزين وحفظ الملفات جاهز ونشط لتنزيل الـ PDF والنسخ الاحتياطي.',
+          message: details || 'إذن التخزين الدائم وتنزيل الملفات نشط ومستعد لحفظ ملفات النسخ الاحتياطي و PDF فوراً.',
           state: 'granted' 
         };
       }
@@ -460,7 +464,8 @@ export async function requestAppPermission(key: PermissionKey): Promise<{ succes
         }
       }
 
-      // 7. DESKTOP MICROPHONE (VOICE SEARCH)
+      // 7. MICROPHONE (VOICE SEARCH & DICTATION - MOBILE & DESKTOP)
+      case 'microphone':
       case 'desktop_microphone': {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           return { success: false, message: 'الميكروفون غير مدعوم في هذا المتصفح/الجهاز', state: 'unsupported' };
@@ -470,12 +475,12 @@ export async function requestAppPermission(key: PermissionKey): Promise<{ succes
           stream.getTracks().forEach(track => track.stop());
           return { 
             success: true, 
-            message: 'تم تفعيل إذن الميكروفون بنجاح! يمكنك الآن استخدام البحث والتحكم الصوتي الذكي في شاشات النظام.', 
+            message: 'تم تفعيل إذن الميكروفون بنجاح! يمكنك الآن استخدام البحث والتحكم الصوتي الذكي والإملاء في شاشات النظام.', 
             state: 'granted' 
           };
         } catch (err: any) {
           if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            return { success: false, message: 'تم رفض إذن الميكروفون. يرجى تفعيله من إعدادات المتصفح لاستخدام البحث الصوتي.', state: 'denied' };
+            return { success: false, message: 'تم رفض إذن الميكروفون. يرجى تفعيله من إعدادات المتصفح/الهاتف لاستخدام البحث الصوتي.', state: 'denied' };
           }
           return { success: false, message: `تعذر الوصول للميكروفون: ${err.message || ''}`, state: 'denied' };
         }

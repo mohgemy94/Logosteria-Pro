@@ -36,6 +36,7 @@ import {
   triggerAutoSaveNow, 
   type AutoSaveConfig 
 } from './utils/localFolderBackup';
+import { evaluateAndTriggerSmartAlerts } from './utils/smartNotificationsEngine';
 import NewJournalEntry from './components/NewJournalEntry';
 import TrialBalanceScreen from './components/TrialBalanceScreen';
 import FinancialReportsScreen from './components/FinancialReportsScreen';
@@ -63,6 +64,7 @@ import CheckPortfolioScreen from './components/CheckPortfolioScreen';
 import CostCenterScreen from './components/CostCenterScreen';
 import FiscalYearSelector from './components/FiscalYearSelector';
 import FiscalYearArchiveBanner from './components/FiscalYearArchiveBanner';
+import MobileBackButton from './components/MobileBackButton';
 import { mobileNavigationController } from './utils/mobileNavigation';
 import { useSwipeBack } from './hooks/useSwipeBack';
 import { getSystemSettings } from './utils/settings';
@@ -192,6 +194,24 @@ export default function App() {
     };
   }, [autoSaveConfig.intervalMinutes, autoSaveConfig.enabled]);
 
+  // Background smart notifications evaluator (evaluates checks, stock, approvals, dues)
+  useEffect(() => {
+    // Initial evaluation 4s after app mount
+    const initialTimer = setTimeout(() => {
+      evaluateAndTriggerSmartAlerts().catch(() => {});
+    }, 4000);
+
+    // Periodic evaluation every 30 minutes
+    const periodicTimer = setInterval(() => {
+      evaluateAndTriggerSmartAlerts().catch(() => {});
+    }, 30 * 60 * 1000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(periodicTimer);
+    };
+  }, []);
+
   // Mobile Back Navigation & Popstate Controller Initialization
   useEffect(() => {
     mobileNavigationController.init((newView) => {
@@ -309,7 +329,9 @@ export default function App() {
   };
 
   const closeModal = () => {
-    if (activeView === 'companyProfile') {
+    if (mobileNavigationController.canGoBack()) {
+      mobileNavigationController.goBack();
+    } else if (activeView === 'companyProfile') {
       handleNavigate(null);
     } else {
       handleNavigate('companyProfile');
@@ -414,6 +436,9 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* Mobile Top Header Back Button */}
+          <MobileBackButton activeView={activeView} variant="header" />
+
           {/* Voice Search Quick Button */}
           <button
             type="button"

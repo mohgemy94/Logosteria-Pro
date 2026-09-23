@@ -4,7 +4,7 @@
  * with IndexedDB persistence for seamless background auto-saving to a user-selected local folder.
  */
 
-import { saveOrShareBlob } from './fileSaver';
+import { saveOrShareBlob, isMobileDevice, canWebShareFiles } from './fileSaver';
 
 export interface AutoSaveConfig {
   enabled: boolean;
@@ -192,7 +192,10 @@ export async function clearDirectoryHandle(): Promise<void> {
 }
 
 export function isFileSystemAccessSupported(): boolean {
-  return typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker === 'function';
+  if (typeof window === 'undefined') return false;
+  // Mobile browsers (Android/iOS) and WebViews do not support persistent directory tree handles
+  if (isMobileDevice()) return false;
+  return typeof (window as any).showDirectoryPicker === 'function';
 }
 
 /**
@@ -226,11 +229,20 @@ export async function selectLocalDirectory(): Promise<{
   handle?: FileSystemDirectoryHandle;
   folderName?: string;
   error?: string;
+  isMobile?: boolean;
 }> {
+  if (isMobileDevice()) {
+    return {
+      success: false,
+      isMobile: true,
+      error: 'نظام أندرويد والموبايل لا يتيح للمتصفحات ربط المجلدات المباشرة (Directory Tree Access) لدواعي أمان النظام. يُرجى استخدام ميزة "تنزيل نسخة احتياطية" لحفظها مباشرة في مجلد التنزيلات (Downloads) أو مشاركتها على Google Drive بنقرة واحدة.'
+    };
+  }
+
   if (!isFileSystemAccessSupported()) {
     return {
       success: false,
-      error: 'متصفحك الحالي لا يدعم واجهة اختيار المجلدات المحلية (File System Access API). يُفضل استخدام متصفح Google Chrome أو Microsoft Edge أو Brave على أجهزة الكمبيوتر المكتبية، أو الاستفادة من ميزة تنزيل النسخة المباشرة.'
+      error: 'متصفحك الحالي لا يدعم واجهة اختيار المجلدات المحلية (File System Access API). يُفضل استخدام متصفح Google Chrome أو Microsoft Edge أو Brave على أجهزة الكمبيوتر المكتبية، أو الاستفادة من ميزة تنزيل ومشاركة النسخة المباشرة.'
     };
   }
 
@@ -261,6 +273,13 @@ export async function selectLocalDirectory(): Promise<{
     return { success: true, handle, folderName };
   } catch (err: any) {
     if (err.name === 'AbortError') {
+      if (isMobileDevice()) {
+        return {
+          success: false,
+          isMobile: true,
+          error: 'نظام أندرويد لا يدعم ربط المجلدات المباشرة. يُرجى استخدام زر "تنزيل نسخة احتياطية" لحفظها مباشرة في مجلد التنزيلات (Downloads) أو Google Drive.'
+        };
+      }
       return { success: false, error: 'تم إلغاء اختيار المجلد من قبل المستخدم.' };
     }
     if (err.name === 'SecurityError') {
@@ -553,11 +572,13 @@ export async function triggerAutoSaveNow(): Promise<{
   return await writeBackupToDirectory(handle);
 }
 
+export { isMobileDevice, canWebShareFiles };
+
 /**
  * Immediate download of the full backup JSON file to user's browser default downloads folder.
  * Works across ALL browsers without requiring FileSystem API.
  */
-export function downloadBackupDirectly(): void {
+export async function downloadBackupDirectly(): Promise<void> {
   const backup = collectSystemBackupData();
   const jsonStr = JSON.stringify(backup, null, 2);
   const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
@@ -565,7 +586,14 @@ export function downloadBackupDirectly(): void {
   const dateStr = now.toISOString().split('T')[0];
   const timeStr = `${now.getHours().toString().padStart(2, '0')}-${now.getMinutes().toString().padStart(2, '0')}`;
   const filename = `logustria_full_backup_${dateStr}_${timeStr}.json`;
-  saveOrShareBlob(blob, filename, 'application/json');
+  await saveOrShareBlob(blob, filename, 'application/json');
+}
+
+/**
+ * Share or save backup directly to Mobile device storage / Google Drive / WhatsApp
+ */
+export async function shareOrSaveBackupMobile(): Promise<void> {
+  await downloadBackupDirectly();
 }
 
 /**

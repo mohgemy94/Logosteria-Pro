@@ -20,11 +20,13 @@ import {
   Monitor,
   Globe,
   ArrowRight,
-  ArrowLeft
+  ArrowLeft,
+  BellRing
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { mobileNavigationController } from '../utils/mobileNavigation';
 import MobilePermissionsModal from './MobilePermissionsModal';
+import SmartNotificationsManager from './SmartNotificationsManager';
 import { SystemSettings, CurrencySetting, UserPermission, CreditAndStockControlSettings, BrandingSettings } from '../types/accounting';
 import { getSystemSettings, saveSystemSettings, DEFAULT_SETTINGS } from '../utils/settings';
 import { getSequences, type SequencesStore } from '../utils/sequences';
@@ -61,7 +63,8 @@ type SettingsPortal =
   | 'users_permissions' 
   | 'master_data_engine' 
   | 'approvals_and_reset'
-  | 'mobile_permissions';
+  | 'mobile_permissions'
+  | 'smart_notifications';
 
 interface SettingsProps {
   onNavigateToDashboard?: () => void;
@@ -400,6 +403,20 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
         { label: language === 'ar' ? 'سطح المكتب:' : 'Desktop:', value: language === 'ar' ? 'مجلد صامت وبحث صوتي' : 'Local folder & mic' },
         { label: language === 'ar' ? 'الموبايل:' : 'Mobile:', value: language === 'ar' ? 'كاميرا وبلوتوث وموقع' : 'Camera, Bluetooth, GPS' },
         { label: language === 'ar' ? 'التخزين والطباعة:' : 'Storage & Print:', value: language === 'ar' ? 'دائم ونوافذ منبثقة' : 'Persistent storage' },
+      ]
+    },
+    {
+      id: 'smart_notifications' as SettingsPortal,
+      title: language === 'ar' ? 'مركز الإشعارات والتنبيهات الذكية (Smart Alerts & Push)' : 'Smart Notifications & Push Alerts',
+      description: language === 'ar'
+        ? 'إدارة قنوات وتنبيهات أندرويد للهاتف: مواعيد استحقاق الشيكات، تنبيهات حد إعادة طلب المخزون، وسندات بانتظار الاعتماد.'
+        : 'Automated push alerts for check maturities, low inventory reorder levels, voucher approvals, and due invoices.',
+      icon: BellRing,
+      color: 'amber',
+      highlights: [
+        { label: language === 'ar' ? 'استحقاق الشيكات:' : 'Checks Alerts:', value: language === 'ar' ? 'تنبيه فوري بالصرف' : 'Instant check alert' },
+        { label: language === 'ar' ? 'حد المخزون:' : 'Stock Alerts:', value: language === 'ar' ? 'إنذار نفاد الأصناف' : 'Reorder alerts' },
+        { label: language === 'ar' ? 'أندرويد والموبايل:' : 'Android/Mobile:', value: language === 'ar' ? 'إشعار صوتي واهتزاز' : 'Push & Vibration' },
       ]
     }
   ];
@@ -993,6 +1010,11 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
               {/* 9. ANDROID & MOBILE PERMISSIONS (THE 5 KEY PERMISSIONS) */}
               {activeSection === 'mobile_permissions' && (
                 <MobilePermissionsModal />
+              )}
+
+              {/* 10. SMART NOTIFICATIONS & PUSH ALERTS */}
+              {activeSection === 'smart_notifications' && (
+                <SmartNotificationsManager />
               )}
             </div>
 

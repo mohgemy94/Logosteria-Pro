@@ -31,6 +31,10 @@ export function useSwipeBack({
       }
 
       const touch = e.touches[0];
+      if (!touch) {
+        touchStartRef.current = null;
+        return;
+      }
       const screenWidth = window.innerWidth;
       const x = touch.clientX;
       const y = touch.clientY;

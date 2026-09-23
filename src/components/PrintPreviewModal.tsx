@@ -16,11 +16,13 @@ import {
   Palette,
   CheckCircle2,
   Globe,
-  Scan
+  Scan,
+  Share2
 } from 'lucide-react';
 import { CertifiedInvoiceDocument } from './CertifiedInvoiceDocument';
 import { exportElementToPdf, printElementDirectly } from '../utils/pdfExport';
 import { mobileNavigationController } from '../utils/mobileNavigation';
+import { shareBlobDirectly, isMobileDevice } from '../utils/fileSaver';
 import {
   PAPER_FORMAT_LIST,
   getSavedPrintPaperFormat,
@@ -161,6 +163,7 @@ export default function PrintPreviewModal({
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [isExportSuccess, setIsExportSuccess] = useState<boolean>(false);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
+  const [mobilePdfReady, setMobilePdfReady] = useState<{ blob: Blob; filename: string } | null>(null);
 
   const printAreaRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -324,16 +327,28 @@ export default function PrintPreviewModal({
       });
 
       setIsExportSuccess(true);
+      
+      // If on mobile or APK, also store blob for immediate 1-tap save/share
+      if (result?.blob) {
+        setMobilePdfReady({ blob: result.blob, filename });
+      }
+
       if (result?.method === 'share') {
         setFeedbackToast(
           result.cancelled
             ? 'تم إغلاق نافذة المشاركة'
             : `تم تجهيز ملف PDF (${filename}) - تم فتح قائمة الحفظ والمشاركة!`
         );
+      } else if (result?.method === 'action_sheet') {
+        setFeedbackToast('تم تجهيز ملف PDF بنجاح! اختر طريقة الحفظ في هاتفك أدناه.');
       } else if (result?.method === 'open') {
         setFeedbackToast(`تم فتح ملف الـ PDF (${filename}) للمعاينة والحفظ`);
       } else {
-        setFeedbackToast(`تم تنزيل ملف PDF (${filename}) بنجاح!`);
+        setFeedbackToast(
+          isMobileDevice()
+            ? `تم تجهيز ملف PDF (${filename}) - يمكنك حفظه ومشاركته الآن!`
+            : `تم تنزيل ملف PDF (${filename}) بنجاح!`
+        );
       }
       setTimeout(() => {
         setIsExportSuccess(false);
@@ -725,6 +740,112 @@ export default function PrintPreviewModal({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Mobile / Android APK PDF Save & Share Action Sheet Modal */}
+      {mobilePdfReady && (
+        <div 
+          className="fixed inset-0 z-70 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setMobilePdfReady(null)}
+        >
+          <div 
+            className="w-full max-w-lg bg-slate-900 border-t-4 sm:border-2 border-emerald-500 rounded-t-3xl sm:rounded-2xl p-5 sm:p-6 shadow-2xl animate-in slide-in-from-bottom-6 duration-200 text-white flex flex-col gap-4"
+            onClick={(e) => e.stopPropagation()}
+            dir="rtl"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shadow-inner shrink-0">
+                  <FileCheck size={22} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white flex items-center gap-1.5">
+                    <span>خيارات حفظ المستند في الموبايل</span>
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono">PDF</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5 truncate max-w-[240px] sm:max-w-[320px]">
+                    {mobilePdfReady.filename}
+                  </p>
+                </div>
+              </div>
+
+              <button 
+                type="button"
+                onClick={() => setMobilePdfReady(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                title="إغلاق"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Android Guidance Note */}
+            <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-xs text-emerald-200 leading-relaxed flex items-start gap-2.5">
+              <span className="text-base leading-none shrink-0">📱</span>
+              <p>
+                اختر <strong>«حفظ ومشاركة في الهاتف»</strong> لإرسال المستند فوراً عبر الواتساب أو حفظه في جوجل درايف والملفات، أو اختر <strong>«حفظ كـ PDF عبر الطباعة»</strong> لحفظه مباشرة في ذاكرة التنزيلات.
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-2.5 pt-1">
+              {/* Option 1: Native Share Sheet */}
+              <button
+                type="button"
+                onClick={async () => {
+                  const shared = await shareBlobDirectly(mobilePdfReady.blob, mobilePdfReady.filename);
+                  if (shared) {
+                    setFeedbackToast('تم فتح قائمة المشاركة والحفظ بنجاح!');
+                    setTimeout(() => setFeedbackToast(null), 3000);
+                  }
+                }}
+                className="w-full btn-3d btn-3d-emerald py-3 px-4 text-sm font-black flex items-center justify-center gap-2.5 shadow-lg"
+              >
+                <Share2 size={18} />
+                <span>حفظ ومشاركة في الهاتف (واتساب / درايف / ملفات)</span>
+              </button>
+
+              {/* Option 2: Android Print Spooler Save as PDF */}
+              <button
+                type="button"
+                onClick={() => {
+                  setMobilePdfReady(null);
+                  handlePrint();
+                }}
+                className="w-full btn-3d btn-3d-indigo py-3 px-4 text-sm font-black flex items-center justify-center gap-2.5 shadow-md"
+              >
+                <Printer size={18} />
+                <span>حفظ كـ PDF عبر مدير طباعة أندرويد (تنزيلات)</span>
+              </button>
+
+              {/* Option 3: Direct Download Anchor Retry */}
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    const blobUrl = URL.createObjectURL(mobilePdfReady.blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = mobilePdfReady.filename;
+                    a.target = '_blank';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+                    setFeedbackToast('تم إرسال أمر التنزيل المباشر');
+                    setTimeout(() => setFeedbackToast(null), 2500);
+                  } catch (e) {
+                    console.error('Download click error:', e);
+                  }
+                }}
+                className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all border border-slate-700 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Download size={15} />
+                <span>محاولة تنزيل مباشر كملف عادي</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -14,7 +14,9 @@ import {
   Upload,
   Layers,
   History,
-  FileText
+  FileText,
+  Smartphone,
+  Share2
 } from 'lucide-react';
 import {
   getAutoSaveConfig,
@@ -23,12 +25,14 @@ import {
   selectLocalDirectory,
   triggerAutoSaveNow,
   downloadBackupDirectly,
+  shareOrSaveBackupMobile,
   restoreSystemFromBackup,
   readLatestBackupFromDirectory,
   getStoredDirectoryHandle,
   clearDirectoryHandle,
   collectSystemBackupData,
   isFileSystemAccessSupported,
+  isMobileDevice,
   verifyDirectoryPermission,
   type AutoSaveConfig,
   type SystemFullBackup
@@ -319,13 +323,52 @@ export default function LocalFolderBackupManager({ onClose, isModal = false }: P
         </div>
       )}
 
-      {!isSupported && (
+      {/* Mobile-Friendly Banner & Quick Actions */}
+      {isMobileDevice() && (
+        <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-2 border-indigo-200 text-slate-800 rounded-2xl text-xs shadow-xs space-y-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Smartphone size={18} />
+            </div>
+            <div>
+              <h4 className="font-extrabold text-sm text-indigo-950">
+                وضع النسخ الاحتياطي للهواتف ونظام أندرويد 📱
+              </h4>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                في أجهزة أندرويد و iOS، يتم تنزيل وحفظ النسخ الاحتياطية مباشرة في مجلد (التنزيلات / Downloads) أو مشاركتها مع Google Drive و WhatsApp بنقرة واحدة.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={downloadBackupDirectly}
+              className="btn-3d btn-3d-blue px-3.5 py-2 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Download size={15} />
+              <span>تنزيل نسخة في الهاتف (Downloads)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={shareOrSaveBackupMobile}
+              className="btn-3d btn-3d-emerald px-3.5 py-2 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Share2 size={15} />
+              <span>مشاركة النسخة (Drive / WhatsApp)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isSupported && !isMobileDevice() && (
         <div className="mt-4 p-3.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs flex items-start gap-2.5">
           <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
           <div>
             <p className="font-bold">ملاحظة توافق المتصفح (Browser Compatibility):</p>
             <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-              المتصفح الحالي لا يدعم نافذة اختيار المجلدات المباشرة (File System Access). تعمل هذه الميزة بكفاءة كاملة على متصفحات Chrome و Edge و Brave و Opera على أنظمة Windows و macOS و Linux. يمكنك في الوقت الحالي استخدام زر "تنزيل نسخة JSON" لتنزيل نسخة كاملة فوراً.
+              المتصفح الحالي لا يدعم نافذة اختيار المجلدات المباشرة (File System Access). تعمل هذه الميزة بكفاءة كاملة على متصفحات Chrome و Edge و Brave و Opera على أنظمة Windows و macOS و Linux. يمكنك استخدام زر "تنزيل نسخة JSON" لتنزيل نسخة كاملة فوراً.
             </p>
           </div>
         </div>

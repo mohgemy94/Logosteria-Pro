@@ -33,9 +33,10 @@ export default function MobilePermissionsModal() {
   const [activeTab, setActiveTab] = useState<PlatformTarget>('desktop');
   const [statuses, setStatuses] = useState<Record<PermissionKey, PermissionState>>({
     camera: 'prompt',
+    microphone: 'prompt',
     storage: 'prompt',
-    bluetooth: 'prompt',
     notifications: 'prompt',
+    bluetooth: 'prompt',
     geolocation: 'prompt',
     desktop_directory: 'prompt',
     desktop_microphone: 'prompt',
@@ -48,7 +49,7 @@ export default function MobilePermissionsModal() {
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
   const [isAutoExecutingAll, setIsAutoExecutingAll] = useState<boolean>(false);
 
-  const mobileKeys: readonly PermissionKey[] = ['camera', 'storage', 'bluetooth', 'notifications', 'geolocation'] as const;
+  const mobileKeys: readonly PermissionKey[] = ['camera', 'microphone', 'storage', 'notifications', 'bluetooth', 'geolocation'] as const;
   const desktopKeys: readonly PermissionKey[] = [
     'desktop_directory', 
     'desktop_microphone', 
@@ -164,12 +165,14 @@ export default function MobilePermissionsModal() {
       // Mobile
       case 'camera':
         return <Camera className="text-blue-600" size={20} />;
+      case 'microphone':
+        return <Mic className="text-purple-600" size={20} />;
       case 'storage':
         return <HardDrive className="text-emerald-600" size={20} />;
-      case 'bluetooth':
-        return <Bluetooth className="text-indigo-600" size={20} />;
       case 'notifications':
         return <Bell className="text-amber-600" size={20} />;
+      case 'bluetooth':
+        return <Bluetooth className="text-indigo-600" size={20} />;
       case 'geolocation':
         return <MapPin className="text-rose-600" size={20} />;
       // Desktop
