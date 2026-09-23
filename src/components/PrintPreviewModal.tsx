@@ -17,7 +17,9 @@ import {
   CheckCircle2,
   Globe,
   Scan,
-  Share2
+  Share2,
+  Image as ImageIcon,
+  MessageSquare
 } from 'lucide-react';
 import { CertifiedInvoiceDocument } from './CertifiedInvoiceDocument';
 import { exportElementToPdf, printElementDirectly } from '../utils/pdfExport';
@@ -163,7 +165,7 @@ export default function PrintPreviewModal({
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [isExportSuccess, setIsExportSuccess] = useState<boolean>(false);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
-  const [mobilePdfReady, setMobilePdfReady] = useState<{ blob: Blob; filename: string } | null>(null);
+  const [mobilePdfReady, setMobilePdfReady] = useState<{ blob: Blob; filename: string; imgData?: string } | null>(null);
 
   const printAreaRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -197,6 +199,16 @@ export default function PrintPreviewModal({
     });
     return () => unregister();
   }, [isOpen, onClose, data.docNumber]);
+
+  // Handle back button for the mobile PDF save sheet
+  useEffect(() => {
+    if (!mobilePdfReady) return;
+    const sheetId = 'modal-mobile-pdf-sheet';
+    const unregister = mobileNavigationController.registerModal(sheetId, () => {
+      setMobilePdfReady(null);
+    });
+    return () => unregister();
+  }, [mobilePdfReady]);
 
   const activeDef = getPaperFormatDef(format, customSize);
   const baseWidth = activeDef.baseWidthPx;
@@ -328,9 +340,9 @@ export default function PrintPreviewModal({
 
       setIsExportSuccess(true);
       
-      // If on mobile or APK, also store blob for immediate 1-tap save/share
+      // If on mobile or APK, store blob & imgData for 1-tap save/share options
       if (result?.blob) {
-        setMobilePdfReady({ blob: result.blob, filename });
+        setMobilePdfReady({ blob: result.blob, filename, imgData: result.imgData });
       }
 
       if (result?.method === 'share') {
@@ -743,29 +755,33 @@ export default function PrintPreviewModal({
           </div>
         </div>
       )}
-      {/* Mobile / Android APK PDF Save & Share Action Sheet Modal */}
+      {/* Fully Responsive Universal PDF Save & Share Modal (Mobile, Tablet, Desktop) */}
       {mobilePdfReady && (
         <div 
-          className="fixed inset-0 z-70 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-150"
+          className="fixed inset-0 z-70 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/85 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
           onClick={() => setMobilePdfReady(null)}
         >
           <div 
-            className="w-full max-w-lg bg-slate-900 border-t-4 sm:border-2 border-emerald-500 rounded-t-3xl sm:rounded-2xl p-5 sm:p-6 shadow-2xl animate-in slide-in-from-bottom-6 duration-200 text-white flex flex-col gap-4"
+            className="w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl max-h-[94vh] sm:max-h-[90vh] bg-slate-900 border-t-4 sm:border-2 border-emerald-500 rounded-t-3xl sm:rounded-3xl shadow-2xl animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 text-white flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
             dir="rtl"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shadow-inner shrink-0">
-                  <FileCheck size={22} />
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-800 bg-slate-900/90 shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shadow-inner shrink-0">
+                  <FileCheck className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <div>
-                  <h3 className="font-bold text-base text-white flex items-center gap-1.5">
-                    <span>خيارات حفظ المستند في الموبايل</span>
-                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono">PDF</span>
-                  </h3>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5 truncate max-w-[240px] sm:max-w-[320px]">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h3 className="font-bold text-sm sm:text-base text-white">
+                      خيارات تصدير وحفظ المستند
+                    </h3>
+                    <span className="text-[10px] sm:text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono font-bold border border-emerald-500/30">
+                      {activeDef.shortName}
+                    </span>
+                  </div>
+                  <p className="text-[11px] sm:text-xs text-slate-400 font-mono mt-0.5 truncate">
                     {mobilePdfReady.filename}
                   </p>
                 </div>
@@ -774,53 +790,139 @@ export default function PrintPreviewModal({
               <button 
                 type="button"
                 onClick={() => setMobilePdfReady(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                 title="إغلاق"
               >
-                <X size={20} />
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
 
-            {/* Android Guidance Note */}
-            <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-xs text-emerald-200 leading-relaxed flex items-start gap-2.5">
-              <span className="text-base leading-none shrink-0">📱</span>
-              <p>
-                اختر <strong>«حفظ ومشاركة في الهاتف»</strong> لإرسال المستند فوراً عبر الواتساب أو حفظه في جوجل درايف والملفات، أو اختر <strong>«حفظ كـ PDF عبر الطباعة»</strong> لحفظه مباشرة في ذاكرة التنزيلات.
-              </p>
-            </div>
+            {/* Scrollable Content Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex flex-col gap-3.5 sm:gap-4 flex-1">
+              {/* Document Summary Card with Thumbnail Preview on larger screens */}
+              <div className="flex flex-col sm:flex-row items-center gap-3 bg-slate-800/60 p-3 sm:p-4 rounded-2xl border border-slate-700/60">
+                {mobilePdfReady.imgData && (
+                  <div className="w-16 h-20 sm:w-20 sm:h-24 bg-white rounded-lg p-1 shadow-md shrink-0 border border-slate-600 flex items-center justify-center overflow-hidden">
+                    <img 
+                      src={mobilePdfReady.imgData} 
+                      alt="معاينة مصغرة للمستند" 
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                )}
+                <div className="flex-1 text-center sm:text-right min-w-0">
+                  <div className="text-xs sm:text-sm font-bold text-white flex items-center justify-center sm:justify-start gap-1.5 flex-wrap">
+                    <span>{data.title || 'مستند مالي'}</span>
+                    {data.docNumber && (
+                      <span className="text-emerald-400 font-mono">#{data.docNumber}</span>
+                    )}
+                    {data.partnerName && (
+                      <span className="text-slate-300 font-normal">({data.partnerName})</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] sm:text-xs text-slate-300 mt-1 leading-relaxed">
+                    تم إنشاء وتشفير ملف الـ PDF بنجاح بالمقاس المعتمد. اختر الطريقة المناسبة لك لحفظه في الهاتف أو الكمبيوتر:
+                  </p>
+                </div>
+              </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-2.5 pt-1">
-              {/* Option 1: Native Share Sheet */}
-              <button
-                type="button"
-                onClick={async () => {
-                  const shared = await shareBlobDirectly(mobilePdfReady.blob, mobilePdfReady.filename);
-                  if (shared) {
-                    setFeedbackToast('تم فتح قائمة المشاركة والحفظ بنجاح!');
-                    setTimeout(() => setFeedbackToast(null), 3000);
-                  }
-                }}
-                className="w-full btn-3d btn-3d-emerald py-3 px-4 text-sm font-black flex items-center justify-center gap-2.5 shadow-lg"
-              >
-                <Share2 size={18} />
-                <span>حفظ ومشاركة في الهاتف (واتساب / درايف / ملفات)</span>
-              </button>
+              {/* Responsive Action Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+                {/* 1. Mobile & PWA Share Sheet */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const shared = await shareBlobDirectly(mobilePdfReady.blob, mobilePdfReady.filename);
+                    if (shared) {
+                      setFeedbackToast('تم فتح قائمة المشاركة والحفظ بنجاح!');
+                      setTimeout(() => setFeedbackToast(null), 3000);
+                    }
+                  }}
+                  className="btn-3d btn-3d-emerald p-3 sm:p-3.5 text-xs sm:text-sm font-black flex items-center gap-2.5 sm:gap-3 text-right group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-emerald-700/50 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                    <Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-100" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="leading-tight">حفظ ومشاركة في الهاتف</div>
+                    <div className="text-[10px] font-normal opacity-85 mt-0.5 truncate">تطبيق الملفات / درايف / التطبيقات</div>
+                  </div>
+                </button>
 
-              {/* Option 2: Android Print Spooler Save as PDF */}
-              <button
-                type="button"
-                onClick={() => {
-                  setMobilePdfReady(null);
-                  handlePrint();
-                }}
-                className="w-full btn-3d btn-3d-indigo py-3 px-4 text-sm font-black flex items-center justify-center gap-2.5 shadow-md"
-              >
-                <Printer size={18} />
-                <span>حفظ كـ PDF عبر مدير طباعة أندرويد (تنزيلات)</span>
-              </button>
+                {/* 2. Android Print Spooler Save as PDF */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobilePdfReady(null);
+                    handlePrint();
+                  }}
+                  className="btn-3d btn-3d-indigo p-3 sm:p-3.5 text-xs sm:text-sm font-black flex items-center gap-2.5 sm:gap-3 text-right group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-indigo-700/50 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                    <Printer className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-100" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="leading-tight">حفظ كـ PDF عبر الطباعة</div>
+                    <div className="text-[10px] font-normal opacity-85 mt-0.5 truncate">مدير طباعة أندرويد الرسمية (تنزيلات)</div>
+                  </div>
+                </button>
 
-              {/* Option 3: Direct Download Anchor Retry */}
+                {/* 3. Save as HD Document Image */}
+                {mobilePdfReady.imgData && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        const imgFilename = mobilePdfReady.filename.replace(/\.pdf$/i, '') + '.png';
+                        const a = document.createElement('a');
+                        a.href = mobilePdfReady.imgData!;
+                        a.download = imgFilename;
+                        a.target = '_blank';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        setFeedbackToast('تم بدء تنزيل صورة المستند فائقة الدقة');
+                        setTimeout(() => setFeedbackToast(null), 2500);
+                      } catch (e) {
+                        console.error('Image download error:', e);
+                      }
+                    }}
+                    className="p-3 sm:p-3.5 bg-purple-950/50 hover:bg-purple-900/70 border border-purple-500/40 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold text-purple-100 transition-all flex items-center gap-2.5 sm:gap-3 text-right cursor-pointer group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-purple-800/60 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                      <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5 text-purple-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="leading-tight text-white font-black">حفظ كصورة فائقة الدقة (PNG)</div>
+                      <div className="text-[10px] font-normal text-purple-300 mt-0.5 truncate">متوافق 100% بدون أي قيود تحميل</div>
+                    </div>
+                  </button>
+                )}
+
+                {/* 4. WhatsApp Direct */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const docTitle = data.title || 'مستند مالي';
+                    const docNo = data.docNumber ? ` رقم ${data.docNumber}` : '';
+                    const partner = data.partnerName ? ` - ${data.partnerName}` : '';
+                    const text = `📄 *${docTitle}${docNo}*${partner}\nالمبلغ: ${data.totalAmount?.toLocaleString() || ''} ${data.currency || 'SAR'}\nتم إصداره عبر منظومة لوجوستريا المحاسبية`;
+                    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+                    window.open(waUrl, '_blank');
+                  }}
+                  className="p-3 sm:p-3.5 bg-emerald-950/50 hover:bg-emerald-900/70 border border-emerald-600/40 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold text-emerald-100 transition-all flex items-center gap-2.5 sm:gap-3 text-right cursor-pointer group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-emerald-800/60 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                    <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-300" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="leading-tight text-white font-black">إرسال الملخص عبر الواتساب</div>
+                    <div className="text-[10px] font-normal text-emerald-300 mt-0.5 truncate">مشاركة نص الفاتورة والمبلغ مباشرة</div>
+                  </div>
+                </button>
+              </div>
+
+              {/* 5. Standard Download Anchor fallback */}
               <button
                 type="button"
                 onClick={() => {
@@ -834,16 +936,16 @@ export default function PrintPreviewModal({
                     a.click();
                     document.body.removeChild(a);
                     setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
-                    setFeedbackToast('تم إرسال أمر التنزيل المباشر');
+                    setFeedbackToast('تم إرسال أمر التنزيل المباشر كملف');
                     setTimeout(() => setFeedbackToast(null), 2500);
                   } catch (e) {
                     console.error('Download click error:', e);
                   }
                 }}
-                className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all border border-slate-700 flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700/90 text-slate-300 hover:text-white rounded-xl text-xs font-bold transition-all border border-slate-700 flex items-center justify-center gap-2 cursor-pointer mt-1"
               >
-                <Download size={15} />
-                <span>محاولة تنزيل مباشر كملف عادي</span>
+                <Download className="w-4 h-4" />
+                <span>تنزيل مباشر لملف الـ PDF (لمتصفحات الديسك توب العادية)</span>
               </button>
             </div>
           </div>

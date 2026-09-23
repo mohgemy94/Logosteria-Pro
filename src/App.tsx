@@ -64,7 +64,6 @@ import CheckPortfolioScreen from './components/CheckPortfolioScreen';
 import CostCenterScreen from './components/CostCenterScreen';
 import FiscalYearSelector from './components/FiscalYearSelector';
 import FiscalYearArchiveBanner from './components/FiscalYearArchiveBanner';
-import MobileBackButton from './components/MobileBackButton';
 import { mobileNavigationController } from './utils/mobileNavigation';
 import { useSwipeBack } from './hooks/useSwipeBack';
 import { getSystemSettings } from './utils/settings';
@@ -436,9 +435,6 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Mobile Top Header Back Button */}
-          <MobileBackButton activeView={activeView} variant="header" />
-
           {/* Voice Search Quick Button */}
           <button
             type="button"

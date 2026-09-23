@@ -8,7 +8,7 @@ import {
   applyPrintPageStyle,
   getSavedPrintColorMode
 } from './printPaperFormats';
-import { saveOrShareBlob, type SaveResult } from './fileSaver';
+import { saveOrShareBlob, isMobileDevice, type SaveResult } from './fileSaver';
 
 export interface PdfExportOptions {
   filename?: string;
@@ -19,9 +19,16 @@ export interface PdfExportOptions {
   quality?: number;
 }
 
+export interface PdfExportResult extends SaveResult {
+  imgData?: string;
+  blob?: Blob;
+  filename?: string;
+}
+
 /**
- * Directly prints an HTML element in an isolated, dedicated iframe.
- * Eliminates all blank print issues, overflow-clipping, and background UI interference.
+ * Directly prints an HTML element.
+ * For mobile / Android APK: Uses direct window.print() so Android Print Spooler (Save as PDF) opens.
+ * For desktop: Uses isolated iframe to prevent UI clipping.
  */
 export function printElementDirectly(
   element?: HTMLElement | null,
@@ -32,15 +39,18 @@ export function printElementDirectly(
   if (typeof window === 'undefined') return;
 
   const target = element || document.getElementById('certified-invoice-document');
-  if (!target) {
+  const activeColorMode = colorMode || getSavedPrintColorMode();
+  applyPrintPageStyle(format, customSize, activeColorMode);
+
+  // Mobile / Android APK: Main window print triggers the native OS Print Spooler
+  if (isMobileDevice() || !target) {
+    window.focus();
     window.print();
     return;
   }
 
+  // Desktop: Isolated iframe print
   const def = getPaperFormatDef(format, customSize);
-  const activeColorMode = colorMode || getSavedPrintColorMode();
-
-  // Create isolated iframe with actual viewport dimensions, positioned invisibly
   const iframe = document.createElement('iframe');
   iframe.id = 'alpha-isolated-print-iframe';
   iframe.style.position = 'fixed';
@@ -56,12 +66,10 @@ export function printElementDirectly(
 
   const iframeDoc = iframe.contentWindow?.document;
   if (!iframeDoc) {
-    applyPrintPageStyle(format, customSize, activeColorMode);
     window.print();
     return;
   }
 
-  // Collect head styles (Tailwind, fonts, custom styles)
   let stylesHtml = '';
   document.querySelectorAll('style, link[rel="stylesheet"]').forEach((node) => {
     stylesHtml += node.outerHTML;
@@ -152,14 +160,11 @@ export function printElementDirectly(
   `);
   iframeDoc.close();
 
-  // Allow styles, web fonts, and layout to settle, then print
   setTimeout(() => {
     try {
       iframe.contentWindow?.focus();
       iframe.contentWindow?.print();
-    } catch (err) {
-      console.warn('Iframe print error, falling back to native print:', err);
-      applyPrintPageStyle(format, customSize, activeColorMode);
+    } catch {
       window.print();
     } finally {
       setTimeout(() => {
@@ -172,172 +177,71 @@ export function printElementDirectly(
 }
 
 /**
- * Exports the invoice directly to a downloaded PDF file using jsPDF and html2canvas.
- * Captures full Arabic typography, tables, badges, QR codes, and styling with zero empty pages.
+ * Exports the invoice directly to a PDF file using jsPDF and html2canvas.
  */
 export async function exportElementToPdf(
   element?: HTMLElement | null,
   options: PdfExportOptions = {}
-): Promise<SaveResult> {
+): Promise<PdfExportResult> {
   const {
     filename = 'invoice.pdf',
     format = 'A4',
     customSize,
-    scale = 3.2,
+    colorMode,
+    scale = 2.5,
   } = options;
 
   const target = element || document.getElementById('certified-invoice-document');
   if (!target) {
-    throw new Error('Printable document element not found');
-  }
-
-  // Ensure document fonts are fully loaded
-  if (typeof document !== 'undefined' && 'fonts' in document) {
-    try {
-      await document.fonts.ready;
-    } catch (e) {
-      console.warn('Font loading check skipped:', e);
-    }
+    throw new Error('Target printable document element not found');
   }
 
   const def = getPaperFormatDef(format, customSize);
 
-  // Temporarily remove any ancestor CSS scale/transform during capture so html2canvas measures at full natural width
-  const transformedAncestors: { el: HTMLElement; transform: string }[] = [];
-  let ancestor: HTMLElement | null = target.parentElement;
-  while (ancestor && ancestor !== document.body) {
-    const inlineTransform = ancestor.style.transform;
-    const computedTransform = window.getComputedStyle(ancestor).transform;
-    if ((inlineTransform && inlineTransform !== 'none') || (computedTransform && computedTransform !== 'none')) {
-      transformedAncestors.push({
-        el: ancestor,
-        transform: inlineTransform,
-      });
-      ancestor.style.transform = 'none';
+  // Temporarily reset CSS transforms on ancestors for crisp html2canvas rasterization
+  const transformedAncestors: Array<{ el: HTMLElement; transform: string }> = [];
+  let curr: HTMLElement | null = target.parentElement;
+  while (curr && curr !== document.body) {
+    const style = window.getComputedStyle(curr);
+    if (style.transform && style.transform !== 'none') {
+      transformedAncestors.push({ el: curr, transform: curr.style.transform });
+      curr.style.transform = 'none';
     }
-    ancestor = ancestor.parentElement;
+    curr = curr.parentElement;
+  }
+
+  const activeColorMode = colorMode || getSavedPrintColorMode();
+  if (activeColorMode === 'bw') {
+    target.classList.add('print-bw-mode');
   }
 
   let canvas: HTMLCanvasElement;
   try {
-    // Render element to high-res canvas (scale 3.2 produces ~300+ DPI Retina crispness)
     canvas = await html2canvas(target, {
-      scale: Math.max(3, scale),
+      scale: Math.max(scale, 2),
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
       logging: false,
       imageTimeout: 15000,
-      onclone: (clonedDoc, clonedElement) => {
-        // 1. Extract and inline ALL stylesheet CSS rules directly into clonedDoc.head
-        // This solves the Desktop/Electron file:// protocol issue where linked stylesheets are blocked by CORS/security
-        try {
-          let allCssRules = '';
-          Array.from(document.styleSheets).forEach((sheet) => {
-            try {
-              const rules = sheet.cssRules || sheet.rules;
-              if (rules) {
-                Array.from(rules).forEach((rule) => {
-                  allCssRules += rule.cssText + '\n';
-                });
-              }
-            } catch (e) {
-              if (sheet.ownerNode) {
-                clonedDoc.head.appendChild(sheet.ownerNode.cloneNode(true));
-              }
-            }
-          });
-
-          if (allCssRules) {
-            const styleEl = clonedDoc.createElement('style');
-            styleEl.textContent = allCssRules;
-            clonedDoc.head.appendChild(styleEl);
+      onclone: (clonedDoc: Document) => {
+        const clonedTarget = clonedDoc.getElementById(target.id) || clonedDoc.querySelector('.printable-invoice-doc');
+        if (clonedTarget instanceof HTMLElement) {
+          clonedTarget.style.transform = 'none';
+          clonedTarget.style.margin = '0 auto';
+          clonedTarget.style.boxShadow = 'none';
+          clonedTarget.style.border = 'none';
+          clonedTarget.style.backgroundColor = '#ffffff';
+          if (activeColorMode === 'bw') {
+            clonedTarget.classList.add('print-bw-mode');
           }
-        } catch (err) {
-          console.warn('Styles extraction warning:', err);
-        }
-
-        // 2. Clone all existing <style> and <link> elements into head
-        document.querySelectorAll('style, link[rel="stylesheet"]').forEach((styleNode) => {
-          clonedDoc.head.appendChild(styleNode.cloneNode(true));
-        });
-
-        // 3. Inject typography and contrast enhancements for crisp 300+ DPI print output without blurry or washed-out text
-        const highResStyle = clonedDoc.createElement('style');
-        highResStyle.textContent = `
-          * {
-            -webkit-font-smoothing: antialiased !important;
-            -moz-osx-font-smoothing: grayscale !important;
-            text-rendering: optimizeLegibility !important;
-          }
-          /* Ensure primary titles, text and tables are rich solid black, not washed-out gray */
-          .text-slate-900, .text-slate-800, .text-black, h1, h2, h3, h4, th, strong, b {
-            color: #000000 !important;
-          }
-          .text-slate-700, .text-slate-600 {
-            color: #1e293b !important;
-          }
-          .text-slate-500 {
-            color: #334155 !important;
-          }
-          /* Ensure crisp borders */
-          .border-slate-300, .border-slate-200 {
-            border-color: #94a3b8 !important;
-          }
-          .border-slate-100 {
-            border-color: #cbd5e1 !important;
-          }
-          /* Ensure barcode and QR codes render with maximum pixel crispness */
-          img, canvas, svg {
-            image-rendering: -webkit-optimize-contrast !important;
-            image-rendering: crisp-edges !important;
-          }
-        `;
-        clonedDoc.head.appendChild(highResStyle);
-
-        // 4. Strip print-hidden elements and force print-specific display rules in clonedDoc
-        try {
-          // Remove all elements explicitly marked with print:hidden or data-print-ignore
-          const printHiddenElements = clonedDoc.querySelectorAll('.print\\:hidden, [data-print-ignore="true"]');
-          printHiddenElements.forEach((el) => {
-            el.remove();
-          });
-
-          // Ensure any elements styled as print:block or print:flex are visible
-          const printBlockElements = clonedDoc.querySelectorAll<HTMLElement>('.print\\:block');
-          printBlockElements.forEach((el) => {
-            el.style.display = 'block';
-            el.classList.remove('hidden');
-          });
-
-          const printFlexElements = clonedDoc.querySelectorAll<HTMLElement>('.print\\:flex');
-          printFlexElements.forEach((el) => {
-            el.style.display = 'flex';
-            el.classList.remove('hidden');
-          });
-        } catch (e) {
-          console.warn('Error cleaning print elements in clonedDoc:', e);
-        }
-
-        // 5. Strip transforms or zoom from preview container
-        clonedElement.style.transform = 'none';
-        clonedElement.style.margin = '0 auto';
-        clonedElement.style.boxShadow = 'none';
-
-        // Ensure all parents in the clone are visible
-        let curr: HTMLElement | null = clonedElement.parentElement;
-        while (curr && curr !== clonedDoc.body) {
-          curr.style.transform = 'none';
-          curr.style.overflow = 'visible';
-          curr.style.width = 'auto';
-          curr.style.height = 'auto';
-          curr.style.maxHeight = 'none';
-          curr = curr.parentElement;
         }
       },
     });
   } finally {
-    // Restore ancestor transforms immediately
+    if (activeColorMode === 'bw') {
+      target.classList.remove('print-bw-mode');
+    }
     transformedAncestors.forEach(({ el, transform }) => {
       el.style.transform = transform;
     });
@@ -352,8 +256,8 @@ export async function exportElementToPdf(
 
   const safeFilename = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
 
+  let pdfBlob: Blob;
   if (isContinuous || !def.heightMm || calculatedHeightMm <= (def.heightMm + 2)) {
-    // Single page document (Thermal roll, or document fits in 1 page)
     const pageHeightMm = isContinuous ? calculatedHeightMm : (def.heightMm ?? 297);
     const orientation: 'portrait' | 'landscape' = widthMm > pageHeightMm ? 'landscape' : 'portrait';
 
@@ -365,10 +269,8 @@ export async function exportElementToPdf(
     });
 
     pdf.addImage(imgData, 'PNG', 0, 0, widthMm, isContinuous ? pageHeightMm : calculatedHeightMm, undefined, 'SLOW');
-    const pdfBlob = pdf.output('blob');
-    return await saveOrShareBlob(pdfBlob, safeFilename, 'application/pdf');
+    pdfBlob = pdf.output('blob');
   } else {
-    // Multi-page document (e.g. multi-page invoice or long statement of account)
     const pageHeightMm = def.heightMm ?? 297;
     const orientation: 'portrait' | 'landscape' = widthMm > pageHeightMm ? 'landscape' : 'portrait';
 
@@ -392,18 +294,25 @@ export async function exportElementToPdf(
       heightLeftMm -= pageHeightMm;
     }
 
-    const pdfBlob = pdf.output('blob');
-    return await saveOrShareBlob(pdfBlob, safeFilename, 'application/pdf');
+    pdfBlob = pdf.output('blob');
   }
+
+  const saveRes = await saveOrShareBlob(pdfBlob, safeFilename, 'application/pdf');
+  return {
+    ...saveRes,
+    imgData,
+    blob: pdfBlob,
+    filename: safeFilename
+  };
 }
 
-/**
- * Universal helper to save or share any jsPDF instance across Desktop, Mobile, and PWA
- */
-export async function saveOrSharePdf(pdf: jsPDF, filename: string): Promise<SaveResult> {
+export async function saveOrSharePdf(pdf: jsPDF, filename: string): Promise<PdfExportResult> {
   const safeFilename = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
   const pdfBlob = pdf.output('blob');
-  return await saveOrShareBlob(pdfBlob, safeFilename, 'application/pdf');
+  const saveRes = await saveOrShareBlob(pdfBlob, safeFilename, 'application/pdf');
+  return {
+    ...saveRes,
+    blob: pdfBlob,
+    filename: safeFilename
+  };
 }
-
-
