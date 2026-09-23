@@ -12,6 +12,8 @@ import {
 import { PartnerBalanceItem } from './PartnerBalances';
 import { getSystemSettings } from '../utils/settings';
 import { useSystemCurrency } from '../utils/currency';
+import { mobileNavigationController } from '../utils/mobileNavigation';
+import { useEffect } from 'react';
 
 interface BalanceConfirmationModalProps {
   partner: PartnerBalanceItem | null;
@@ -32,6 +34,16 @@ export default function BalanceConfirmationModal({
   const currencySymbol = customCurrency || defaultCurrency;
   const [systemSettings] = useState(() => getSystemSettings());
   const [copied, setCopied] = useState(false);
+
+  // Register with mobile navigation controller so back button closes modal first
+  useEffect(() => {
+    if (!isOpen || !partner) return;
+    const modalId = `modal-balance-confirm-${partner.id}`;
+    const unregister = mobileNavigationController.registerModal(modalId, () => {
+      onClose();
+    });
+    return () => unregister();
+  }, [isOpen, partner, onClose]);
 
   if (!isOpen || !partner) return null;
 

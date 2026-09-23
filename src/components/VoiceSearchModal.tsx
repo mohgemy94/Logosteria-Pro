@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Mic, 
   MicOff, 
@@ -9,11 +9,36 @@ import {
   FolderTree, 
   LayoutDashboard, 
   Volume2, 
+  VolumeX,
   AlertCircle,
-  CornerDownLeft
+  CornerDownLeft,
+  FileText,
+  Receipt,
+  Users,
+  Building2,
+  Package,
+  Layers,
+  Phone,
+  Zap,
+  Play,
+  ArrowUpRight
 } from 'lucide-react';
 import { loadChartOfAccounts } from '../utils/trialBalanceStore';
 import { Account } from '../types/accounting';
+import { 
+  loadCustomers, 
+  loadVendors, 
+  loadSalesInvoices, 
+  loadPurchaseInvoices, 
+  loadReceiptVouchers, 
+  loadPaymentVouchers,
+  StoredSalesInvoiceRecord,
+  StoredPurchaseInvoiceRecord,
+  StoredVoucherRecord
+} from '../utils/partnerLedger';
+import { loadStoredItems, Item } from '../utils/itemsStore';
+import { useSystemCurrency } from '../utils/currency';
+import { parseVoiceAction, ParsedVoiceAction, evaluateFinancialQA } from '../utils/voiceCommandParser';
 
 // System screens map with Arabic and English aliases
 export interface SystemScreenItem {
@@ -219,6 +244,14 @@ export const SYSTEM_SCREENS: SystemScreenItem[] = [
     description: 'صرف عهد نقدية للموظفين أو سداد مصاريف نثرية داخلية'
   },
   {
+    id: 'auditTrail',
+    titleAr: 'سجل الأنشطة ومسارات التدقيق المالي',
+    titleEn: 'Audit Trail & Activity Log',
+    category: 'الإدارة والنظام',
+    keywords: ['تدقيق', 'سجل أنشطة', 'مسارات تدقيق', 'سجل العمليات', 'رقابة', 'audit', 'activity', 'log', 'trail'],
+    description: 'تتبع كافة الحركات والتعديلات وحالات الحذف وهوية المستخدمين وسجل التغييرات'
+  },
+  {
     id: 'settings',
     titleAr: 'إعدادات النظام والنسخ الاحتياطي',
     titleEn: 'System Settings & Backups',
@@ -227,6 +260,8 @@ export const SYSTEM_SCREENS: SystemScreenItem[] = [
     description: 'ضبط خيارات النظام العامة، الضرائب، المجلدات والنسخ الاحتياطي'
   }
 ];
+
+export type VoiceSearchTab = 'all' | 'invoices' | 'vouchers' | 'partners' | 'items' | 'accounts' | 'screens';
 
 interface VoiceSearchModalProps {
   isOpen: boolean;
@@ -241,26 +276,82 @@ export default function VoiceSearchModal({
   onNavigate,
   onSelectAccount
 }: VoiceSearchModalProps) {
+  const { symbol: currencySymbol } = useSystemCurrency();
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimText, setInterimText] = useState('');
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(true);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isVoiceFeedbackEnabled, setIsVoiceFeedbackEnabled] = useState(true);
+
+  // Loaded Data Sources
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [matchedScreens, setMatchedScreens] = useState<SystemScreenItem[]>([]);
-  const [matchedAccounts, setMatchedAccounts] = useState<Account[]>([]);
-  const [activeTab, setActiveTab] = useState<'all' | 'screens' | 'accounts'>('all');
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [vendors, setVendors] = useState<any[]>([]);
+  const [salesInvoices, setSalesInvoices] = useState<StoredSalesInvoiceRecord[]>([]);
+  const [purchaseInvoices, setPurchaseInvoices] = useState<StoredPurchaseInvoiceRecord[]>([]);
+  const [receiptVouchers, setReceiptVouchers] = useState<StoredVoucherRecord[]>([]);
+  const [paymentVouchers, setPaymentVouchers] = useState<StoredVoucherRecord[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
+
+  const [activeTab, setActiveTab] = useState<VoiceSearchTab>('all');
 
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const lastSpokenTextRef = useRef<string>('');
 
-  // Load chart of accounts
-  useEffect(() => {
+  // Arabic Text-to-Speech (TTS) Voice Synthesis
+  const speakArabic = (text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
-      const accList = loadChartOfAccounts();
-      setAccounts(accList || []);
-    } catch {
-      setAccounts([]);
+      window.speechSynthesis.cancel();
+      if (!text || !isVoiceFeedbackEnabled) return;
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ar-SA';
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+
+      // Select Arabic voice if available
+      const voices = window.speechSynthesis.getVoices();
+      const arabicVoice = voices.find(v => v.lang.startsWith('ar') || v.name.toLowerCase().includes('arabic') || v.name.toLowerCase().includes('tariq') || v.name.toLowerCase().includes('maged') || v.name.toLowerCase().includes('laila') || v.name.toLowerCase().includes('salma'));
+      if (arabicVoice) {
+        utterance.voice = arabicVoice;
+      }
+
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn('Speech synthesis error:', err);
+      setIsSpeaking(false);
+    }
+  };
+
+  const stopSpeaking = () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
+  };
+
+  // Load All Entities from Local Storage & Stores on modal open
+  useEffect(() => {
+    if (!isOpen) return;
+    try {
+      setAccounts(loadChartOfAccounts() || []);
+      setCustomers(loadCustomers() || []);
+      setVendors(loadVendors() || []);
+      setSalesInvoices(loadSalesInvoices() || []);
+      setPurchaseInvoices(loadPurchaseInvoices() || []);
+      setReceiptVouchers(loadReceiptVouchers() || []);
+      setPaymentVouchers(loadPaymentVouchers() || []);
+      setItems(loadStoredItems() || []);
+    } catch (err) {
+      console.error('Failed to load search data:', err);
     }
   }, [isOpen]);
 
@@ -276,39 +367,17 @@ export default function VoiceSearchModal({
     }
   }, []);
 
-  // Filter logic whenever transcript or input changes
-  useEffect(() => {
-    const query = transcript.trim().toLowerCase();
-    if (!query) {
-      setMatchedScreens(SYSTEM_SCREENS.slice(0, 5));
-      setMatchedAccounts(accounts.slice(0, 5));
-      return;
-    }
-
-    // Filter screens
-    const filteredScreens = SYSTEM_SCREENS.filter(screen => {
-      const matchTitleAr = screen.titleAr.toLowerCase().includes(query);
-      const matchTitleEn = screen.titleEn.toLowerCase().includes(query);
-      const matchDesc = screen.description.toLowerCase().includes(query);
-      const matchKeywords = screen.keywords.some(k => query.includes(k) || k.includes(query));
-      return matchTitleAr || matchTitleEn || matchDesc || matchKeywords;
-    });
-
-    // Filter accounts
-    const filteredAccounts = accounts.filter(acc => {
-      const codeMatch = acc.code.toLowerCase().includes(query);
-      const nameMatch = acc.name.toLowerCase().includes(query);
-      return codeMatch || nameMatch;
-    });
-
-    setMatchedScreens(filteredScreens);
-    setMatchedAccounts(filteredAccounts);
-  }, [transcript, accounts]);
-
-  // Clean voice search command words like "افتح", "اذهب الى", "شاشة", "حساب"
+  // Clean voice search spoken command prefixes
   const cleanSpokenCommand = (text: string) => {
     let clean = text;
     const prefixes = [
+      'ابحث عن فاتورة',
+      'ابحث عن سند',
+      'ابحث عن عميل',
+      'ابحث عن مورد',
+      'ابحث عن صنف',
+      'ابحث عن حساب',
+      'ابحث عن',
       'افتح لي شاشة',
       'افتح شاشة',
       'افتح لي',
@@ -324,8 +393,9 @@ export default function VoiceSearchModal({
       'شاشة',
       'ودني على',
       'ودني إلى',
-      'ابحث عن حساب',
-      'ابحث عن',
+      'فاتورة رقم',
+      'سند رقم',
+      'كود صنف',
       'حساب رقم',
       'حساب'
     ];
@@ -359,7 +429,7 @@ export default function VoiceSearchModal({
       }
 
       const recognition = new SpeechRecognition();
-      recognition.lang = 'ar-SA'; // Arabic Saudi Arabia
+      recognition.lang = 'ar-SA';
       recognition.continuous = false;
       recognition.interimResults = true;
       recognition.maxAlternatives = 3;
@@ -397,7 +467,7 @@ export default function VoiceSearchModal({
       recognition.onerror = (event: any) => {
         setIsListening(false);
         if (event.error === 'not-allowed' || event.error === 'permission-denied') {
-          setVoiceError('تم رفض إذن الوصول إلى الميكروفون. يرجى السماح للمتصفح بالوصول للميكروفون من شريط العنوان.');
+          setVoiceError('تم رفض إذن الوصول إلى الميكروفون. يرجى السماح للمتصفح بالوصول للميكروفون من شريط المتصفح.');
         } else if (event.error === 'no-speech') {
           setVoiceError('لم يتم التقاط أي صوت، يرجى المحاولة والتحدث بالقرب من الميكروفون.');
         } else {
@@ -427,28 +497,204 @@ export default function VoiceSearchModal({
     setIsListening(false);
   };
 
-  // Trigger listen on open if supported
+  // Trigger listen on open
   useEffect(() => {
     if (isOpen) {
       setTranscript('');
       setInterimText('');
       setVoiceError(null);
+      lastSpokenTextRef.current = '';
       setTimeout(() => {
         inputRef.current?.focus();
         startListening();
       }, 300);
     } else {
       stopListening();
+      stopSpeaking();
     }
 
     return () => {
       stopListening();
+      stopSpeaking();
     };
   }, [isOpen]);
 
+  // Compute Filtered Results across all entities
+  const searchResults = useMemo(() => {
+    const query = transcript.trim().toLowerCase();
+
+    // 1. Screens Filter
+    const matchedScreens = (!query) 
+      ? SYSTEM_SCREENS.slice(0, 4)
+      : SYSTEM_SCREENS.filter(screen => {
+          const matchTitleAr = screen.titleAr.toLowerCase().includes(query);
+          const matchTitleEn = screen.titleEn.toLowerCase().includes(query);
+          const matchDesc = screen.description.toLowerCase().includes(query);
+          const matchKeywords = screen.keywords.some(k => query.includes(k) || k.includes(query));
+          return matchTitleAr || matchTitleEn || matchDesc || matchKeywords;
+        });
+
+    // 2. Accounts Filter
+    const matchedAccounts = (!query)
+      ? accounts.slice(0, 4)
+      : accounts.filter(acc => 
+          acc.code.toLowerCase().includes(query) || 
+          acc.name.toLowerCase().includes(query)
+        );
+
+    // 3. Customers Filter
+    const matchedCustomers = (!query)
+      ? customers.slice(0, 4)
+      : customers.filter(c => 
+          (c.name && c.name.toLowerCase().includes(query)) ||
+          (c.code && c.code.toLowerCase().includes(query)) ||
+          (c.phone && c.phone.includes(query)) ||
+          (c.taxNumber && c.taxNumber.includes(query))
+        );
+
+    // 4. Vendors Filter
+    const matchedVendors = (!query)
+      ? vendors.slice(0, 4)
+      : vendors.filter(v => 
+          (v.name && v.name.toLowerCase().includes(query)) ||
+          (v.code && v.code.toLowerCase().includes(query)) ||
+          (v.phone && v.phone.includes(query)) ||
+          (v.taxNumber && v.taxNumber.includes(query))
+        );
+
+    // 5. Sales & Purchases Invoices Filter
+    const matchedSales = (!query)
+      ? salesInvoices.slice(0, 3)
+      : salesInvoices.filter(inv => 
+          (inv.invoiceNumber && inv.invoiceNumber.toLowerCase().includes(query)) ||
+          (inv.partnerName && inv.partnerName.toLowerCase().includes(query)) ||
+          (inv.date && inv.date.includes(query)) ||
+          (inv.totals?.grandTotal && String(inv.totals.grandTotal).includes(query)) ||
+          (inv.items && inv.items.some((it: any) => it.description?.toLowerCase().includes(query) || it.name?.toLowerCase().includes(query)))
+        );
+
+    const matchedPurchases = (!query)
+      ? purchaseInvoices.slice(0, 3)
+      : purchaseInvoices.filter(inv => 
+          (inv.invoiceNumber && inv.invoiceNumber.toLowerCase().includes(query)) ||
+          (inv.supplierRef && inv.supplierRef.toLowerCase().includes(query)) ||
+          (inv.partnerName && inv.partnerName.toLowerCase().includes(query)) ||
+          (inv.date && inv.date.includes(query))
+        );
+
+    // 6. Vouchers Filter
+    const matchedReceipts = (!query)
+      ? receiptVouchers.slice(0, 3)
+      : receiptVouchers.filter(v => 
+          (v.voucherNumber && v.voucherNumber.toLowerCase().includes(query)) ||
+          (v.partnerName && v.partnerName.toLowerCase().includes(query)) ||
+          (v.description && v.description.toLowerCase().includes(query)) ||
+          (v.amount && String(v.amount).includes(query))
+        );
+
+    const matchedPayments = (!query)
+      ? paymentVouchers.slice(0, 3)
+      : paymentVouchers.filter(v => 
+          (v.voucherNumber && v.voucherNumber.toLowerCase().includes(query)) ||
+          (v.partnerName && v.partnerName.toLowerCase().includes(query)) ||
+          (v.description && v.description.toLowerCase().includes(query)) ||
+          (v.amount && String(v.amount).includes(query))
+        );
+
+    // 7. Items / Products Filter
+    const matchedItems = (!query)
+      ? items.slice(0, 4)
+      : items.filter(it => 
+          (it.name && it.name.toLowerCase().includes(query)) ||
+          (it.code && it.code.toLowerCase().includes(query)) ||
+          (it.barcode && it.barcode.toLowerCase().includes(query)) ||
+          (it.category && it.category.toLowerCase().includes(query)) ||
+          (it.supplierName && it.supplierName.toLowerCase().includes(query))
+        );
+
+    const totalInvoicesCount = matchedSales.length + matchedPurchases.length;
+    const totalVouchersCount = matchedReceipts.length + matchedPayments.length;
+    const totalPartnersCount = matchedCustomers.length + matchedVendors.length;
+    const totalItemsCount = matchedItems.length;
+    const totalAccountsCount = matchedAccounts.length;
+    const totalScreensCount = matchedScreens.length;
+
+    const totalResults = totalInvoicesCount + totalVouchersCount + totalPartnersCount + totalItemsCount + totalAccountsCount + totalScreensCount;
+
+    // Detect direct Voice Action Intent
+    const parsedAction = parseVoiceAction(transcript, {
+      customers,
+      vendors,
+      items,
+      accounts
+    });
+
+    // Detect direct Instant Financial Q&A
+    const financialQA = evaluateFinancialQA(transcript, {
+      customers,
+      vendors,
+      salesInvoices,
+      purchaseInvoices,
+      receiptVouchers,
+      paymentVouchers,
+      items,
+      accounts,
+      currencySymbol
+    });
+
+    return {
+      screens: matchedScreens,
+      accounts: matchedAccounts,
+      customers: matchedCustomers,
+      vendors: matchedVendors,
+      salesInvoices: matchedSales,
+      purchaseInvoices: matchedPurchases,
+      receiptVouchers: matchedReceipts,
+      paymentVouchers: matchedPayments,
+      items: matchedItems,
+      parsedAction,
+      financialQA,
+      counts: {
+        total: totalResults,
+        invoices: totalInvoicesCount,
+        vouchers: totalVouchersCount,
+        partners: totalPartnersCount,
+        items: totalItemsCount,
+        accounts: totalAccountsCount,
+        screens: totalScreensCount
+      }
+    };
+  }, [transcript, accounts, customers, vendors, salesInvoices, purchaseInvoices, receiptVouchers, paymentVouchers, items, currencySymbol]);
+
+  // Automatically read out the answer / action result if voice feedback is enabled and transcript is final
+  useEffect(() => {
+    if (!isOpen || !isVoiceFeedbackEnabled) return;
+
+    if (searchResults.financialQA) {
+      const textToSpeak = `${searchResults.financialQA.answerText}. ${searchResults.financialQA.primaryValue}`;
+      if (lastSpokenTextRef.current !== textToSpeak) {
+        lastSpokenTextRef.current = textToSpeak;
+        // Small delay to ensure smooth transition after user finishes speaking
+        const timer = setTimeout(() => {
+          speakArabic(textToSpeak);
+        }, 350);
+        return () => clearTimeout(timer);
+      }
+    } else if (searchResults.parsedAction) {
+      const textToSpeak = `${searchResults.parsedAction.labelAr}. ${searchResults.parsedAction.summary}`;
+      if (lastSpokenTextRef.current !== textToSpeak) {
+        lastSpokenTextRef.current = textToSpeak;
+        const timer = setTimeout(() => {
+          speakArabic(textToSpeak);
+        }, 350);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [searchResults.financialQA, searchResults.parsedAction, isOpen, isVoiceFeedbackEnabled]);
+
   if (!isOpen) return null;
 
-  // Handle navigate to screen
+  // Handlers for selection & navigation
   const handleSelectScreen = (screenId: string) => {
     stopListening();
     onClose();
@@ -459,32 +705,128 @@ export default function VoiceSearchModal({
     }
   };
 
-  // Handle select account
   const handleSelectAccount = (acc: Account) => {
     stopListening();
     onClose();
     if (onSelectAccount) {
       onSelectAccount(acc);
     } else {
-      // Navigate to Chart of Accounts Tree or Trial Balance with custom search query
       onNavigate('chartTree');
-      // Dispatch custom event to highlight or filter account in tree
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('alpha-select-account', { detail: { account: acc } }));
       }, 200);
     }
   };
 
-  // Quick preset voice queries
+  const handleSelectCustomer = (customer: any) => {
+    stopListening();
+    onClose();
+    onNavigate('customers');
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('alpha-highlight-customer', { detail: { customer } }));
+    }, 200);
+  };
+
+  const handleSelectVendor = (vendor: any) => {
+    stopListening();
+    onClose();
+    onNavigate('vendors');
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('alpha-highlight-vendor', { detail: { vendor } }));
+    }, 200);
+  };
+
+  const handleSelectSalesInvoice = (inv: StoredSalesInvoiceRecord) => {
+    stopListening();
+    onClose();
+    onNavigate('sales');
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('alpha-highlight-sales-invoice', { detail: { invoice: inv } }));
+    }, 200);
+  };
+
+  const handleSelectPurchaseInvoice = (inv: StoredPurchaseInvoiceRecord) => {
+    stopListening();
+    onClose();
+    onNavigate('purchases');
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('alpha-highlight-purchase-invoice', { detail: { invoice: inv } }));
+    }, 200);
+  };
+
+  const handleSelectReceiptVoucher = (voucher: StoredVoucherRecord) => {
+    stopListening();
+    onClose();
+    onNavigate('externalReceipt');
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('alpha-highlight-voucher', { detail: { voucher } }));
+    }, 200);
+  };
+
+  const handleSelectPaymentVoucher = (voucher: StoredVoucherRecord) => {
+    stopListening();
+    onClose();
+    onNavigate('externalPayment');
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('alpha-highlight-voucher', { detail: { voucher } }));
+    }, 200);
+  };
+
+  const handleSelectItem = (item: Item) => {
+    stopListening();
+    onClose();
+    onNavigate('items');
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('alpha-highlight-item', { detail: { item } }));
+    }, 200);
+  };
+
+  // Execute Smart Voice Action (Create Invoice, Voucher, Journal, etc.)
+  const handleExecuteVoiceAction = (action: ParsedVoiceAction) => {
+    stopListening();
+    onClose();
+
+    if (action.type === 'CREATE_SALES_INVOICE') {
+      onNavigate('sales');
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('alpha-voice-create-sales-invoice', { detail: action.payload }));
+      }, 250);
+    } else if (action.type === 'CREATE_PURCHASE_INVOICE') {
+      onNavigate('purchases');
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('alpha-voice-create-purchase-invoice', { detail: action.payload }));
+      }, 250);
+    } else if (action.type === 'CREATE_RECEIPT_VOUCHER') {
+      onNavigate('externalReceipt');
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('alpha-voice-create-voucher', { detail: action.payload }));
+      }, 250);
+    } else if (action.type === 'CREATE_PAYMENT_VOUCHER') {
+      onNavigate('externalPayment');
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('alpha-voice-create-voucher', { detail: action.payload }));
+      }, 250);
+    } else if (action.type === 'CREATE_JOURNAL_ENTRY') {
+      onNavigate('journal');
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('alpha-voice-create-journal-entry', { detail: action.payload }));
+      }, 250);
+    }
+  };
+
+  // Quick preset voice queries, action triggers, and Financial Q&A
   const presetQueries = [
-    { label: 'شجرة الحسابات', query: 'شجرة الحسابات' },
+    { label: '💰 كم رصيد الصندوق؟', query: 'كم رصيد الصندوق' },
+    { label: '📈 كم مبيعات اليوم؟', query: 'كم مبيعات اليوم' },
+    { label: '⚠️ أصناف أوشكت على النفاد', query: 'ما هي الأصناف التي أوشكت على النفاد' },
+    { label: '✨ إنشاء فاتورة مبيعات', query: 'انشئ فاتورة مبيعات جديدة' },
+    { label: '✨ سند قبض نقدي', query: 'تحرير سند قبض جديد بمبلغ 1000' },
+    { label: '✨ سند صرف لمورد', query: 'سند صرف جديد لمورد' },
     { label: 'فواتير المبيعات', query: 'مبيعات' },
-    { label: 'سند قبض', query: 'سند قبض' },
-    { label: 'أرصدة العملاء', query: 'أرصدة العملاء' },
-    { label: 'حساب الصندوق', query: '1101' },
-    { label: 'حساب البنك', query: 'بنك' },
-    { label: 'إدارة التقسيط', query: 'تقسيط' },
-    { label: 'الجرد المخزني', query: 'جرد' }
+    { label: 'سندات القبض', query: 'سند قبض' },
+    { label: 'العملاء والمدينين', query: 'عملاء' },
+    { label: 'الموردين والدائنين', query: 'موردين' },
+    { label: 'شجرة الحسابات', query: 'شجرة الحسابات' }
   ];
 
   return (
@@ -493,12 +835,12 @@ export default function VoiceSearchModal({
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200/90 w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] md:max-h-[90vh] text-right font-sans animate-modalIn"
+        className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200/90 w-full max-w-3xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] md:max-h-[90vh] text-right font-sans animate-modalIn"
         onClick={e => e.stopPropagation()}
         dir="rtl"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
-        {/* Mobile Handle */}
+        {/* Mobile Drag Handle */}
         <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
 
         {/* Top Header */}
@@ -507,34 +849,65 @@ export default function VoiceSearchModal({
             <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-inner transition-all duration-300 shrink-0 ${
               isListening 
                 ? 'bg-rose-500 text-white animate-pulse shadow-rose-500/50' 
-                : 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/30'
+                : isSpeaking
+                  ? 'bg-emerald-500 text-white animate-pulse shadow-emerald-500/50'
+                  : 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/30'
             }`}>
-              {isListening ? <Mic size={20} /> : <Sparkles size={20} />}
+              {isListening ? <Mic size={20} /> : isSpeaking ? <Volume2 size={20} className="animate-bounce" /> : <Sparkles size={20} />}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-extrabold text-sm sm:text-base md:text-lg text-white tracking-wide truncate">
-                  البحث الصوتي الذكي
+                  البحث الصوتي الذكي الشامل
                 </h3>
                 <span className="bg-indigo-500/20 text-indigo-300 text-[10px] px-2.5 py-0.5 rounded-full border border-indigo-400/30 font-bold shrink-0">
-                  Voice Assistant
+                  Universal AI Search
                 </span>
+                {isSpeaking && (
+                  <span className="bg-emerald-500/20 text-emerald-300 text-[10px] px-2.5 py-0.5 rounded-full border border-emerald-400/30 font-bold flex items-center gap-1 animate-pulse">
+                    <Volume2 size={11} />
+                    <span>جارٍ نطق الإجابة...</span>
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-400 mt-0.5 truncate sm:overflow-visible sm:whitespace-normal">
-                تحدث باسم أي شاشة أو رقم أو اسم حساب للوصول الفوري
+                ابحث بالصوت أو النص في الفواتير، السندات، العملاء، الموردين، الأصناف، وشاشات النظام
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shrink-0"
-            title="إغلاق (Esc)"
-            aria-label="إغلاق"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Audio Feedback Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                if (isSpeaking) stopSpeaking();
+                setIsVoiceFeedbackEnabled(!isVoiceFeedbackEnabled);
+              }}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                isVoiceFeedbackEnabled 
+                  ? 'bg-indigo-500/20 border-indigo-400/40 text-indigo-200 hover:bg-indigo-500/30' 
+                  : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+              }`}
+              title={isVoiceFeedbackEnabled ? 'الرد الصوتي الناطق مفعّل (انقر للتعطيل)' : 'الرد الصوتي الناطق معطل (انقر للتفعيل)'}
+            >
+              {isVoiceFeedbackEnabled ? <Volume2 size={15} className="text-teal-400" /> : <VolumeX size={15} />}
+              <span className="hidden sm:inline">{isVoiceFeedbackEnabled ? 'الرد الصوتي' : 'كتم الصوت'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                stopSpeaking();
+                onClose();
+              }}
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shrink-0"
+              title="إغلاق (Esc)"
+              aria-label="إغلاق"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Voice Input & Search Bar Box */}
@@ -548,7 +921,7 @@ export default function VoiceSearchModal({
                 setTranscript(e.target.value);
                 setInterimText('');
               }}
-              placeholder={isListening ? 'جارٍ الاستماع إليك... تحدث الآن' : 'تحدث أو اكتب اسم الشاشة أو الحساب (مثال: مبيعات، سند قبض، 1101)...'}
+              placeholder={isListening ? 'جارٍ الاستماع إليك... تحدث باسم العميل، رقم الفاتورة، الصنف، أو السند' : 'تحدث أو اكتب للبحث (مثال: أحمد، فاتورة 001، لابتوب، سند صرف، 1101)...'}
               className={`w-full bg-white border-2 rounded-2xl py-3.5 pr-12 pl-24 text-sm sm:text-base outline-none transition-all ${
                 isListening 
                   ? 'border-rose-500 ring-4 ring-rose-500/10 placeholder:text-rose-400' 
@@ -598,7 +971,7 @@ export default function VoiceSearchModal({
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600"></span>
                 </span>
-                <span>الميكروفون نشط... تحدث بأي أمر أو اسم شاشة الآن</span>
+                <span>الميكروفون نشط... تحدث بأي اسم عميل، مورد، صنف، أو رقم فاتورة الآن</span>
               </div>
               <button
                 type="button"
@@ -639,7 +1012,7 @@ export default function VoiceSearchModal({
 
           {/* Quick preset chips */}
           <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar mt-3 pt-1 pb-0.5 text-xs">
-            <span className="text-slate-400 text-[11px] shrink-0 font-medium ml-1">اقتراحات سريعة:</span>
+            <span className="text-slate-400 text-[11px] shrink-0 font-medium ml-1">اقتراحات صوتية:</span>
             {presetQueries.map((item, idx) => (
               <button
                 key={idx}
@@ -656,12 +1029,12 @@ export default function VoiceSearchModal({
           </div>
         </div>
 
-        {/* Filter Tabs */}
-        <div className="flex items-center px-4 sm:px-6 border-b border-slate-200 bg-white shrink-0 text-xs sm:text-sm font-bold">
+        {/* Filter Tabs Header */}
+        <div className="flex items-center gap-1 px-4 sm:px-6 border-b border-slate-200 bg-white shrink-0 text-xs sm:text-sm font-bold overflow-x-auto custom-scrollbar">
           <button
             type="button"
             onClick={() => setActiveTab('all')}
-            className={`py-3 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`py-3 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
               activeTab === 'all'
                 ? 'border-indigo-600 text-indigo-600 font-extrabold'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -669,60 +1042,636 @@ export default function VoiceSearchModal({
           >
             <span>الكل</span>
             <span className="bg-slate-100 text-slate-600 text-[11px] px-1.5 py-0.5 rounded-full font-mono">
-              {matchedScreens.length + matchedAccounts.length}
+              {searchResults.counts.total}
             </span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab('screens')}
-            className={`py-3 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'screens'
+            onClick={() => setActiveTab('invoices')}
+            className={`py-3 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'invoices'
                 ? 'border-indigo-600 text-indigo-600 font-extrabold'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <LayoutDashboard size={14} />
-            <span>شاشات النظام</span>
-            <span className="bg-indigo-50 text-indigo-700 text-[11px] px-1.5 py-0.5 rounded-full font-mono">
-              {matchedScreens.length}
+            <FileText size={14} className="text-blue-500" />
+            <span>الفواتير</span>
+            <span className="bg-blue-50 text-blue-700 text-[11px] px-1.5 py-0.5 rounded-full font-mono">
+              {searchResults.counts.invoices}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('vouchers')}
+            className={`py-3 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'vouchers'
+                ? 'border-indigo-600 text-indigo-600 font-extrabold'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Receipt size={14} className="text-emerald-500" />
+            <span>السندات المالية</span>
+            <span className="bg-emerald-50 text-emerald-700 text-[11px] px-1.5 py-0.5 rounded-full font-mono">
+              {searchResults.counts.vouchers}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('partners')}
+            className={`py-3 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'partners'
+                ? 'border-indigo-600 text-indigo-600 font-extrabold'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Users size={14} className="text-purple-500" />
+            <span>العملاء والموردين</span>
+            <span className="bg-purple-50 text-purple-700 text-[11px] px-1.5 py-0.5 rounded-full font-mono">
+              {searchResults.counts.partners}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('items')}
+            className={`py-3 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'items'
+                ? 'border-indigo-600 text-indigo-600 font-extrabold'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Package size={14} className="text-amber-500" />
+            <span>الأصناف والمنتجات</span>
+            <span className="bg-amber-50 text-amber-700 text-[11px] px-1.5 py-0.5 rounded-full font-mono">
+              {searchResults.counts.items}
             </span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('accounts')}
-            className={`py-3 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`py-3 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
               activeTab === 'accounts'
                 ? 'border-indigo-600 text-indigo-600 font-extrabold'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <FolderTree size={14} />
-            <span>حسابات الشجرة</span>
-            <span className="bg-emerald-50 text-emerald-700 text-[11px] px-1.5 py-0.5 rounded-full font-mono">
-              {matchedAccounts.length}
+            <FolderTree size={14} className="text-teal-500" />
+            <span>شجرة الحسابات</span>
+            <span className="bg-teal-50 text-teal-700 text-[11px] px-1.5 py-0.5 rounded-full font-mono">
+              {searchResults.counts.accounts}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('screens')}
+            className={`py-3 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'screens'
+                ? 'border-indigo-600 text-indigo-600 font-extrabold'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <LayoutDashboard size={14} className="text-slate-600" />
+            <span>الشاشات</span>
+            <span className="bg-slate-100 text-slate-700 text-[11px] px-1.5 py-0.5 rounded-full font-mono">
+              {searchResults.counts.screens}
             </span>
           </button>
         </div>
 
-        {/* Results List */}
+        {/* Results List Viewport */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar bg-slate-50/50">
-          {/* Section: Screens */}
-          {(activeTab === 'all' || activeTab === 'screens') && matchedScreens.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-2.5">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <LayoutDashboard size={14} className="text-indigo-600" />
-                  شاشات ووحدات النظام ({matchedScreens.length})
+          
+          {/* SPECIAL SECTION: INSTANT FINANCIAL VOICE Q&A (الميزة الثانية) */}
+          {searchResults.financialQA && (
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 text-white shadow-2xl border border-teal-500/40 animate-fadeIn">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-teal-500/20 text-teal-300 flex items-center justify-center border border-teal-500/30 shrink-0">
+                    <Sparkles size={20} className="text-teal-400" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-400/20 text-teal-300 border border-teal-400/30">
+                        استعلام مالي صوتي فوري (Voice Q&A)
+                      </span>
+                      {searchResults.financialQA.statusBadge && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-slate-300 border border-white/10">
+                          {searchResults.financialQA.statusBadge.text}
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="text-xs text-slate-300 font-medium mt-0.5">
+                      {searchResults.financialQA.answerText}
+                    </h4>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Replay Voice Audio Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isSpeaking) {
+                        stopSpeaking();
+                      } else {
+                        speakArabic(`${searchResults.financialQA!.answerText}. ${searchResults.financialQA!.primaryValue}`);
+                      }
+                    }}
+                    className={`p-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
+                      isSpeaking 
+                        ? 'bg-emerald-500 text-white border-emerald-400 animate-pulse' 
+                        : 'bg-white/10 hover:bg-white/20 text-slate-300 border-white/10'
+                    }`}
+                    title={isSpeaking ? 'إيقاف نطق الإجابة' : 'نطق الإجابة صوتياً'}
+                  >
+                    <Volume2 size={15} className={isSpeaking ? 'animate-bounce' : 'text-teal-300'} />
+                  </button>
+
+                  {searchResults.financialQA.navigationView && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        stopListening();
+                        stopSpeaking();
+                        onClose();
+                        onNavigate(searchResults.financialQA!.navigationView!);
+                      }}
+                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-teal-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border border-white/10 cursor-pointer"
+                    >
+                      <span>{searchResults.financialQA.navigationLabel || 'عرض التفاصيل'}</span>
+                      <ArrowUpRight size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Main Metric Banner */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 sm:p-4 mb-3">
+                <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                  <span className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono tracking-tight">
+                    {searchResults.financialQA.primaryValue}
+                  </span>
+                  {searchResults.financialQA.secondaryValue && (
+                    <span className="text-xs font-bold text-slate-300 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
+                      {searchResults.financialQA.secondaryValue}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Breakdown Details Grid if present */}
+              {searchResults.financialQA.details && searchResults.financialQA.details.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {searchResults.financialQA.details.map((dt, idx) => (
+                    <div key={idx} className="bg-black/30 px-3 py-2 rounded-lg border border-white/5 flex items-center justify-between gap-2">
+                      <span className="text-slate-400">{dt.label}</span>
+                      <strong className="text-slate-100 font-medium">{dt.value}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* SPECIAL SECTION: DETECTED SMART VOICE ACTION */}
+          {searchResults.parsedAction && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 text-white shadow-xl border border-indigo-500/40 animate-fadeIn">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-400 to-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-md font-bold mt-0.5">
+                    <Zap size={22} className="fill-slate-950" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="bg-amber-400/20 text-amber-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-amber-400/40">
+                        إجراء ذكي مقترح (Voice Action)
+                      </span>
+                      <h4 className="font-extrabold text-sm sm:text-base text-white">
+                        {searchResults.parsedAction.labelAr}
+                      </h4>
+                    </div>
+                    <p className="text-xs text-indigo-200 leading-relaxed font-medium">
+                      {searchResults.parsedAction.summary}
+                    </p>
+
+                    {searchResults.parsedAction.payload.partner && (
+                      <div className="mt-2.5 flex items-center gap-2 text-xs text-slate-300 bg-white/5 px-3 py-1.5 rounded-xl border border-white/10 w-fit">
+                        <Users size={14} className="text-amber-400" />
+                        <span>الطرف المالي: <strong className="text-white font-bold">{searchResults.parsedAction.payload.partner.name}</strong></span>
+                        {searchResults.parsedAction.payload.amount && (
+                          <>
+                            <span className="text-slate-500">•</span>
+                            <span>المبلغ: <strong className="text-emerald-400 font-mono font-bold">{searchResults.parsedAction.payload.amount.toLocaleString()}</strong></span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Replay Action Voice Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isSpeaking) {
+                        stopSpeaking();
+                      } else {
+                        speakArabic(`${searchResults.parsedAction!.labelAr}. ${searchResults.parsedAction!.summary}`);
+                      }
+                    }}
+                    className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
+                      isSpeaking 
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 animate-pulse' 
+                        : 'bg-white/10 hover:bg-white/20 text-amber-300 border-white/10'
+                    }`}
+                    title={isSpeaking ? 'إيقاف نطق الإجراء' : 'نطق الإجراء المقترح صوتياً'}
+                  >
+                    <Volume2 size={16} className={isSpeaking ? 'animate-bounce' : ''} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopSpeaking();
+                      handleExecuteVoiceAction(searchResults.parsedAction!);
+                    }}
+                    className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg shadow-emerald-950/40 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0"
+                  >
+                    <Play size={15} className="fill-white" />
+                    <span>تنفيذ الإجراء فوراً</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 1: INVOICES (Sales & Purchases) */}
+          {(activeTab === 'all' || activeTab === 'invoices') && (searchResults.salesInvoices.length > 0 || searchResults.purchaseInvoices.length > 0) && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                  <FileText size={15} className="text-blue-600" />
+                  الفواتير الضريبية والمشتريات ({searchResults.counts.invoices})
+                </span>
+                <span className="text-[11px] text-slate-400">انقر للفتح والمعاينة</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Sales Invoices */}
+                {searchResults.salesInvoices.map((inv) => (
+                  <div
+                    key={`sales-${inv.id || inv.invoiceNumber}`}
+                    onClick={() => handleSelectSalesInvoice(inv)}
+                    className="group bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer flex items-start justify-between gap-3 text-right"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
+                          فاتورة مبيعات
+                        </span>
+                        <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
+                          #{inv.invoiceNumber}
+                        </span>
+                        {inv.status === 'POSTED' ? (
+                          <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">مرحلة</span>
+                        ) : (
+                          <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded">مسودة</span>
+                        )}
+                      </div>
+                      <h4 className="font-bold text-sm text-slate-800 group-hover:text-blue-600 transition-colors truncate">
+                        {inv.partnerName || 'عميل نقدي'}
+                      </h4>
+                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                        <span>{inv.date}</span>
+                        <span className="font-mono font-black text-blue-600">
+                          {(inv.totals?.grandTotal || 0).toLocaleString()} {currencySymbol}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-8 h-8 rounded-xl bg-blue-50 group-hover:bg-blue-600 group-hover:text-white text-blue-600 flex items-center justify-center shrink-0 transition-colors mt-1">
+                      <ArrowRight size={16} />
+                    </div>
+                  </div>
+                ))}
+
+                {/* Purchase Invoices */}
+                {searchResults.purchaseInvoices.map((inv) => (
+                  <div
+                    key={`purch-${inv.id || inv.invoiceNumber}`}
+                    onClick={() => handleSelectPurchaseInvoice(inv)}
+                    className="group bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer flex items-start justify-between gap-3 text-right"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
+                          فاتورة مشتريات
+                        </span>
+                        <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
+                          #{inv.invoiceNumber}
+                        </span>
+                        {inv.supplierRef && (
+                          <span className="text-[10px] text-slate-500 font-mono">مرجع: {inv.supplierRef}</span>
+                        )}
+                      </div>
+                      <h4 className="font-bold text-sm text-slate-800 group-hover:text-indigo-600 transition-colors truncate">
+                        {inv.partnerName || 'مورد'}
+                      </h4>
+                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                        <span>{inv.date}</span>
+                      </div>
+                    </div>
+                    <div className="w-8 h-8 rounded-xl bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white text-indigo-600 flex items-center justify-center shrink-0 transition-colors mt-1">
+                      <ArrowRight size={16} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 2: FINANCIAL VOUCHERS (Receipts & Payments) */}
+          {(activeTab === 'all' || activeTab === 'vouchers') && (searchResults.receiptVouchers.length > 0 || searchResults.paymentVouchers.length > 0) && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                  <Receipt size={15} className="text-emerald-600" />
+                  السندات المالية وسندات القبض والصرف ({searchResults.counts.vouchers})
+                </span>
+                <span className="text-[11px] text-slate-400">انقر لفتح السند</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Receipts */}
+                {searchResults.receiptVouchers.map((v) => (
+                  <div
+                    key={`rcv-${v.id || v.voucherNumber}`}
+                    onClick={() => handleSelectReceiptVoucher(v)}
+                    className="group bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer flex items-start justify-between gap-3 text-right"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                          سند قبض
+                        </span>
+                        <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
+                          #{v.voucherNumber}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-sm text-slate-800 group-hover:text-emerald-600 transition-colors truncate">
+                        {v.partnerName || v.description || 'سند قبض مالي'}
+                      </h4>
+                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                        <span>{v.date}</span>
+                        <span className="font-mono font-black text-emerald-600">
+                          {(v.amount || 0).toLocaleString()} {currencySymbol}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-8 h-8 rounded-xl bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white text-emerald-600 flex items-center justify-center shrink-0 transition-colors mt-1">
+                      <ArrowRight size={16} />
+                    </div>
+                  </div>
+                ))}
+
+                {/* Payments */}
+                {searchResults.paymentVouchers.map((v) => (
+                  <div
+                    key={`pay-${v.id || v.voucherNumber}`}
+                    onClick={() => handleSelectPaymentVoucher(v)}
+                    className="group bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-rose-400 hover:shadow-md transition-all cursor-pointer flex items-start justify-between gap-3 text-right"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-rose-50 text-rose-700 border border-rose-200 shrink-0">
+                          سند صرف
+                        </span>
+                        <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
+                          #{v.voucherNumber}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-sm text-slate-800 group-hover:text-rose-600 transition-colors truncate">
+                        {v.partnerName || v.description || 'سند صرف مالي'}
+                      </h4>
+                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                        <span>{v.date}</span>
+                        <span className="font-mono font-black text-rose-600">
+                          {(v.amount || 0).toLocaleString()} {currencySymbol}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-8 h-8 rounded-xl bg-rose-50 group-hover:bg-rose-600 group-hover:text-white text-rose-600 flex items-center justify-center shrink-0 transition-colors mt-1">
+                      <ArrowRight size={16} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 3: PARTNERS (Customers & Vendors) */}
+          {(activeTab === 'all' || activeTab === 'partners') && (searchResults.customers.length > 0 || searchResults.vendors.length > 0) && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                  <Users size={15} className="text-purple-600" />
+                  العملاء والموردين ({searchResults.counts.partners})
+                </span>
+                <span className="text-[11px] text-slate-400">انقر لعرض بطاقة الحساب</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Customers */}
+                {searchResults.customers.map((c) => (
+                  <div
+                    key={`cust-${c.id || c.code}`}
+                    onClick={() => handleSelectCustomer(c)}
+                    className="group bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-purple-400 hover:shadow-md transition-all cursor-pointer flex items-start justify-between gap-3 text-right"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-purple-50 text-purple-700 border border-purple-200 shrink-0">
+                          عميل
+                        </span>
+                        {c.code && (
+                          <span className="font-mono font-bold text-xs text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                            {c.code}
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="font-bold text-sm text-slate-800 group-hover:text-purple-600 transition-colors truncate">
+                        {c.name}
+                      </h4>
+                      <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
+                        {c.phone && <span className="flex items-center gap-1 font-mono"><Phone size={11} /> {c.phone}</span>}
+                        {c.taxNumber && <span>ضريبي: {c.taxNumber}</span>}
+                      </div>
+                    </div>
+                    <div className="w-8 h-8 rounded-xl bg-purple-50 group-hover:bg-purple-600 group-hover:text-white text-purple-600 flex items-center justify-center shrink-0 transition-colors mt-1">
+                      <ArrowRight size={16} />
+                    </div>
+                  </div>
+                ))}
+
+                {/* Vendors */}
+                {searchResults.vendors.map((v) => (
+                  <div
+                    key={`vend-${v.id || v.code}`}
+                    onClick={() => handleSelectVendor(v)}
+                    className="group bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-teal-400 hover:shadow-md transition-all cursor-pointer flex items-start justify-between gap-3 text-right"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-teal-50 text-teal-700 border border-teal-200 shrink-0">
+                          مورد
+                        </span>
+                        {v.code && (
+                          <span className="font-mono font-bold text-xs text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                            {v.code}
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="font-bold text-sm text-slate-800 group-hover:text-teal-600 transition-colors truncate">
+                        {v.name}
+                      </h4>
+                      <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
+                        {v.phone && <span className="flex items-center gap-1 font-mono"><Phone size={11} /> {v.phone}</span>}
+                        {v.taxNumber && <span>ضريبي: {v.taxNumber}</span>}
+                      </div>
+                    </div>
+                    <div className="w-8 h-8 rounded-xl bg-teal-50 group-hover:bg-teal-600 group-hover:text-white text-teal-600 flex items-center justify-center shrink-0 transition-colors mt-1">
+                      <ArrowRight size={16} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 4: ITEMS & PRODUCTS */}
+          {(activeTab === 'all' || activeTab === 'items') && searchResults.items.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                  <Package size={15} className="text-amber-600" />
+                  الأصناف والمنتجات المخزنية ({searchResults.counts.items})
+                </span>
+                <span className="text-[11px] text-slate-400">انقر للذهاب إلى الصنف والتعديل</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {searchResults.items.map((it) => (
+                  <div
+                    key={`item-${it.id || it.code}`}
+                    onClick={() => handleSelectItem(it)}
+                    className="group bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-amber-400 hover:shadow-md transition-all cursor-pointer flex items-start justify-between gap-3 text-right"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                          {it.category || 'صنف'}
+                        </span>
+                        <span className="font-mono font-bold text-xs text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                          كود: {it.code}
+                        </span>
+                        {it.stock <= 0 ? (
+                          <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">نافذ</span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                            رصيد: {it.stock} {it.unit || ''}
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="font-bold text-sm text-slate-800 group-hover:text-amber-600 transition-colors truncate">
+                        {it.name}
+                      </h4>
+                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                        <span className="font-mono font-black text-emerald-700">
+                          سعر البيع: {(it.salePrice || 0).toLocaleString()} {currencySymbol}
+                        </span>
+                        {it.barcode && (
+                          <span className="text-[11px] text-slate-400 font-mono">باركود: {it.barcode}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="w-8 h-8 rounded-xl bg-amber-50 group-hover:bg-amber-600 group-hover:text-white text-amber-600 flex items-center justify-center shrink-0 transition-colors mt-1">
+                      <ArrowRight size={16} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 5: ACCOUNTS TREE */}
+          {(activeTab === 'all' || activeTab === 'accounts') && searchResults.accounts.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                  <FolderTree size={15} className="text-teal-600" />
+                  حسابات شجرة ودليل الحسابات ({searchResults.counts.accounts})
+                </span>
+                <span className="text-[11px] text-slate-400">انقر للعرض في الشجرة</span>
+              </div>
+
+              <div className="space-y-2">
+                {searchResults.accounts.map((acc) => (
+                  <div
+                    key={`acc-${acc.id || acc.code}`}
+                    onClick={() => handleSelectAccount(acc)}
+                    className="group bg-white p-3 rounded-2xl border border-slate-200 hover:border-teal-400 hover:shadow-md transition-all cursor-pointer flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center font-mono font-bold text-xs shrink-0 border border-teal-200">
+                        {acc.code}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-sm text-slate-800 group-hover:text-teal-700 transition-colors truncate">
+                            {acc.name}
+                          </h4>
+                          {acc.isControlAccount && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 shrink-0">
+                              مراقبة: {acc.controlType}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-slate-400 font-sans">
+                          النوع: {acc.type} • الطبيعة: {acc.balanceType === 'DEBIT' ? 'مدين' : 'دائن'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-xs text-teal-600 font-bold shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span>عرض في الشجرة</span>
+                      <CornerDownLeft size={14} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 6: SYSTEM SCREENS */}
+          {(activeTab === 'all' || activeTab === 'screens') && searchResults.screens.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                  <LayoutDashboard size={15} className="text-indigo-600" />
+                  شاشات ووحدات النظام ({searchResults.counts.screens})
                 </span>
                 <span className="text-[11px] text-slate-400">انقر للفتح المباشر</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {matchedScreens.map((screen) => (
+                {searchResults.screens.map((screen) => (
                   <div
-                    key={screen.id}
+                    key={`screen-${screen.id}`}
                     onClick={() => handleSelectScreen(screen.id)}
                     className="group bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer flex items-start justify-between gap-3 text-right"
                   >
@@ -748,57 +1697,8 @@ export default function VoiceSearchModal({
             </div>
           )}
 
-          {/* Section: Chart Accounts */}
-          {(activeTab === 'all' || activeTab === 'accounts') && matchedAccounts.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-2.5">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <FolderTree size={14} className="text-emerald-600" />
-                  حسابات شجرة ودليل الحسابات ({matchedAccounts.length})
-                </span>
-                <span className="text-[11px] text-slate-400">انقر للذهاب إلى الحساب</span>
-              </div>
-
-              <div className="space-y-2">
-                {matchedAccounts.map((acc) => (
-                  <div
-                    key={acc.id}
-                    onClick={() => handleSelectAccount(acc)}
-                    className="group bg-white p-3 rounded-2xl border border-slate-200 hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer flex items-center justify-between gap-3"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-mono font-bold text-xs shrink-0 border border-emerald-200">
-                        {acc.code}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-sm text-slate-800 group-hover:text-emerald-700 transition-colors truncate">
-                            {acc.name}
-                          </h4>
-                          {acc.isControlAccount && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 shrink-0">
-                              مراقبة: {acc.controlType}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[11px] text-slate-400 font-sans">
-                          النوع: {acc.type} • الطبيعة: {acc.balanceType === 'DEBIT' ? 'مدين' : 'دائن'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span>عرض في الشجرة</span>
-                      <CornerDownLeft size={14} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Empty State */}
-          {matchedScreens.length === 0 && matchedAccounts.length === 0 && (
+          {/* EMPTY STATE */}
+          {searchResults.counts.total === 0 && (
             <div className="py-12 text-center">
               <div className="w-14 h-14 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
                 <Search size={24} />
@@ -806,8 +1706,8 @@ export default function VoiceSearchModal({
               <h4 className="font-bold text-slate-700 text-base mb-1">
                 لا توجد نتائج مطابقة لـ "{transcript}"
               </h4>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto mb-4">
-                جرب التحدث بكلمات أخرى مثل: "مبيعات"، "سند صرف"، "أرصدة العملاء"، أو اذكر رقم الكود المحاسبي.
+              <p className="text-xs text-slate-400 max-w-sm mx-auto mb-4 leading-relaxed">
+                جرب التحدث بكلمات أخرى مثل: اسم العميل أو المورد، اسم الصنف أو الباركود، رقم الفاتورة أو السند.
               </p>
               <button
                 type="button"
@@ -826,11 +1726,11 @@ export default function VoiceSearchModal({
           <div className="flex items-center gap-2">
             <Volume2 size={15} className="text-indigo-600 shrink-0" />
             <span className="text-[11px] sm:text-xs">
-              أمثلة صوتية: <strong>«افتح شجرة الحسابات»</strong> • <strong>«سند قبض»</strong> • <strong>«حساب البنك»</strong>
+              أمثلة صوتية: <strong>«فاتورة رقم 001»</strong> • <strong>«عميل أحمد»</strong> • <strong>«سند صرف»</strong> • <strong>«صنف لابتوب»</strong>
             </span>
           </div>
           <div className="flex items-center gap-3 mr-auto text-[11px] text-slate-400">
-            <span>مدعوم بمحرك التعرف الصوتي الذكي Web Speech API</span>
+            <span>مدعوم بمحرك البحث الصوتي الذكي Web Speech API</span>
           </div>
         </div>
       </div>

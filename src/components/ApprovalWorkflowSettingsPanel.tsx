@@ -111,31 +111,33 @@ export default function ApprovalWorkflowSettingsPanel({
 
         {/* Quick Presets */}
         <div className="mt-4 pt-3 border-t border-slate-200/80 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
+          <span className="text-xs font-bold text-slate-500 flex items-center gap-1 w-full sm:w-auto">
             <Sparkles size={13} className="text-amber-500" />
             نماذج جاهزة سريعة:
           </span>
-          <button
-            type="button"
-            onClick={() => applyPreset('STANDARD')}
-            className="btn-3d btn-3d-purple px-3 py-1 text-xs font-bold"
-          >
-            الشركات المتوسطة (من 5,000 ر.س)
-          </button>
-          <button
-            type="button"
-            onClick={() => applyPreset('STRICT')}
-            className="btn-3d btn-3d-white px-3 py-1 text-xs font-bold"
-          >
-            اعتماد صارم (كافة السندات من 1 ر.س)
-          </button>
-          <button
-            type="button"
-            onClick={() => applyPreset('ENTERPRISE')}
-            className="btn-3d btn-3d-white px-3 py-1 text-xs font-bold"
-          >
-            المؤسسات الكبرى (من 20,000 ر.س)
-          </button>
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => applyPreset('STANDARD')}
+              className="btn-3d btn-3d-purple px-3 py-1.5 text-xs font-bold flex-1 sm:flex-none"
+            >
+              الشركات المتوسطة (من 5,000 ر.س)
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('STRICT')}
+              className="btn-3d btn-3d-white px-3 py-1.5 text-xs font-bold flex-1 sm:flex-none"
+            >
+              اعتماد صارم (كافة السندات من 1 ر.س)
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('ENTERPRISE')}
+              className="btn-3d btn-3d-white px-3 py-1.5 text-xs font-bold flex-1 sm:flex-none"
+            >
+              المؤسسات الكبرى (من 20,000 ر.س)
+            </button>
+          </div>
         </div>
       </div>
 
@@ -368,7 +370,7 @@ export default function ApprovalWorkflowSettingsPanel({
               setShowApprovalModal(true);
             }
           }}
-          className="btn-3d btn-3d-purple px-4 py-2 text-xs font-black flex items-center gap-1.5 self-start sm:self-center"
+          className="btn-3d btn-3d-purple w-full sm:w-auto px-4 py-2.5 text-xs font-black flex items-center justify-center gap-1.5 self-stretch sm:self-center shrink-0"
         >
           <UserCheck size={14} />
           <span>فتح مركز الاعتمادات السريعة</span>

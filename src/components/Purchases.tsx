@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Save, Plus, Trash2, CheckCircle2, RotateCcw, 
   History, Printer, Calendar, Truck, X, Edit3, Eye, Lock,
   FileDown, Loader2, Keyboard, FileText, CreditCard, BarChart3,
-  ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft
+  ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft,
+  Mic, MicOff, Sparkles, Volume2
 } from 'lucide-react';
 import PrintDropdown from './PrintDropdown';
 import PrintPreviewModal, { PrintPreviewData } from './PrintPreviewModal';
@@ -34,6 +35,8 @@ import {
   type StoredPurchaseInvoice 
 } from '../utils/purchasesStore';
 import { getSystemSettings } from '../utils/settings';
+import { checkDateIsLocked } from '../utils/periodLock';
+import { parseVoiceItemsFromText } from '../utils/voiceCommandParser';
 export type { StoredPurchaseInvoice };
 
 export interface InvoiceItem {
@@ -193,6 +196,112 @@ export default function Purchases() {
   const [itemsCatalog, setItemsCatalog] = useState<Item[]>([]);
   const [selectedPartnerForStatementModal, setSelectedPartnerForStatementModal] = useState<Partner | null>(null);
 
+  // Voice Dictation for Purchase Items
+  const [isDictatingItems, setIsDictatingItems] = useState<boolean>(false);
+  const [dictationTranscript, setDictationTranscript] = useState<string>('');
+  const dictationRecognitionRef = useRef<any>(null);
+
+  const startItemsDictation = () => {
+    if (!isEditable) {
+      showToast({
+        type: 'warning',
+        title: 'تعديل الفاتورة مطلوب',
+        message: 'اضغط على زر [تعديل الفاتورة] بالأعلى للتمكن من إملاء أصناف المشتريات بالصوت.'
+      });
+      return;
+    }
+    if (typeof window === 'undefined') return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      showToast({
+        type: 'error',
+        title: 'المتصفح لا يدعم التعرف الصوتي',
+        message: 'يمكنك كتابة أسماء وأكواد الأصناف في الجدول مباشرة.'
+      });
+      return;
+    }
+
+    try {
+      if (dictationRecognitionRef.current) {
+        try { dictationRecognitionRef.current.stop(); } catch {}
+      }
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'ar-SA';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        setIsDictatingItems(true);
+        setDictationTranscript('');
+      };
+
+      recognition.onresult = (event: any) => {
+        let interim = '';
+        let final = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            final += event.results[i][0].transcript;
+          } else {
+            interim += event.results[i][0].transcript;
+          }
+        }
+        setDictationTranscript(final || interim);
+        if (final) {
+          const parsed = parseVoiceItemsFromText(final, itemsCatalog);
+          if (parsed && parsed.length > 0) {
+            setItems(prev => {
+              const cleanPrev = prev.filter(p => (p.description && p.description.trim()) || (p.itemId));
+              const newItemsMapped = parsed.map((p, idx) => ({
+                id: 'item-' + Date.now() + '-' + idx,
+                itemId: p.item?.id,
+                itemCode: p.item?.code || '',
+                description: p.name || p.item?.name || '',
+                quantity: p.quantity || 1,
+                unitPrice: p.unitPrice !== undefined ? p.unitPrice : (p.item?.costPrice || p.item?.salePrice || 0),
+                taxRate: classification === 'TAX' ? taxRate : 0,
+                availableStock: p.item?.stock || 0,
+                costPrice: p.item?.costPrice || 0
+              }));
+              return [...cleanPrev, ...newItemsMapped];
+            });
+            showToast({
+              type: 'success',
+              title: `🎙️ تم إدراج ${parsed.length} صنف/أصناف شراء بالصوت بنجاح!`,
+              message: parsed.map(p => `${p.name} (كمية: ${p.quantity})`).join(' ، ')
+            });
+          } else {
+            showToast({
+              type: 'info',
+              title: 'لم يتم التعرف على بنود محددة',
+              message: `النص الملتقط: "${final}". يمكنك نطق: "10 كراتين زيت بسعر 85"`
+            });
+          }
+        }
+      };
+
+      recognition.onerror = () => {
+        setIsDictatingItems(false);
+      };
+
+      recognition.onend = () => {
+        setIsDictatingItems(false);
+      };
+
+      dictationRecognitionRef.current = recognition;
+      recognition.start();
+    } catch (err) {
+      console.error(err);
+      setIsDictatingItems(false);
+    }
+  };
+
+  const stopItemsDictation = () => {
+    if (dictationRecognitionRef.current) {
+      try { dictationRecognitionRef.current.stop(); } catch {}
+    }
+    setIsDictatingItems(false);
+  };
+
   // Initial non-blocking load: deferred to render view immediately without UI lag
   useEffect(() => {
     let isMounted = true;
@@ -240,6 +349,50 @@ export default function Purchases() {
     window.addEventListener('alpha-device-id-changed', handleSync);
     window.addEventListener('alpha-sequences-updated', handleSync);
     window.addEventListener('storage', handleSync);
+
+    const handleCreateVoicePurchase = (e: any) => {
+      const payload = e.detail;
+      handleNewInvoice();
+      if (payload?.partner?.id) {
+        setPartnerId(payload.partner.id);
+      } else if (payload?.partnerId) {
+        setPartnerId(payload.partnerId);
+      }
+      if (payload?.items && Array.isArray(payload.items) && payload.items.length > 0) {
+        const mappedItems = payload.items.map((it: any, index: number) => ({
+          id: 'item-' + Date.now() + '-' + index,
+          itemId: it.item?.id,
+          itemCode: it.item?.code || '',
+          description: it.name || it.item?.name || '',
+          quantity: it.quantity || 1,
+          unitPrice: it.unitPrice || it.item?.costPrice || it.item?.salePrice || 0,
+          taxRate: 15,
+          availableStock: it.item?.stock || 0,
+          costPrice: it.item?.costPrice || 0
+        }));
+        setItems(mappedItems);
+      }
+      showToast({
+        type: 'success',
+        title: 'تم تجهيز مسودة فاتورة مشتريات بالصوت',
+        message: payload?.partner?.name ? `المورد المحدد: ${payload.partner.name}` : 'جاهزة لإضافة الأصناف الموردة'
+      });
+    };
+
+    const handleHighlightPurchase = (e: any) => {
+      const invoice = e.detail?.invoice;
+      if (invoice) {
+        handleEditInvoice(invoice);
+        showToast({
+          type: 'info',
+          title: `تم فتح فاتورة المشتريات #${invoice.invoiceNumber}`
+        });
+      }
+    };
+
+    window.addEventListener('alpha-voice-create-purchase-invoice', handleCreateVoicePurchase);
+    window.addEventListener('alpha-highlight-purchase-invoice', handleHighlightPurchase);
+
     return () => {
       window.removeEventListener('alpha-partner-ledger-updated', handleSync);
       window.removeEventListener('alpha-system-reset-completed', handleSync);
@@ -248,6 +401,8 @@ export default function Purchases() {
       window.removeEventListener('alpha-device-id-changed', handleSync);
       window.removeEventListener('alpha-sequences-updated', handleSync);
       window.removeEventListener('storage', handleSync);
+      window.removeEventListener('alpha-voice-create-purchase-invoice', handleCreateVoicePurchase);
+      window.removeEventListener('alpha-highlight-purchase-invoice', handleHighlightPurchase);
     };
   }, []);
 
@@ -597,6 +752,13 @@ export default function Purchases() {
   const saveInvoiceToDb = (isPosting: boolean) => {
     if (!partnerId) {
       alert("يرجى اختيار المورد أولاً");
+      return false;
+    }
+
+    // Check fiscal period lock
+    const lockCheck = checkDateIsLocked(date);
+    if (lockCheck.isLocked) {
+      alert(`🔒 تنبيه رقابي - الفترة المالية مقفلة ومحمية:\n${lockCheck.reason}`);
       return false;
     }
 
@@ -2083,7 +2245,43 @@ export default function Purchases() {
                   <span>إضافة صنف مشتريات جديد</span>
                   <kbd className="text-[10px] bg-emerald-950 text-emerald-100 px-1.5 py-0.5 rounded font-mono border border-emerald-900">F2</kbd>
                 </button>
+
+                {/* Smart Voice Dictation for Purchase Items */}
+                <button
+                  type="button"
+                  onClick={isDictatingItems ? stopItemsDictation : startItemsDictation}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all shadow-xs hover:shadow cursor-pointer border ${
+                    isDictatingItems
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-800 animate-pulse'
+                      : 'bg-emerald-800 hover:bg-emerald-900 text-white border-emerald-950'
+                  }`}
+                  title="إملاء أصناف المشتريات والكميات بالصوت (مثال: 10 كراتين زيت بسعر 85)"
+                >
+                  {isDictatingItems ? (
+                    <>
+                      <MicOff size={16} className="animate-spin text-rose-200" />
+                      <span>إيقاف الإملاء الصوتي</span>
+                      <span className="w-2 h-2 rounded-full bg-white animate-ping"></span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic size={16} className="text-emerald-200" />
+                      <span>إملاء أصناف الشراء بالصوت</span>
+                      <Sparkles size={14} className="text-amber-300" />
+                    </>
+                  )}
+                </button>
               </div>
+
+              {isDictatingItems && (
+                <div className="flex-1 min-w-[200px] max-w-md bg-white border border-rose-300 rounded-xl px-3 py-1.5 flex items-center gap-2 animate-fadeIn">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping shrink-0"></span>
+                  <span className="text-xs text-slate-700 font-bold truncate">
+                    {dictationTranscript ? `جاري السماع: "${dictationTranscript}"` : 'تحدث الآن بإملاء أصناف المشتريات والكميات وأسعار التوريد...'}
+                  </span>
+                </div>
+              )}
+
               <span className="text-xs text-emerald-950 font-black bg-white px-3.5 py-1.5 rounded-xl border-2 border-emerald-950 shadow-2xs">
                 عدد الأصناف: <strong className="text-emerald-900 font-mono text-sm">{items.length}</strong>
               </span>

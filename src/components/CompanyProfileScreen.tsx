@@ -10,7 +10,8 @@ import {
   QrCode,
   ShieldCheck,
   Award,
-  LayoutDashboard
+  LayoutDashboard,
+  ShieldAlert
 } from 'lucide-react';
 import { SystemSettings } from '../types/accounting';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -26,7 +27,8 @@ interface CompanyProfileScreenProps {
 export default function CompanyProfileScreen({
   systemSettings,
   onNavigateToSettings,
-  onNavigateToDashboard
+  onNavigateToDashboard,
+  onNavigate
 }: CompanyProfileScreenProps) {
   const { company, financial } = systemSettings;
   const { language, dir } = useLanguage();
@@ -78,9 +80,6 @@ export default function CompanyProfileScreen({
                 <span className="px-3 py-0.5 rounded-full text-[11px] font-bold bg-amber-400/15 text-amber-300 border border-amber-400/30">
                   {company.branchName || (language === 'ar' ? 'الفرع الرئيسي' : 'Main Branch')}
                 </span>
-                <span className="px-3 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/20 text-blue-300 border border-blue-400/30">
-                  {language === 'ar' ? `السنة المالية: ${financial.fiscalYear}` : `Fiscal Year: ${financial.fiscalYear}`}
-                </span>
               </div>
 
               {/* Company Main Display Name (Switches between Arabic and English) */}
@@ -122,14 +121,24 @@ export default function CompanyProfileScreen({
               <LayoutDashboard size={15} />
               <span>{language === 'ar' ? 'لوحة المؤشرات والرسوم البيانية' : 'Financial Dashboard & Analytics'}</span>
             </button>
-            <button
-              type="button"
-              onClick={onNavigateToSettings}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-semibold backdrop-blur-md transition-all cursor-pointer shadow-sm hover:border-amber-300/50 hover:text-amber-200"
-            >
-              <Edit3 size={15} />
-              <span>{language === 'ar' ? 'تعديل بيانات المنشأة' : 'Edit Company Profile'}</span>
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={onNavigateToSettings}
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-semibold backdrop-blur-md transition-all cursor-pointer shadow-sm hover:border-amber-300/50 hover:text-amber-200"
+              >
+                <Edit3 size={14} />
+                <span>{language === 'ar' ? 'تعديل المنشأة' : 'Edit Profile'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate && onNavigate('auditTrail')}
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-indigo-600/40 hover:bg-indigo-600/70 border border-indigo-400/40 text-indigo-200 hover:text-white text-xs font-bold transition-all cursor-pointer shadow-sm"
+              >
+                <ShieldAlert size={14} />
+                <span>{language === 'ar' ? 'سجل الأنشطة' : 'Audit Log'}</span>
+              </button>
+            </div>
             <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 bg-slate-900/60 px-3 py-1.5 rounded-lg border border-slate-700/50">
               <Award size={13} className="text-amber-400" />
               <span>{language === 'ar' ? 'نظام القيد المزدوج المعتمد' : 'Double-Entry ERP Standard'}</span>

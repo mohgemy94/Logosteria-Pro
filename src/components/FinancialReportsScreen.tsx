@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
   Printer, 
   RefreshCcw,
@@ -23,6 +23,11 @@ import { AccountType } from '../types/accounting';
 import { calculateTrialBalance, getAccountLedgerMovements } from '../utils/trialBalanceStore';
 import { getSystemSettings } from '../utils/settings';
 import ExportButtonGroup from './ExportButtonGroup';
+import { 
+  getSelectedBrowsingYear, 
+  getActiveFiscalYear, 
+  FISCAL_YEAR_CHANGED_EVENT 
+} from '../utils/fiscalYearArchive';
 
 interface FinancialReportsScreenProps {
   onNavigate?: (view: string) => void;
@@ -43,6 +48,21 @@ export default function FinancialReportsScreen({ onNavigate }: FinancialReportsS
   const [compPeriod1End, setCompPeriod1End] = useState<string>('');
   const [compPeriod2Start, setCompPeriod2Start] = useState<string>('');
   const [compPeriod2End, setCompPeriod2End] = useState<string>('');
+
+  // Sync date range with selected browsing fiscal year
+  useEffect(() => {
+    const handleFiscalYearSync = () => {
+      const bYear = getSelectedBrowsingYear();
+      const aYear = getActiveFiscalYear();
+      if (bYear !== aYear) {
+        setStartDate(`${bYear}-01-01`);
+        setEndDate(`${bYear}-12-31`);
+      }
+    };
+    handleFiscalYearSync();
+    window.addEventListener(FISCAL_YEAR_CHANGED_EVENT, handleFiscalYearSync);
+    return () => window.removeEventListener(FISCAL_YEAR_CHANGED_EVENT, handleFiscalYearSync);
+  }, []);
 
   const { rows } = useMemo(() => {
     return calculateTrialBalance(

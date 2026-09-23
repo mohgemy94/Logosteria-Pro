@@ -3,6 +3,7 @@ import { JournalEntry, JournalEntryStatus } from '../types/accounting';
 import { loadStoredItems } from './itemsStore';
 import { DB_ITEMS_KEY } from './sequences';
 import { saveJournalEntry, loadJournalEntries } from './trialBalanceStore';
+import { recordAuditLog } from './auditLogStore';
 
 export const STORAGE_KEY_INVENTORY_AUDITS = 'alpha_inventory_audits_v1';
 export const LOCAL_STORAGE_WAREHOUSE_KEY = 'alpha_warehouse_balances_v2';
@@ -385,6 +386,30 @@ export function postInventoryAuditAndReconcile(
     window.dispatchEvent(new Event('alpha-data-changed'));
     window.dispatchEvent(new Event('accounting-data-changed'));
     window.dispatchEvent(new Event('storage'));
+
+    // Record audit trail event
+    try {
+      recordAuditLog({
+        action: 'POST',
+        module: 'INVENTORY_COUNT',
+        documentType: 'محضر جرد مخزني وتسوية',
+        documentNumber: updatedAudit.auditNumber,
+        documentId: updatedAudit.id,
+        summary: `اعتماد وترحيل محضر الجرد الدوري (${updatedAudit.auditNumber}) لمستودع ${updatedAudit.targetWarehouse} مع تسوية فروقات بقيد ${generatedJournalEntry?.entryNumber || 'تسوية'}`,
+        summaryEn: `Posted inventory audit count ${updatedAudit.auditNumber} for warehouse ${updatedAudit.targetWarehouse}`,
+        severity: 'INFO',
+        details: {
+          auditNumber: updatedAudit.auditNumber,
+          warehouse: updatedAudit.targetWarehouse,
+          totalItemsCount: computedLines.length,
+          matchedCount,
+          shortageCount,
+          surplusCount,
+          netVariance,
+          journalEntryNumber: generatedJournalEntry?.entryNumber
+        }
+      });
+    } catch {}
 
     return {
       success: true,

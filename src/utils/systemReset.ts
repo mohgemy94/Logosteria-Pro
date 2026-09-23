@@ -20,6 +20,7 @@ import { STORAGE_KEY_EMPLOYEES } from '../data/mockPayroll';
 import { STORAGE_KEY_BOM, STORAGE_KEY_WORK_ORDERS, STORAGE_KEY_WORK_CENTERS } from '../data/mockManufacturing';
 import { savePrintPaperFormat, savePrintColorMode } from './printPaperFormats';
 import { STORAGE_KEY_INVENTORY_AUDITS } from './inventoryAuditStore';
+import { recordAuditLog } from './auditLogStore';
 
 export type ResetType = 'TRANSACTIONS_ONLY' | 'FULL_FACTORY_RESET';
 
@@ -228,6 +229,29 @@ export function resetTransactionsOnly(): ResetSummary {
   try {
     fetch('/api/accounts/reset', { method: 'POST' }).catch(() => {});
   } catch {}
+
+  // Record critical audit log for transaction reset
+  try {
+    recordAuditLog({
+      action: 'SYSTEM_RESET',
+      module: 'SYSTEM',
+      documentType: 'تصفير الحركات والعمليات المالية',
+      summary: `تم تصفير جميع الحركات المالية والعمليات بنجاح (مسح ${clearedInvoicesCount} فاتورة، و${clearedVouchersCount} سند، و${clearedJournalEntriesCount} قيد)`,
+      summaryEn: `Reset all transactional data (cleared ${clearedInvoicesCount} invoices, ${clearedVouchersCount} vouchers, ${clearedJournalEntriesCount} journal entries)`,
+      severity: 'CRITICAL',
+      details: {
+        clearedInvoicesCount,
+        clearedVouchersCount,
+        clearedJournalEntriesCount,
+        clearedInventoryAuditsCount,
+        preservedItemsCount,
+        preservedCustomersCount,
+        preservedVendorsCount
+      }
+    });
+  } catch (e) {
+    console.error('Audit logging failed on reset:', e);
+  }
 
   return {
     success: true,

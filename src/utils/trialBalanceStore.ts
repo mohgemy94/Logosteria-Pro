@@ -1,4 +1,5 @@
 import { Account, AccountType, BalanceType, JournalEntry, JournalEntryStatus, JournalItem } from '../types/accounting';
+import { autoLockYearEnd } from './periodLock';
 import { 
   DB_SALES_INVOICES_KEY, 
   DB_PURCHASES_INVOICES_KEY,
@@ -20,6 +21,7 @@ export const DEFAULT_ACCOUNTS: Account[] = [
   { id: 'acc-1103', code: '1103', name: 'حساب بنك الراجحي', type: AccountType.Asset, balanceType: BalanceType.Debit },
   { id: 'acc-1104', code: '1104', name: 'شيكات تحت التحصيل (أوراق قبض برسم التحصيل)', type: AccountType.Asset, balanceType: BalanceType.Debit },
   { id: 'acc-1201', code: '1201', name: 'ذمم العملاء (حساب مراقبة المدينين - Sub-Ledger AR)', type: AccountType.Asset, balanceType: BalanceType.Debit, isControlAccount: true, controlType: 'CUSTOMER' },
+  { id: 'acc-1209', code: '1209', name: 'مخصص ديون مشكوك في تحصيلها (خسائر ائتمانية متوقعة - IFRS 9)', type: AccountType.Asset, balanceType: BalanceType.Credit },
   { id: 'acc-1301', code: '1301', name: 'المخزون السلعي والمواد الخام (المستودع الرئيسي)', type: AccountType.Asset, balanceType: BalanceType.Debit },
   { id: 'acc-1302', code: '1302', name: 'مخزون إنتاج تحت التشغيل (WIP - حساب مراقبة التشغيل)', type: AccountType.Asset, balanceType: BalanceType.Debit },
   { id: 'acc-1303', code: '1303', name: 'مخزون الإنتاج التام والجاهز للتسليم', type: AccountType.Asset, balanceType: BalanceType.Debit },
@@ -1523,6 +1525,11 @@ export function closeYearLocally(selectedYear: number): void {
       status: JournalEntryStatus.Posted
     };
     saveJournalEntry(closingEntry);
+    try {
+      autoLockYearEnd(selectedYear);
+    } catch (e) {
+      console.warn('Failed auto-locking year:', e);
+    }
   }
 }
 

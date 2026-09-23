@@ -17,6 +17,7 @@ import {
 import { BarcodeImage } from './VoucherBarcodeView';
 import type { PrintPreviewData } from './PrintPreviewModal';
 import { useSystemCurrency } from '../utils/currency';
+import { mobileNavigationController } from '../utils/mobileNavigation';
 
 interface VoucherScannerModalProps {
   isOpen: boolean;
@@ -38,6 +39,16 @@ export default function VoucherScannerModal({
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Mobile hardware/gesture back support
+  useEffect(() => {
+    if (!isOpen) return;
+    const unregister = mobileNavigationController.registerModal('modal-voucher-scanner', () => {
+      stopCamera();
+      onClose();
+    });
+    return () => unregister();
+  }, [isOpen, onClose]);
 
   // Stop camera helper
   const stopCamera = () => {

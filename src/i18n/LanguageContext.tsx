@@ -63,14 +63,29 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
     // Comprehensive DOM Auto-Translator for English Mode
     const translateNode = (node: Node) => {
+      // Check if node or its ancestor is excluded from auto-translation
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        if (el.getAttribute('data-no-auto-translate') === 'true' || el.classList.contains('notranslate') || el.getAttribute('translate') === 'no') {
+          return;
+        }
+      }
+
       // 1. Text Nodes
       if (node.nodeType === Node.TEXT_NODE) {
         const textNode = node as CustomTextNode;
         const text = textNode.nodeValue || '';
 
-        // Avoid translating code blocks or script/style contents
+        // Avoid translating code blocks, scripts, or excluded components
         const parent = textNode.parentElement;
-        if (parent && (parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE' || parent.tagName === 'CODE')) {
+        if (parent && (
+          parent.tagName === 'SCRIPT' || 
+          parent.tagName === 'STYLE' || 
+          parent.tagName === 'CODE' ||
+          parent.closest('[data-no-auto-translate="true"]') ||
+          parent.closest('.notranslate') ||
+          parent.closest('[translate="no"]')
+        )) {
           return;
         }
 
@@ -98,6 +113,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       // 2. Element Attributes (placeholder, title, aria-label)
       if (node.nodeType === Node.ELEMENT_NODE) {
         const el = node as CustomElement;
+
+        // Skip excluded elements
+        if (el.getAttribute('data-no-auto-translate') === 'true' || el.classList.contains('notranslate') || el.getAttribute('translate') === 'no') {
+          return;
+        }
 
         // Placeholder
         const placeholder = el.getAttribute('placeholder');

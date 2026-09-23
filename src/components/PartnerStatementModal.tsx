@@ -6,6 +6,7 @@ import {
 import { Partner } from '../types/accounting';
 import { getPartnerAccountStatement, PartnerStatement, setVoucherPostingStatus, PartnerLedgerTx } from '../utils/partnerLedger';
 import PrintPreviewModal, { PrintPreviewData } from './PrintPreviewModal';
+import { mobileNavigationController } from '../utils/mobileNavigation';
 import { useSystemCurrency } from '../utils/currency';
 import ExportButtonGroup from './ExportButtonGroup';
 
@@ -34,6 +35,16 @@ export default function PartnerStatementModal({
     window.addEventListener('partnerLedgerUpdated', handleUpdate);
     return () => window.removeEventListener('partnerLedgerUpdated', handleUpdate);
   }, []);
+
+  // Hardware & gesture back button on mobile closes statement modal first
+  useEffect(() => {
+    if (!isOpen || !partner) return;
+    const modalId = `modal-partner-statement-${partner.id}`;
+    const unregister = mobileNavigationController.registerModal(modalId, () => {
+      onClose();
+    });
+    return () => unregister();
+  }, [isOpen, partner, onClose]);
 
   const statement: PartnerStatement | null = useMemo(() => {
     if (!partner) return null;

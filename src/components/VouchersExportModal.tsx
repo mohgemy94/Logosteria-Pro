@@ -23,6 +23,7 @@ import {
   exportVouchersToCSV, 
   exportVouchersReportPDF 
 } from '../utils/vouchersExport';
+import { mobileNavigationController } from '../utils/mobileNavigation';
 
 interface VouchersExportModalProps {
   isOpen: boolean;
@@ -69,6 +70,15 @@ export default function VouchersExportModal({
       }
     }
   }, [isOpen, preloadedItems]);
+
+  // Mobile back button handler: closes export modal first
+  useEffect(() => {
+    if (!isOpen) return;
+    const unregister = mobileNavigationController.registerModal('modal-vouchers-export', () => {
+      onClose();
+    });
+    return () => unregister();
+  }, [isOpen, onClose]);
 
   // Filters state
   const [startDate, setStartDate] = useState<string>('');

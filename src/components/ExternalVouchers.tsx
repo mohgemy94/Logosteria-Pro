@@ -152,6 +152,36 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
     window.addEventListener('alpha-device-id-changed', handleSync);
     window.addEventListener('alpha-sequences-updated', handleSync);
     window.addEventListener('storage', handleSync);
+
+    const handleCreateVoiceVoucher = (e: any) => {
+      const payload = e.detail;
+      handleNewVoucher();
+      if (payload?.partner?.id) {
+        setPartnerId(payload.partner.id);
+      } else if (payload?.partnerId) {
+        setPartnerId(payload.partnerId);
+      }
+      if (payload?.amount) {
+        setAmount(String(payload.amount));
+      }
+      if (payload?.paymentMethod) {
+        if (payload.paymentMethod === 'TRANSFER') setPaymentMethod('BANK_TRANSFER');
+        else if (payload.paymentMethod === 'CHECK') setPaymentMethod('CHECK');
+        else if (payload.paymentMethod === 'CARD') setPaymentMethod('CREDIT_CARD');
+        else setPaymentMethod('CASH');
+      }
+    };
+
+    const handleHighlightVoucher = (e: any) => {
+      const v = e.detail?.voucher;
+      if (v) {
+        handleEdit(v);
+      }
+    };
+
+    window.addEventListener('alpha-voice-create-voucher', handleCreateVoiceVoucher);
+    window.addEventListener('alpha-highlight-voucher', handleHighlightVoucher);
+
     return () => {
       window.removeEventListener('alpha-partner-ledger-updated', handleSync);
       window.removeEventListener('alpha-vouchers-updated', handleSync);
@@ -161,6 +191,8 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
       window.removeEventListener('alpha-device-id-changed', handleSync);
       window.removeEventListener('alpha-sequences-updated', handleSync);
       window.removeEventListener('storage', handleSync);
+      window.removeEventListener('alpha-voice-create-voucher', handleCreateVoiceVoucher);
+      window.removeEventListener('alpha-highlight-voucher', handleHighlightVoucher);
     };
   }, [type, currentDocType]);
 

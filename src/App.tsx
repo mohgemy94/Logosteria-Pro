@@ -15,7 +15,6 @@ import {
   Users,
   Globe,
   HardDrive,
-  Calendar,
   CheckCircle2,
   ClipboardCheck,
   Landmark,
@@ -24,7 +23,8 @@ import {
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
-  BarChart3
+  BarChart3,
+  ShieldAlert
 } from 'lucide-react';
 import AnalyticsScreen from './components/AnalyticsScreen';
 import VoiceSearchModal from './components/VoiceSearchModal';
@@ -48,6 +48,7 @@ import InternalReceiptVoucher from './components/InternalReceiptVoucher';
 import InternalPaymentVoucher from './components/InternalPaymentVoucher';
 import Items from './components/Items';
 import Settings from './components/Settings';
+import AuditTrailScreen from './components/AuditTrailScreen';
 import PartnerBalances from './components/PartnerBalances';
 import WarehouseBalances from './components/WarehouseBalances';
 import InventoryCountScreen from './components/InventoryCountScreen';
@@ -60,6 +61,10 @@ import ManufacturingScreen from './components/ManufacturingScreen';
 import ChartOfAccountsTree from './components/ChartOfAccountsTree';
 import CheckPortfolioScreen from './components/CheckPortfolioScreen';
 import CostCenterScreen from './components/CostCenterScreen';
+import FiscalYearSelector from './components/FiscalYearSelector';
+import FiscalYearArchiveBanner from './components/FiscalYearArchiveBanner';
+import { mobileNavigationController } from './utils/mobileNavigation';
+import { useSwipeBack } from './hooks/useSwipeBack';
 import { getSystemSettings } from './utils/settings';
 import { useLanguage } from './i18n/LanguageContext';
 
@@ -187,8 +192,67 @@ export default function App() {
     };
   }, [autoSaveConfig.intervalMinutes, autoSaveConfig.enabled]);
 
-  // Close mobile menu on view change
+  // Mobile Back Navigation & Popstate Controller Initialization
+  useEffect(() => {
+    mobileNavigationController.init((newView) => {
+      setActiveView(newView);
+      setIsMobileMenuOpen(false);
+    }, activeView);
+
+    return () => {
+      mobileNavigationController.destroy();
+    };
+  }, []);
+
+  // Register native modal back handlers for global dialogs
+  useEffect(() => {
+    if (!showBackupModal) return;
+    const unregister = mobileNavigationController.registerModal('modal-backup-manager', () => {
+      setShowBackupModal(false);
+    });
+    return () => unregister();
+  }, [showBackupModal]);
+
+  useEffect(() => {
+    if (!showVoiceSearch) return;
+    const unregister = mobileNavigationController.registerModal('modal-voice-search', () => {
+      setShowVoiceSearch(false);
+    });
+    return () => unregister();
+  }, [showVoiceSearch]);
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+    const unregister = mobileNavigationController.registerModal('modal-mobile-menu', () => {
+      setIsMobileMenuOpen(false);
+    });
+    return () => unregister();
+  }, [isMobileMenuOpen]);
+
+  // Touch Edge Swipe-To-Back Gesture support for smartphones and tablets
+  useSwipeBack({
+    onBack: () => {
+      // Close open drawers / modals first if any
+      if (isMobileMenuOpen) {
+        setIsMobileMenuOpen(false);
+        return;
+      }
+      if (showBackupModal) {
+        setShowBackupModal(false);
+        return;
+      }
+      if (showVoiceSearch) {
+        setShowVoiceSearch(false);
+        return;
+      }
+      mobileNavigationController.goBack();
+    },
+    enabled: true
+  });
+
+  // Navigate to view with history recording
   const handleNavigate = (view: string | null) => {
+    mobileNavigationController.pushView(view);
     setActiveView(view);
     setIsMobileMenuOpen(false);
   };
@@ -229,6 +293,7 @@ export default function App() {
       case 'external': return <ExternalReceiptVoucher />;
       case 'internal': return <InternalReceiptVoucher />;
       case 'journalEntries': return <NewJournalEntry />;
+      case 'auditTrail': return <AuditTrailScreen onNavigate={(view) => handleNavigate(view)} />;
       case 'settings': return <Settings onNavigateToDashboard={() => handleNavigate(null)} />;
       default: return null;
     }
@@ -254,6 +319,7 @@ export default function App() {
   const getViewTitle = () => {
     switch (activeView) {
       case 'companyProfile': return t('nav_companyProfile', 'الواجهة الرئيسية (بيانات الشركة)');
+      case 'auditTrail': return language === 'ar' ? 'سجل الأنشطة ومسارات التدقيق المالي' : 'Audit Trail & Activity Log';
       case 'settings': return t('nav_settings', 'إعدادات النظام');
       case 'journal': return t('nav_journal', 'القيود اليومية');
       case 'chartTree': return language === 'ar' ? 'دليل وشجرة الحسابات المالية (Tree)' : 'Chart of Accounts Tree';
@@ -324,22 +390,24 @@ export default function App() {
 
           <div 
             onClick={() => handleNavigate('companyProfile')} 
-            className="flex items-center gap-2.5 sm:gap-3 cursor-pointer select-none hover:opacity-95 transition-opacity group"
-            title={t('homeOverview', 'الواجهة الرئيسية (بيانات الشركة)')}
+            className="flex items-center gap-2.5 sm:gap-3 cursor-pointer select-none hover:opacity-95 transition-opacity group notranslate"
+            title={language === 'ar' ? 'الواجهة الرئيسية (بيانات الشركة)' : 'Company Profile & Overview'}
+            data-no-auto-translate="true"
+            translate="no"
           >
-            <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-linear-to-tr from-amber-500 via-amber-400 to-amber-300 rounded-xl flex items-center justify-center font-extrabold text-xs sm:text-sm shadow-md text-slate-950 font-sans tracking-tight border border-amber-300/40 group-hover:scale-105 transition-transform shrink-0">
+            <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-linear-to-tr from-amber-500 via-amber-400 to-amber-300 rounded-xl flex items-center justify-center font-extrabold text-xs sm:text-sm shadow-md text-slate-950 font-sans tracking-tight border border-amber-300/40 group-hover:scale-105 transition-transform shrink-0 notranslate" translate="no">
               {language === 'ar' ? 'لوجوستريا' : 'LOGUSTRIA'}
             </div>
-            <div>
-              <h1 className="text-sm sm:text-base md:text-lg font-semibold leading-tight line-clamp-1">
+            <div className="notranslate" data-no-auto-translate="true" translate="no" key={`top-hdr-company-${language}`}>
+              <h1 className="text-sm sm:text-base md:text-lg font-semibold leading-tight line-clamp-1 notranslate" translate="no">
                 {language === 'ar' 
-                  ? (systemSettings.company.nameAr || 'لوجوستريا للمحاسبة والأنظمة المالية') 
-                  : (systemSettings.company.nameEn || systemSettings.company.nameAr || 'Logustria ERP & Financial Systems')}
+                  ? (systemSettings.company.nameAr || 'شركة لوجوستريا للمحاسبة والحلول المالية') 
+                  : (systemSettings.company.nameEn || systemSettings.company.nameAr || 'Logustria Financial & ERP Solutions Co.')}
               </h1>
-              <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wider mt-0.5 line-clamp-1">
+              <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wider mt-0.5 line-clamp-1 notranslate" translate="no">
                 {language === 'ar' 
-                  ? (systemSettings.company.nameEn || 'Logustria ERP & Financial Systems') 
-                  : (systemSettings.company.nameAr || 'لوجوستريا للمحاسبة والأنظمة المالية')}
+                  ? (systemSettings.company.nameEn || 'Logustria Financial & ERP Solutions Co.') 
+                  : (systemSettings.company.nameAr || 'شركة لوجوستريا للمحاسبة والحلول المالية')}
               </p>
             </div>
           </div>
@@ -398,21 +466,21 @@ export default function App() {
             : 'md:w-0 md:p-0 md:opacity-0 md:invisible md:overflow-hidden md:pointer-events-none md:border-none'}
         `}>
           {/* Unified Sidebar Header */}
-          <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-800 shrink-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="px-2 py-0.5 bg-linear-to-r from-amber-500 to-amber-400 rounded-md flex items-center justify-center font-bold text-[11px] text-slate-950 shrink-0">
+          <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-800 shrink-0 notranslate" data-no-auto-translate="true" translate="no">
+            <div className="flex items-center gap-2 min-w-0 notranslate" translate="no">
+              <div className="px-2 py-0.5 bg-linear-to-r from-amber-500 to-amber-400 rounded-md flex items-center justify-center font-bold text-[11px] text-slate-950 shrink-0 notranslate" translate="no">
                 {language === 'ar' ? 'لوجوستريا' : 'LOGUSTRIA'}
               </div>
-              <div className="min-w-0">
-                <span className="font-bold text-xs text-white truncate block">
+              <div className="min-w-0 notranslate" translate="no" key={`sidebar-hdr-company-${language}`}>
+                <span className="font-bold text-xs text-white truncate block notranslate" translate="no">
                   {language === 'ar' 
-                    ? (systemSettings.company.nameAr || 'لوجوستريا للمحاسبة') 
-                    : (systemSettings.company.nameEn || systemSettings.company.nameAr || 'Logustria ERP')}
+                    ? (systemSettings.company.nameAr || 'شركة لوجوستريا للمحاسبة والحلول المالية') 
+                    : (systemSettings.company.nameEn || systemSettings.company.nameAr || 'Logustria Financial & ERP Solutions Co.')}
                 </span>
-                <span className="text-[9px] text-slate-400 truncate block">
+                <span className="text-[9px] text-slate-400 truncate block notranslate" translate="no">
                   {language === 'ar' 
-                    ? (systemSettings.company.nameEn || 'قائمة النظام المحاسبي') 
-                    : (systemSettings.company.nameAr || 'ERP Navigation Menu')}
+                    ? (systemSettings.company.nameEn || 'Logustria Financial & ERP Solutions Co.') 
+                    : (systemSettings.company.nameAr || 'شركة لوجوستريا للمحاسبة والحلول المالية')}
                 </span>
               </div>
             </div>
@@ -599,12 +667,19 @@ export default function App() {
           </div>
           <div onClick={() => handleNavigate("yearEndClosing")} className={navItemClass("yearEndClosing")}>
             <span className="text-xs font-mono bg-slate-800 text-rose-400 px-1 rounded">YC</span>
-            <span>{t('nav_yearEndClosing', 'الإقفال السنوي')}</span>
+            <span>{t('nav_yearEndClosing', 'الإقفال السنوي وترحيل الأرصدة')}</span>
           </div>
 
           {/* الإدارة والنظام */}
           <div className="mt-4 text-[10px] uppercase font-bold text-slate-500 px-3 mb-2 tracking-wider">
             {t('nav_adminGroup', 'الإدارة والنظام')}
+          </div>
+          <div onClick={() => handleNavigate('auditTrail')} className={navItemClass('auditTrail')}>
+            <ShieldAlert size={15} className="text-indigo-400 shrink-0" /> 
+            <span className="flex items-center justify-between flex-1">
+              <span>{language === 'ar' ? 'سجل الأنشطة والتدقيق (Audit)' : 'Audit Trail & Log'}</span>
+              <span className="text-[10px] font-mono bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 rounded font-bold">LOG</span>
+            </span>
           </div>
           <div onClick={() => handleNavigate('settings')} className={navItemClass('settings')}>
             <SettingsIcon size={15} className="opacity-80 shrink-0" /> 
@@ -639,26 +714,13 @@ export default function App() {
             </button>
 
             {/* 1. السنة المالية (Fiscal Year) */}
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/70 border border-slate-700/60 text-xs shadow-2xs">
-              <div className="flex items-center gap-2">
-                <Calendar size={15} className="text-amber-400 shrink-0" />
-                <div>
-                  <div className="text-[10px] text-slate-400 font-medium">
-                    {t('fiscalYearLabel', 'السنة المالية')}
-                  </div>
-                  <div className="font-mono font-bold text-slate-100 text-xs">
-                    {systemSettings.financial.fiscalYear}
-                  </div>
-                </div>
-              </div>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                systemSettings.financial.isFiscalYearClosed 
-                  ? 'bg-rose-950/60 text-rose-300 border-rose-800/60' 
-                  : 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60'
-              }`}>
-                {systemSettings.financial.isFiscalYearClosed ? t('yearClosed', 'مغلقة') : t('yearOpen', 'مفتوحة')}
-              </span>
-            </div>
+            <FiscalYearSelector 
+              fullWidth 
+              onNavigateToYearEnd={() => {
+                handleNavigate('yearEndClosing');
+                setIsMobileMenuOpen(false);
+              }} 
+            />
 
             {/* 2. الحفظ التلقائي في مجلد محلي (Auto-Save) */}
             <button
@@ -722,6 +784,9 @@ export default function App() {
         {/* Main Content Workspace */}
         <main className="flex-1 p-2 sm:p-4 md:p-6 lg:p-8 overflow-y-auto flex flex-col bg-[#f1f5f9] print:p-0 relative pb-20 md:pb-8">
           <div className="w-full max-w-7xl 2xl:max-w-[1700px] mx-auto flex-1 flex flex-col transition-all">
+            {/* Archived Fiscal Year Read-Only Banner */}
+            <FiscalYearArchiveBanner onNavigateToYearEnd={() => handleNavigate('yearEndClosing')} />
+
             {activeView ? (
               <div className="flex flex-col flex-1">
                 {/* View Top Bar with Return to Company Profile / Dashboard Button */}

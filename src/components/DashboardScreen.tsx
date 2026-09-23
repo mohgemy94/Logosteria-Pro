@@ -31,7 +31,8 @@ import {
   CheckCircle2,
   BarChart3,
   BookOpen,
-  Landmark
+  Landmark,
+  AlertTriangle
 } from 'lucide-react';
 import DashboardAlertsCenter from './DashboardAlertsCenter';
 import ItemAnalyticsModal from './ItemAnalyticsModal';
@@ -45,6 +46,7 @@ import {
   DB_PAYMENT_VOUCHERS_KEY,
   DB_ITEMS_KEY
 } from '../utils/sequences';
+import { getSelectedBrowsingYear, FISCAL_YEAR_CHANGED_EVENT } from '../utils/fiscalYearArchive';
 
 interface DashboardScreenProps {
   onNavigate: (view: string) => void;
@@ -82,6 +84,12 @@ export default function DashboardScreen({ onNavigate, systemSettings }: Dashboar
     window.addEventListener('accounting-data-changed', handleDataRefresh);
     window.addEventListener('alpha-checks-updated', handleDataRefresh);
 
+    const handleFiscalYearChanged = () => {
+      setSelectedYear(getSelectedBrowsingYear());
+      setDataVersion(v => v + 1);
+    };
+    window.addEventListener(FISCAL_YEAR_CHANGED_EVENT, handleFiscalYearChanged);
+
     return () => {
       window.removeEventListener('storage', handleDataRefresh);
       window.removeEventListener('alpha-data-changed', handleDataRefresh);
@@ -91,6 +99,7 @@ export default function DashboardScreen({ onNavigate, systemSettings }: Dashboar
       window.removeEventListener('alpha-settings-updated', handleDataRefresh);
       window.removeEventListener('accounting-data-changed', handleDataRefresh);
       window.removeEventListener('alpha-checks-updated', handleDataRefresh);
+      window.removeEventListener(FISCAL_YEAR_CHANGED_EVENT, handleFiscalYearChanged);
     };
   }, []);
 
@@ -138,7 +147,7 @@ export default function DashboardScreen({ onNavigate, systemSettings }: Dashboar
     accountsReceivable: 0,
     accountsPayable: 0
   });
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedYear, setSelectedYear] = useState(() => getSelectedBrowsingYear());
   const [isLoadingKPIs, setIsLoadingKPIs] = useState(false);
 
   useEffect(() => {

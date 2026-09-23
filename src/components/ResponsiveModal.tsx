@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { mobileNavigationController } from '../utils/mobileNavigation';
 
 export interface ResponsiveModalProps {
   isOpen: boolean;
@@ -101,6 +102,16 @@ export default function ResponsiveModal({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onClose]);
+
+  // Handle hardware & gesture back button on mobile: closes modal first
+  useEffect(() => {
+    if (!isOpen) return;
+    const modalKey = id ? `responsive-modal-${id}` : `responsive-modal-${Math.random().toString(36).substring(2, 9)}`;
+    const unregister = mobileNavigationController.registerModal(modalKey, () => {
+      onClose();
+    });
+    return () => unregister();
+  }, [isOpen, onClose, id]);
 
   if (!isOpen) return null;
   if (typeof document === 'undefined') return null;

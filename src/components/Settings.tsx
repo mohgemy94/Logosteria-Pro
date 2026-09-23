@@ -18,9 +18,12 @@ import {
   AlertTriangle,
   CheckCircle2,
   Monitor,
-  Globe
+  Globe,
+  ArrowRight,
+  ArrowLeft
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { mobileNavigationController } from '../utils/mobileNavigation';
 import MobilePermissionsModal from './MobilePermissionsModal';
 import { SystemSettings, CurrencySetting, UserPermission, CreditAndStockControlSettings, BrandingSettings } from '../types/accounting';
 import { getSystemSettings, saveSystemSettings, DEFAULT_SETTINGS } from '../utils/settings';
@@ -86,6 +89,15 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
     setSettings(current);
     setSeqs(getSequences());
   }, []);
+
+  // Native mobile back button / gesture registration for Settings Portals
+  useEffect(() => {
+    if (!activeSection) return;
+    const unregister = mobileNavigationController.registerModal(`settings-portal-${activeSection}`, () => {
+      setActiveSection(null);
+    });
+    return () => unregister();
+  }, [activeSection]);
 
   const handleCompanyChange = (field: keyof SystemSettings['company'], value: string) => {
     setSettings(prev => ({
@@ -640,11 +652,13 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
                 <button
                   type="button"
                   onClick={() => setActiveSection(null)}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95"
-                  title="إغلاق"
-                  aria-label="إغلاق"
+                  className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-700 hover:text-slate-950 flex items-center gap-1 text-xs font-bold transition-all cursor-pointer hover:scale-105 active:scale-95"
+                  title="رجوع للقائمة"
+                  aria-label="رجوع"
                 >
-                  <X size={18} />
+                  {dir === 'rtl' ? <ArrowRight size={16} /> : <ArrowLeft size={16} />}
+                  <span className="hidden sm:inline">إغلاق</span>
+                  <span className="sm:hidden text-[11px]">رجوع</span>
                 </button>
               </div>
             </div>
@@ -912,36 +926,64 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
                   />
 
                   {/* Danger Zone: Factory Reset & Clear Data */}
-                  <div className="bg-rose-50/70 rounded-2xl border-2 border-rose-200 p-6">
-                    <div className="flex items-start gap-4 mb-4">
-                      <div className="w-12 h-12 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                        <ShieldAlert size={24} />
+                  <div className="bg-rose-50/80 rounded-2xl border-2 border-rose-200 p-4 sm:p-5 md:p-6 transition-all shadow-xs">
+                    <div className="flex flex-col sm:flex-row items-start gap-3.5 mb-4">
+                      <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                        <ShieldAlert size={22} className="sm:w-6 sm:h-6" />
                       </div>
-                      <div>
-                        <h4 className="text-base font-bold text-rose-950">منطقة العمليات الحساسة وتصفير النظام (System Reset)</h4>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-sm sm:text-base font-bold text-rose-950">
+                            منطقة العمليات الحساسة وتصفير النظام (System Reset)
+                          </h4>
+                          <span className="text-[10px] font-black bg-rose-200/80 text-rose-900 px-2 py-0.5 rounded-full border border-rose-300">
+                            إجراءات متقدمة
+                          </span>
+                        </div>
                         <p className="text-xs text-rose-800 mt-1 leading-relaxed">
                           يتيح لك هذا القسم تفريغ وتصفير بيانات الفواتير والقيود والعمليات لبدء سنة مالية جديدة، أو استعادة ضبط المصنع الشامل مع تنزيل نسخة احتياطية إجبارية للأمان.
                         </p>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                    {/* Responsive Dynamic Grid & Buttons for Mobile & Desktop */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mt-3 pt-3 border-t border-rose-200/60">
+                      {/* Button 1: Reset Transactions */}
                       <button
                         type="button"
                         onClick={() => openResetModal('TRANSACTIONS_ONLY')}
-                        className="btn-3d btn-3d-amber p-3.5 text-xs font-bold flex items-center justify-center gap-2"
+                        className="btn-3d btn-3d-amber w-full p-3 sm:p-4 text-xs font-bold flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-start gap-2.5 sm:gap-3 transition-all cursor-pointer whitespace-normal group"
                       >
-                        <RotateCcw size={16} />
-                        تصفير العمليات والفواتير فقط (مع الاحتفاظ بالحسابات والأصناف)
+                        <div className="w-9 h-9 rounded-lg bg-amber-600/20 text-amber-900 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                          <RotateCcw size={18} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="block font-black text-amber-950 leading-snug">
+                            تصفير العمليات والفواتير فقط
+                          </span>
+                          <span className="block text-[11px] text-amber-900/80 font-normal mt-0.5 leading-tight">
+                            (مع الاحتفاظ بكامل دليل الحسابات، الأصناف، والعملاء والموردين)
+                          </span>
+                        </div>
                       </button>
 
+                      {/* Button 2: Full Factory Reset */}
                       <button
                         type="button"
                         onClick={() => openResetModal('FULL_FACTORY_RESET')}
-                        className="btn-3d btn-3d-danger p-3.5 text-xs font-bold flex items-center justify-center gap-2"
+                        className="btn-3d btn-3d-danger w-full p-3 sm:p-4 text-xs font-bold flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-start gap-2.5 sm:gap-3 transition-all cursor-pointer whitespace-normal group"
                       >
-                        <ShieldAlert size={16} />
-                        استعادة ضبط المصنع الكامل (مسح كافة البيانات وإعادة التهيئة)
+                        <div className="w-9 h-9 rounded-lg bg-rose-700/20 text-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                          <ShieldAlert size={18} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="block font-black text-white leading-snug">
+                            استعادة ضبط المصنع الكامل
+                          </span>
+                          <span className="block text-[11px] text-rose-100/90 font-normal mt-0.5 leading-tight">
+                            (مسح شامل لكافة البيانات وإعادة تهيئة النظام للحالة الأولى)
+                          </span>
+                        </div>
                       </button>
                     </div>
                   </div>

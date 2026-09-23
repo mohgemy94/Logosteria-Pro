@@ -33,6 +33,11 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { exportElementToPdf } from '../utils/pdfExport';
 import ReportPrintPreviewToolbar from './ReportPrintPreviewToolbar';
 import ExportButtonGroup from './ExportButtonGroup';
+import { 
+  getSelectedBrowsingYear, 
+  getActiveFiscalYear, 
+  FISCAL_YEAR_CHANGED_EVENT 
+} from '../utils/fiscalYearArchive';
 
 interface TrialBalanceScreenProps {
   onNavigate?: (view: string) => void;
@@ -76,6 +81,21 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
       window.dispatchEvent(new CustomEvent('alpha-navigate', { detail: { view } }));
     }
   };
+
+  // Sync date range with selected browsing fiscal year
+  useEffect(() => {
+    const handleFiscalYearSync = () => {
+      const bYear = getSelectedBrowsingYear();
+      const aYear = getActiveFiscalYear();
+      if (bYear !== aYear) {
+        setStartDate(`${bYear}-01-01`);
+        setEndDate(`${bYear}-12-31`);
+      }
+    };
+    handleFiscalYearSync();
+    window.addEventListener(FISCAL_YEAR_CHANGED_EVENT, handleFiscalYearSync);
+    return () => window.removeEventListener(FISCAL_YEAR_CHANGED_EVENT, handleFiscalYearSync);
+  }, []);
 
   // Check if opened with target account
   useEffect(() => {

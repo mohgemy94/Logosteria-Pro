@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, type FormEvent } from 'react';
 import { Plus, Trash2, UserCheck, ShieldAlert } from 'lucide-react';
 import { Account, JournalEntry, JournalEntryStatus, Partner } from '../types/accounting';
+import { checkDateIsLocked } from '../utils/periodLock';
 import PrintDropdown from './PrintDropdown';
 import { loadChartOfAccounts, saveJournalEntry } from '../utils/trialBalanceStore';
 import { loadCustomers, loadVendors } from '../utils/partnerLedger';
@@ -56,12 +57,31 @@ export default function NewJournalEntry() {
     window.addEventListener('alpha-system-reset-completed', handleReset);
     window.addEventListener('alpha-data-changed', handleReset);
     window.addEventListener('storage', handleReset);
+
+    const handleCreateVoiceJournal = (e: any) => {
+      const payload = e.detail;
+      handleReset();
+      if (payload?.description) {
+        setDescription(payload.description);
+      }
+      if (payload?.amount) {
+        const amtStr = String(payload.amount);
+        setItems([
+          { id: generateId(), accountId: '', partnerId: '', debit: amtStr, credit: '', description: payload.description || '' },
+          { id: generateId(), accountId: '', partnerId: '', debit: '', credit: amtStr, description: payload.description || '' }
+        ]);
+      }
+    };
+
+    window.addEventListener('alpha-voice-create-journal-entry', handleCreateVoiceJournal);
+
     return () => {
       window.removeEventListener('alpha-chart-of-accounts-updated', handleUpdate);
       window.removeEventListener('alpha-partner-ledger-updated', handlePartnerUpdate);
       window.removeEventListener('alpha-system-reset-completed', handleReset);
       window.removeEventListener('alpha-data-changed', handleReset);
       window.removeEventListener('storage', handleReset);
+      window.removeEventListener('alpha-voice-create-journal-entry', handleCreateVoiceJournal);
     };
   }, []);
 
@@ -181,6 +201,13 @@ export default function NewJournalEntry() {
       const acc = accounts.find(a => a.id === missingSubLedgerItem.accountId || a.code === missingSubLedgerItem.accountId);
       const accName = acc ? `${acc.code} - ${acc.name}` : 'حساب المراقبة';
       alert(`تطبيق معيار الرقابة (Control Account):\nالحساب (${accName}) هو حساب مراقبة إجمالي، ويجب إلزامياً تحديد العميل أو المورد من دفتر الأستاذ المساعد (Sub-Ledger) لترحيل القيد.`);
+      return;
+    }
+
+    // التحقق من تجميد وقفل الفترة المالية (Fiscal Period Lock Check)
+    const lockCheck = checkDateIsLocked(date);
+    if (lockCheck.isLocked) {
+      alert(`🔒 تنبيه رقابي - الفترة المالية مقفلة ومحمية:\n${lockCheck.reason}`);
       return;
     }
 

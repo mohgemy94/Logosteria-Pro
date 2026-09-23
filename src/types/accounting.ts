@@ -194,6 +194,10 @@ export interface SystemSettings {
     costMethod: 'FIFO' | 'WEIGHTED_AVG' | 'LIFO';
     decimalPlaces: number;
     allowNegativeStock: boolean;
+    lockDate?: string; // Date on or before which transactions cannot be created or modified (e.g. 2024-12-31)
+    isPeriodLocked?: boolean;
+    lockedBy?: string;
+    closedFiscalYears?: number[];
   };
   currencies?: CurrencySetting[];
   controlAndLimits?: CreditAndStockControlSettings;

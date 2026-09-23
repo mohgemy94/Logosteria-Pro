@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { CertifiedInvoiceDocument } from './CertifiedInvoiceDocument';
 import { exportElementToPdf, printElementDirectly } from '../utils/pdfExport';
+import { mobileNavigationController } from '../utils/mobileNavigation';
 import {
   PAPER_FORMAT_LIST,
   getSavedPrintPaperFormat,
@@ -183,6 +184,16 @@ export default function PrintPreviewModal({
       document.body.classList.remove('print-preview-active');
     };
   }, [isOpen, initialFormat]);
+
+  // Handle hardware & gesture back button on mobile: closes preview first
+  useEffect(() => {
+    if (!isOpen) return;
+    const modalId = `modal-print-preview-${data.docNumber || 'generic'}`;
+    const unregister = mobileNavigationController.registerModal(modalId, () => {
+      onClose();
+    });
+    return () => unregister();
+  }, [isOpen, onClose, data.docNumber]);
 
   const activeDef = getPaperFormatDef(format, customSize);
   const baseWidth = activeDef.baseWidthPx;

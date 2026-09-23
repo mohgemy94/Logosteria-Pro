@@ -8,6 +8,7 @@ import {
   DB_INTERNAL_VOUCHERS_KEY
 } from './sequences';
 import { dispatchPartnerLedgerUpdated } from './partnerLedger';
+import { recordAuditLog } from './auditLogStore';
 
 export type VoucherCategory = 'EXTERNAL' | 'INTERNAL';
 
@@ -210,6 +211,27 @@ export function approveVoucherRecord(
     window.dispatchEvent(new CustomEvent('alpha-voucher-approval-updated', { detail: { voucherId: payload.voucherId, action: 'APPROVE', voucher: updatedVoucher } }));
     window.dispatchEvent(new Event('alpha-vouchers-updated'));
 
+    // Record audit trail event
+    try {
+      recordAuditLog({
+        action: 'APPROVE',
+        module: 'TREASURY',
+        documentType: 'سند مالي',
+        documentNumber: updatedVoucher.voucherNumber || updatedVoucher.number || `VCH-${payload.voucherId.slice(0, 6)}`,
+        documentId: payload.voucherId,
+        summary: `تم اعتماد السند المالي بنجاح بواسطة ${payload.approverName || 'المدير المالي'} بمبلغ ${updatedVoucher.amount || 0}`,
+        summaryEn: `Voucher approved by ${payload.approverName || 'Finance Manager'} with amount ${updatedVoucher.amount || 0}`,
+        severity: 'INFO',
+        details: {
+          voucherType: payload.voucherType,
+          approverName: payload.approverName,
+          approverRole: payload.approverRole,
+          amount: updatedVoucher.amount,
+          notes: payload.notes
+        }
+      });
+    } catch {}
+
     return { success: true, message: 'تم اعتماد السند بنجاح', voucher: updatedVoucher };
   } catch (err: any) {
     console.error('Failed to approve voucher:', err);
@@ -270,6 +292,26 @@ export function rejectVoucherRecord(
     dispatchPartnerLedgerUpdated();
     window.dispatchEvent(new CustomEvent('alpha-voucher-approval-updated', { detail: { voucherId: payload.voucherId, action: 'REJECT', voucher: updatedVoucher } }));
     window.dispatchEvent(new Event('alpha-vouchers-updated'));
+
+    // Record audit trail event
+    try {
+      recordAuditLog({
+        action: 'REJECT',
+        module: 'TREASURY',
+        documentType: 'سند مالي',
+        documentNumber: updatedVoucher.voucherNumber || updatedVoucher.number || `VCH-${payload.voucherId.slice(0, 6)}`,
+        documentId: payload.voucherId,
+        summary: `تم رفض السند المالي بواسطة ${payload.rejectorName || 'الإدارة المالية'} لسبب: ${payload.reason || 'مراجعة الحسابات'}`,
+        summaryEn: `Voucher rejected by ${payload.rejectorName || 'Finance Management'} (Reason: ${payload.reason || 'Account review'})`,
+        severity: 'WARN',
+        details: {
+          voucherType: payload.voucherType,
+          rejectorName: payload.rejectorName,
+          rejectionReason: payload.reason,
+          amount: updatedVoucher.amount
+        }
+      });
+    } catch {}
 
     return { success: true, message: 'تم رفض السند بنجاح', voucher: updatedVoucher };
   } catch (err: any) {

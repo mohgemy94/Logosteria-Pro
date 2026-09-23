@@ -28,6 +28,7 @@ import { useSystemCurrency } from '../utils/currency';
 import { loadStoredSalesInvoices, StoredSalesInvoice } from '../utils/salesStore';
 import { loadStoredPurchaseInvoices, StoredPurchaseInvoice } from '../utils/purchasesStore';
 import { loadStoredItems } from '../utils/itemsStore';
+import { mobileNavigationController } from '../utils/mobileNavigation';
 
 export interface AnalyticItem {
   id: string;
@@ -112,6 +113,16 @@ export default function ItemAnalyticsModal({
   
   // Custom Date Range State
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0] || '', []);
+
+  // Handle hardware & gesture back button on mobile: closes analytics modal first
+  useEffect(() => {
+    if (!isOpen) return;
+    const modalId = `modal-item-analytics-${activeItemId || 'general'}`;
+    const unregister = mobileNavigationController.registerModal(modalId, () => {
+      onClose();
+    });
+    return () => unregister();
+  }, [isOpen, onClose, activeItemId]);
   const ninetyDaysAgoStr = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - 90);
