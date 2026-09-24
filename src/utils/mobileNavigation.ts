@@ -1,17 +1,14 @@
 /**
  * Universal Mobile & Android APK Navigation Controller
  * 
- * Specifically engineered for Android WebViews, APKs (Cordova, Capacitor, WebIntoApp, Website2APK),
- * PWAs, and mobile browsers.
+ * Specifically engineered for Capacitor Android APKs, WebViews, PWAs, and Mobile Browsers.
  * 
- * Why this fixes Android APK Back Button:
- * Android WebViews only respect hardware back buttons and gestures if the WebBackForwardList 
- * contains distinct URL hash entries (`#viewId`, `#modal=...`). Without hash updates, 
- * `webView.canGoBack()` evaluates to false, causing Android to abruptly terminate the app Activity.
- * 
- * By synchronizing active views and modal layers with URL hashes and intercepting popstate/hashchange,
- * Android OS hardware back buttons & edge-swipe gestures smoothly traverse backwards through screens
- * and close open modals before exiting.
+ * Guarantees STRICT SEQUENTIAL (step-by-step) back navigation:
+ * 1. Closes open dialogs/modals first without leaving the current screen.
+ * 2. Navigates back strictly one step at a time through the navigation stack (Screen C -> Screen B -> Screen A).
+ * 3. Incorporates a 350ms debounce guard to prevent double-firing when Capacitor's native
+ *    `App.addListener('backButton')` and Android WebView's `popstate` trigger simultaneously.
+ * 4. At the root screen ('companyProfile' or initial screen), requires double-tap within 2s to exit safely.
  */
 
 import { App } from '@capacitor/app';
@@ -27,101 +24,88 @@ type ModalCloseHandler = () => void;
 
 class MobileNavigationController {
   private modalHandlers: Map<string, ModalCloseHandler> = new Map();
+  // Navigation stack: preserves exact sequence of user-visited screens
   private historyStack: (string | null)[] = ['companyProfile'];
   private initialized = false;
-  private isProcessingPopState = false;
+  private isPerformingBack = false;
+  private lastBackEventTime = 0;
   private onNavigateCallback: ((view: string | null) => void) | null = null;
-  private lastBackPressTime = 0;
+  private lastExitPressTime = 0;
   private exitToastTimeout: any = null;
 
   init(onNavigate: (view: string | null) => void, initialView: string | null = 'companyProfile') {
-    if (this.initialized) return;
+    if (this.initialized) {
+      this.onNavigateCallback = onNavigate;
+      return;
+    }
     this.initialized = true;
     this.onNavigateCallback = onNavigate;
     const startView = initialView || 'companyProfile';
     this.historyStack = [startView];
 
     if (typeof window !== 'undefined') {
-      const initialHash = '#' + (startView || 'companyProfile');
-      
-      // Ensure the initial history entry has proper state and hash
+      const initialSlug = startView || 'companyProfile';
+      const initialHash = '#' + initialSlug;
+
       try {
-        if (!window.location.hash || window.location.hash === '#') {
+        if (!window.location.hash || window.location.hash === '#' || window.location.hash === '') {
           window.history.replaceState({ view: startView, timestamp: Date.now() }, '', initialHash);
         }
       } catch {
         // ignore
       }
 
-      // 1. Core popstate listener (fires when Android hardware back is pressed in WebView)
-      window.addEventListener('popstate', this.handlePopState);
-
-      // 2. Hashchange listener as secondary safety for WebView wrappers
-      window.addEventListener('hashchange', this.handleHashChange);
-
-      // 3. Cordova / PhoneGap / Android WebView backbutton event
-      if (typeof document !== 'undefined') {
-        document.addEventListener('backbutton', this.handleHardwareBackButton as any, false);
-      }
-
-      // 4. Capacitor App native backButton plugin
+      // 1. Capacitor Native backButton listener (primary source for Android APK)
       try {
         App.addListener('backButton', () => {
-          this.handleNativeHardwareBack();
+          this.executeStepBack();
         });
       } catch (err) {
-        console.warn('Capacitor App listener:', err);
+        console.warn('Capacitor App listener initialization:', err);
       }
 
-      // 5. Physical Keyboard / Android TV remote / Back keys
-      window.addEventListener('keydown', this.handleKeyDown);
+      // 2. Cordova / WebView backbutton event fallback
+      if (typeof document !== 'undefined') {
+        document.addEventListener('backbutton', (e: Event) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.executeStepBack();
+        }, false);
+      }
+
+      // 3. Browser popstate fallback (for Mobile Web / PWAs)
+      window.addEventListener('popstate', (e: PopStateEvent) => {
+        // Only handle if not already handled by native backButton in this cycle
+        const now = Date.now();
+        if (now - this.lastBackEventTime < 350) {
+          return;
+        }
+        this.executeStepBack();
+      });
+
+      // 4. Physical Keyboard / Android TV remote (Escape, Back key code 4)
+      window.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key === 'Escape' || e.key === 'GoBack' || e.key === 'Back' || e.keyCode === 4) {
+          if (this.canGoBack()) {
+            e.preventDefault();
+            this.executeStepBack();
+          }
+        }
+      });
     }
   }
 
   destroy() {
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('popstate', this.handlePopState);
-      window.removeEventListener('hashchange', this.handleHashChange);
-      window.removeEventListener('keydown', this.handleKeyDown);
-      if (typeof document !== 'undefined') {
-        document.removeEventListener('backbutton', this.handleHardwareBackButton as any);
-      }
-    }
     this.initialized = false;
     this.modalHandlers.clear();
   }
 
   /**
-   * Register a modal or popup with the browser history stack.
-   * When Android back is pressed, the modal closes without leaving the current screen.
+   * Register a modal or popup with the navigation controller.
+   * When back button is pressed, only the modal closes — the screen stays intact.
    */
   registerModal(id: string, onClose: () => void): () => void {
-    if (this.modalHandlers.has(id)) {
-      this.modalHandlers.set(id, onClose);
-      return () => this.unregisterModal(id);
-    }
-
     this.modalHandlers.set(id, onClose);
-
-    if (typeof window !== 'undefined' && window.history && !this.isProcessingPopState) {
-      try {
-        const currentHash = window.location.hash || '#companyProfile';
-        const modalParam = `modal=${encodeURIComponent(id)}`;
-        const newHash = currentHash.includes('?') 
-          ? `${currentHash}&${modalParam}` 
-          : `${currentHash}?${modalParam}`;
-
-        window.history.pushState({
-          view: this.getCurrentView(),
-          hasModal: true,
-          modalId: id,
-          timestamp: Date.now()
-        }, '', newHash);
-      } catch {
-        // ignore
-      }
-    }
-
     return () => {
       this.unregisterModal(id);
     };
@@ -134,24 +118,28 @@ class MobileNavigationController {
   }
 
   /**
-   * Called when active view changes. Pushes new state to WebBackForwardList so Android can go back.
+   * Push a new screen onto the sequential history stack.
+   * Automatically deduplicates consecutive identical views.
    */
   pushView(newView: string | null) {
-    if (this.isProcessingPopState) return;
+    if (this.isPerformingBack) return;
 
     const current = this.getCurrentView();
+    // Do not add if already on this view
     if (current === newView) return;
 
+    // Push new view to the sequential stack
     this.historyStack.push(newView);
 
+    // Sync browser URL hash smoothly
     if (typeof window !== 'undefined' && window.history) {
       try {
-        const viewSlug = newView || 'dashboard';
-        const targetHash = '#' + viewSlug;
-        
+        const slug = newView || 'dashboard';
+        const targetHash = '#' + slug;
         if (window.location.hash !== targetHash) {
           window.history.pushState({
             view: newView,
+            index: this.historyStack.length - 1,
             timestamp: Date.now()
           }, '', targetHash);
         }
@@ -162,20 +150,15 @@ class MobileNavigationController {
   }
 
   /**
-   * Universal programmatic back trigger
+   * Programmatic back trigger (e.g. from UI back button)
    */
   goBack(): boolean {
-    if (typeof window !== 'undefined' && window.history && window.history.length > 1) {
-      window.history.back();
-      return true;
-    }
-    return this.handleNativeHardwareBack();
+    return this.executeStepBack();
   }
 
   getCurrentView(): string | null {
     if (this.historyStack.length === 0) return null;
-    const top = this.historyStack[this.historyStack.length - 1];
-    return top !== undefined ? top : null;
+    return this.historyStack[this.historyStack.length - 1] ?? null;
   }
 
   canGoBack(): boolean {
@@ -185,33 +168,25 @@ class MobileNavigationController {
     return current !== null && current !== 'companyProfile';
   }
 
-  private handleHardwareBackButton = (e: Event) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
+  /**
+   * Single Source of Truth for Step-by-Step Back Navigation.
+   * Strictly processes ONE navigation level per press:
+   * Level 1: Open modal -> Closes modal only.
+   * Level 2: Stack depth > 1 -> Steps back to previous screen (e.g. Sales -> Customers).
+   * Level 3: Subview with depth 1 -> Steps to main overview ('companyProfile').
+   * Level 4: Root screen -> Double-tap to exit app.
+   */
+  executeStepBack(): boolean {
+    const now = Date.now();
+    // Debounce to strictly eliminate multi-firing across native and web events
+    if (now - this.lastBackEventTime < 350) {
+      return true;
     }
-    this.handleNativeHardwareBack();
-  };
-
-  private handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' || e.key === 'GoBack' || e.key === 'Back' || e.keyCode === 4) {
-      if (this.canGoBack()) {
-        e.preventDefault();
-        this.goBack();
-      }
-    }
-  };
-
-  private handleHashChange = () => {
-    if (this.isProcessingPopState) return;
-    this.parseCurrentHashAndSync();
-  };
-
-  private handlePopState = (event: PopStateEvent) => {
-    this.isProcessingPopState = true;
+    this.lastBackEventTime = now;
+    this.isPerformingBack = true;
 
     try {
-      // 1. Check if any modals were open and need closing
+      // 1. If any modal/sheet is open, close the newest one first
       if (this.modalHandlers.size > 0) {
         const entries = Array.from(this.modalHandlers.entries());
         const lastEntry = entries[entries.length - 1];
@@ -223,98 +198,73 @@ class MobileNavigationController {
           } catch (err) {
             console.error('Error closing modal on back:', err);
           }
-          return;
+          return true;
         }
       }
 
-      // 2. Resolve target view from state or URL hash
-      let targetView: string | null = null;
-      if (event.state && typeof event.state === 'object') {
-        const state = event.state as HistoryState;
-        if (state.view !== undefined) {
-          targetView = state.view;
-        }
-      }
-
-      if (targetView === null && typeof window !== 'undefined') {
-        const hash = window.location.hash.replace(/^#/, '').split('?')[0] || '';
-        targetView = hash === 'dashboard' ? null : (hash || 'companyProfile');
-      }
-
-      // Update history stack
+      // 2. Sequential Step-by-Step Back in history stack
       if (this.historyStack.length > 1) {
+        // Pop current view
         this.historyStack.pop();
-      }
+        // Target is the preceding view in the stack
+        const prevView = this.historyStack[this.historyStack.length - 1] ?? 'companyProfile';
+        
+        // Update URL hash cleanly
+        if (typeof window !== 'undefined') {
+          try {
+            const slug = prevView || 'dashboard';
+            window.history.replaceState({
+              view: prevView,
+              index: this.historyStack.length - 1,
+              timestamp: Date.now()
+            }, '', '#' + slug);
+          } catch {
+            // ignore
+          }
+        }
 
-      if (this.onNavigateCallback) {
-        this.onNavigateCallback(targetView);
-      }
-    } finally {
-      this.isProcessingPopState = false;
-    }
-  };
-
-  private parseCurrentHashAndSync() {
-    if (typeof window === 'undefined') return;
-    const rawHash = window.location.hash.replace(/^#/, '');
-    const cleanSlug = rawHash.split('?')[0] || '';
-    const targetView = cleanSlug === 'dashboard' ? null : (cleanSlug || 'companyProfile');
-    
-    if (targetView !== this.getCurrentView() && this.onNavigateCallback) {
-      this.onNavigateCallback(targetView);
-    }
-  }
-
-  /**
-   * Native back logic when popstate isn't natively triggered by OS
-   */
-  handleNativeHardwareBack(): boolean {
-    // 1. Close open modal first
-    if (this.modalHandlers.size > 0) {
-      const entries = Array.from(this.modalHandlers.entries());
-      const lastEntry = entries[entries.length - 1];
-      if (lastEntry) {
-        const [id, handler] = lastEntry;
-        this.modalHandlers.delete(id);
-        try {
-          handler();
-        } catch (err) {
-          console.error(err);
+        // Notify App component to render previous view
+        if (this.onNavigateCallback) {
+          this.onNavigateCallback(prevView);
         }
         return true;
       }
-    }
 
-    // 2. Navigate back through stack
-    if (this.historyStack.length > 1) {
-      this.historyStack.pop();
-      const prevView = this.historyStack[this.historyStack.length - 1] ?? 'companyProfile';
-      if (this.onNavigateCallback) {
-        this.onNavigateCallback(prevView);
+      // 3. If on a sub-screen with only 1 item in stack, return to root ('companyProfile')
+      const current = this.getCurrentView();
+      if (current !== null && current !== 'companyProfile') {
+        this.historyStack = ['companyProfile'];
+        if (typeof window !== 'undefined') {
+          try {
+            window.history.replaceState({
+              view: 'companyProfile',
+              timestamp: Date.now()
+            }, '', '#companyProfile');
+          } catch {
+            // ignore
+          }
+        }
+        if (this.onNavigateCallback) {
+          this.onNavigateCallback('companyProfile');
+        }
+        return true;
       }
-      return true;
-    }
 
-    // 3. If on subview, return to main overview
-    const current = this.getCurrentView();
-    if (current !== null && current !== 'companyProfile') {
-      this.historyStack = ['companyProfile'];
-      if (this.onNavigateCallback) {
-        this.onNavigateCallback('companyProfile');
-      }
-      return true;
+      // 4. At the root screen: Double-tap back within 2s to exit
+      return this.handleRootExitProtection();
+    } finally {
+      setTimeout(() => {
+        this.isPerformingBack = false;
+      }, 200);
     }
-
-    // 4. On root: double tap to exit protection
-    return this.handleRootBackExit();
   }
 
   /**
    * Double-tap back on root to prevent accidental app close in Android APK
    */
-  private handleRootBackExit(): boolean {
+  private handleRootExitProtection(): boolean {
     const now = Date.now();
-    if (now - this.lastBackPressTime < 2000) {
+    if (now - this.lastExitPressTime < 2000) {
       try {
         App.exitApp();
         return true;
@@ -324,7 +274,7 @@ class MobileNavigationController {
       return false;
     }
 
-    this.lastBackPressTime = now;
+    this.lastExitPressTime = now;
     this.showExitToast();
     return true;
   }

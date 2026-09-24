@@ -462,11 +462,11 @@ export default function InternalVouchers() {
         </div>
 
         {/* Global 3D Responsive Internal Voucher Actions Toolbar */}
-        <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
+        <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
           {/* Cluster 1: Sequential Navigation & History */}
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             {/* 3D Navigation Bar */}
-            <div className="nav-3d-segment">
+            <div className="nav-3d-segment overflow-x-auto max-w-full pb-0.5 sm:pb-0">
               <button
                 type="button"
                 onClick={handleNavigateFirst}
@@ -699,7 +699,147 @@ export default function InternalVouchers() {
             }
 
             return (
-              <div className="overflow-x-auto max-h-64">
+              <>
+                {/* Mobile Cards View (< md) */}
+                <div className="block md:hidden divide-y divide-slate-100 max-h-80 overflow-y-auto space-y-2">
+                  {filteredList.map(v => {
+                    const isPosted = v.status === 'POSTED';
+                    return (
+                      <div
+                        key={v.id}
+                        className={`p-3 rounded-xl space-y-2 transition-all border ${
+                          editingVoucherId === v.id
+                            ? 'bg-blue-50/70 border-blue-300 ring-1 ring-blue-200'
+                            : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-100/60'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-black text-xs px-2 py-0.5 rounded-md border text-blue-900 bg-blue-100/80 border-blue-300">
+                              #{v.voucherNumber}
+                            </span>
+                            <span className="text-[11px] text-slate-500 font-mono">{v.date}</span>
+                          </div>
+                          <div>
+                            {isPosted ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                <CheckCircle2 size={10} className="text-emerald-600" />
+                                <span>مرحل</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                <AlertTriangle size={10} className="text-amber-600" />
+                                <span>مسودة</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs bg-white/80 p-2 rounded-lg border border-slate-200/60">
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">المبلغ:</span>
+                            <span className="font-mono font-black text-slate-900 text-sm">
+                              {v.amount.toLocaleString()} {currencySymbol}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">المسار:</span>
+                            <span className="font-bold text-slate-700 text-[11px] truncate block">
+                              {getAccountName(v.fromAccountId)} ⬅️ {getAccountName(v.toAccountId)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {v.description && (
+                          <p className="text-[11px] text-slate-600 line-clamp-1">{v.description}</p>
+                        )}
+
+                        <div className="flex items-center justify-between gap-1 pt-1 border-t border-slate-200/60 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePostingFromList(v)}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold border transition-colors cursor-pointer ${
+                              isPosted
+                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300'
+                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-300'
+                            }`}
+                          >
+                            {isPosted ? (
+                              <>
+                                <RotateCcw size={11} />
+                                <span>إلغاء</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 size={11} />
+                                <span>ترحيل</span>
+                              </>
+                            )}
+                          </button>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCustomPreviewData({
+                                  title: 'سند تحويل ومناقلة داخلية',
+                                  subtitle: 'سند تسوية ونقل أموال بين الحسابات والخزائن',
+                                  docNumber: v.voucherNumber,
+                                  date: v.date,
+                                  partnerName: `من: ${getAccountName(v.fromAccountId)} ⬅️ إلى: ${getAccountName(v.toAccountId)}`,
+                                  paymentMethod: 'مناقلة داخلية',
+                                  notes: v.description,
+                                  grandTotal: v.amount,
+                                  subtotal: v.amount,
+                                  amount: v.amount,
+                                  paidAmount: v.amount,
+                                  voucherType: 'INTERNAL',
+                                  amountInWords: tafqeet(v.amount),
+                                  items: [{
+                                    description: `تحويل من (${getAccountName(v.fromAccountId)}) إلى (${getAccountName(v.toAccountId)}) - ${v.description || 'مناقلة مالية'}`,
+                                    quantity: 1,
+                                    unitPrice: v.amount,
+                                    taxRate: 0,
+                                    total: v.amount
+                                  }]
+                                });
+                                setShowPrintPreview(true);
+                              }}
+                              className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg border border-indigo-200 cursor-pointer"
+                              title="معاينة"
+                            >
+                              <Eye size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(v)}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg border border-blue-200 cursor-pointer"
+                              title="تعديل"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isPosted}
+                              onClick={() => handleDelete(v.id, v.voucherNumber)}
+                              className={`p-1.5 rounded-lg border transition-colors ${
+                                isPosted
+                                  ? 'bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed opacity-40'
+                                  : 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-200 cursor-pointer'
+                              }`}
+                              title={isPosted ? 'السند مرحل' : 'حذف'}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Desktop Table View (>= md) */}
+                <div className="hidden md:block overflow-x-auto max-h-64">
                 <table className="w-full text-right text-xs">
                   <thead>
                     <tr className="border-b border-slate-100 text-slate-400">
@@ -844,7 +984,8 @@ export default function InternalVouchers() {
                   </tbody>
                 </table>
               </div>
-            );
+            </>
+          );
           })()}
         </div>
       )}
@@ -1231,14 +1372,14 @@ export default function InternalVouchers() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto justify-stretch sm:justify-end">
               <button
                 type="button"
                 onClick={() => {
                   setCustomPreviewData(null);
                   setShowPrintPreview(true);
                 }}
-                className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded-xl font-bold text-xs border border-slate-700 transition-colors cursor-pointer"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded-xl font-bold text-xs border border-slate-700 transition-colors cursor-pointer min-h-[42px]"
               >
                 <Eye size={15} />
                 <span>معاينة الطباعة</span>
@@ -1247,7 +1388,7 @@ export default function InternalVouchers() {
               <button
                 type="button"
                 onClick={() => saveVoucherWithStatus('DRAFT')}
-                className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-xs border border-slate-700 transition-colors cursor-pointer"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-xs border border-slate-700 transition-colors cursor-pointer min-h-[42px]"
               >
                 <Save size={15} />
                 <span>حفظ كمسودة (غير مرحل)</span>
@@ -1257,7 +1398,7 @@ export default function InternalVouchers() {
                 <button
                   type="button"
                   onClick={handleUnpostCurrentVoucher}
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-xl font-bold text-xs border border-amber-500/40 transition-colors cursor-pointer"
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-xl font-bold text-xs border border-amber-500/40 transition-colors cursor-pointer min-h-[42px]"
                 >
                   <RotateCcw size={15} />
                   <span>إلغاء الترحيل</span>
@@ -1266,7 +1407,7 @@ export default function InternalVouchers() {
                 <button
                   type="button"
                   onClick={handlePostCurrentVoucher}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 text-white rounded-xl shadow-lg shadow-emerald-950/40 text-sm font-black transition-all cursor-pointer border border-emerald-400/30"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 text-white rounded-xl shadow-lg shadow-emerald-950/40 text-sm font-black transition-all cursor-pointer border border-emerald-400/30 min-h-[42px]"
                 >
                   <CheckCircle2 size={16} />
                   <span>ترحيل السند في الحسابات</span>

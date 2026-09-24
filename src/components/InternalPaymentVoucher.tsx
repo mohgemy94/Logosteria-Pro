@@ -641,16 +641,16 @@ export default function InternalPaymentVoucher() {
         </div>
 
         {/* Global 3D Responsive Voucher Actions Toolbar */}
-        <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
+        <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
           {/* Cluster 1: Sequential Navigation & History */}
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             {/* 3D Navigation Bar */}
-            <div className="nav-3d-segment">
+            <div className="nav-3d-segment overflow-x-auto max-w-full pb-0.5 sm:pb-0">
               <button
                 type="button"
                 onClick={handleNavigateFirst}
                 disabled={!canGoFirst}
-                className="p-1.5 text-slate-600 hover:text-rose-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 text-slate-600 hover:text-rose-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed shrink-0"
                 title="السند الأول (الأقدم)"
               >
                 <ChevronsRight size={15} />
@@ -659,7 +659,7 @@ export default function InternalPaymentVoucher() {
                 type="button"
                 onClick={handleNavigatePrevious}
                 disabled={!canGoPrevious}
-                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs shrink-0"
                 title="تراجع للخلف - السند السابق"
               >
                 <ChevronRight size={14} className="text-slate-700" />
@@ -667,7 +667,7 @@ export default function InternalPaymentVoucher() {
                 <span className="sm:hidden">السابق</span>
               </button>
 
-              <div className="px-2 sm:px-2.5 py-1 text-[11px] font-mono font-black text-rose-950 bg-rose-50 rounded-lg mx-0.5 select-none border border-rose-200 whitespace-nowrap">
+              <div className="px-2 sm:px-2.5 py-1 text-[11px] font-mono font-black text-rose-950 bg-rose-50 rounded-lg mx-0.5 select-none border border-rose-200 whitespace-nowrap shrink-0">
                 {currentVoucherIndex >= 0 ? (
                   <span>{currentVoucherIndex + 1} / {chronologicallyOrderedVouchers.length}</span>
                 ) : (
@@ -679,7 +679,7 @@ export default function InternalPaymentVoucher() {
                 type="button"
                 onClick={handleNavigateNext}
                 disabled={!canGoNext}
-                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs shrink-0"
                 title="تقديم للأمام - السند التالي"
               >
                 <span className="hidden sm:inline">تقديم للأمام</span>
@@ -690,7 +690,7 @@ export default function InternalPaymentVoucher() {
                 type="button"
                 onClick={handleNavigateLast}
                 disabled={!canGoLast}
-                className="p-1.5 text-slate-600 hover:text-rose-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 text-slate-600 hover:text-rose-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed shrink-0"
                 title="السند الأخير (الأحدث)"
               >
                 <ChevronsLeft size={15} />
@@ -789,7 +789,7 @@ export default function InternalPaymentVoucher() {
             >
               <Scan size={14} className="text-purple-200 animate-pulse" />
               <span className="hidden sm:inline">ماسح الباركود & QR</span>
-              <span className="sm:hidden">ماسح ضوئي</span>
+              <span className="sm:hidden">ماسح</span>
             </button>
 
             {/* 3D Export Vouchers Button */}
@@ -827,18 +827,18 @@ export default function InternalPaymentVoucher() {
 
       {/* Collapsible History Drawer */}
       {showHistory && (
-        <div className="mb-6 bg-white border border-slate-200 rounded-xl p-4 shadow-sm animate-in fade-in duration-150 print:hidden">
-          <div className="flex items-center justify-between mb-3">
+        <div className="mb-6 bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 md:p-5 shadow-sm animate-in fade-in duration-150 print:hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3.5 pb-2.5 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <History size={16} className="text-rose-600" />
-              <h3 className="font-bold text-slate-800 text-sm">سجل سندات الصرف والمدفوعات الداخلية بقاعدة البيانات</h3>
+              <History size={16} className="text-rose-600 shrink-0" />
+              <h3 className="font-bold text-slate-800 text-xs sm:text-sm">سجل سندات الصرف والمدفوعات الداخلية</h3>
               <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono">{savedVouchers.length} سندات</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 self-end sm:self-auto">
               <button
                 type="button"
                 onClick={() => setShowExportModal(true)}
-                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 flex items-center gap-1 transition-colors cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 flex items-center gap-1 transition-colors cursor-pointer"
                 title="تصدير كشف سندات الصرف الداخلي إلى Excel (.xlsx) أو CSV أو PDF"
               >
                 <FileSpreadsheet size={13} className="text-emerald-600" />
@@ -848,7 +848,7 @@ export default function InternalPaymentVoucher() {
               <button 
                 type="button" 
                 onClick={() => setShowHistory(false)}
-                className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 rounded-md hover:bg-slate-100 cursor-pointer"
               >
                 إغلاق
               </button>
@@ -857,7 +857,118 @@ export default function InternalPaymentVoucher() {
           {savedVouchers.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-4">لا توجد سندات صرف داخلية محفوظة بعد. السند القادم سيبدأ برقم #{nextCalculatedVoucherNum}.</p>
           ) : (
-            <div className="overflow-x-auto max-h-56">
+            <>
+              {/* Mobile Cards View (< md) */}
+              <div className="block md:hidden divide-y divide-slate-100 max-h-80 overflow-y-auto space-y-2">
+                {savedVouchers.map(v => (
+                  <div key={v.id} className={`p-3 rounded-xl border border-slate-100 space-y-2 transition-colors ${editingVoucherId === v.id ? 'bg-rose-50/70 border-rose-200' : 'bg-slate-50/50'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-black text-rose-700 text-xs">#{v.voucherNumber}</span>
+                        {v.status === 'POSTED' ? (
+                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                            <CheckCircle2 size={10} /> مرحل
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-900">
+                            <AlertTriangle size={10} /> مسودة
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono font-black text-rose-700 text-xs">
+                        {v.amount.toLocaleString()} {currencyFullNameAr}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-600">
+                      <div><span className="text-slate-400">من حساب:</span> <span className="font-bold">{getAccountName(v.fromAccountId)}</span></div>
+                      <div><span className="text-slate-400">المستفيد:</span> <span className="font-bold">{v.paidTo || '-'}</span></div>
+                      <div><span className="text-slate-400">التاريخ:</span> <span className="font-mono">{v.date}</span></div>
+                      <div><span className="text-slate-400">النوع:</span> <span>{PAYMENT_EXPENSE_TYPES.find(s => s.id === v.expenseType)?.label || '-'}</span></div>
+                    </div>
+
+                    {v.description && (
+                      <p className="text-[11px] text-slate-500 truncate bg-white p-1.5 rounded-lg border border-slate-100">
+                        {v.description}
+                      </p>
+                    )}
+
+                    <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-200/60">
+                      <button
+                        type="button"
+                        onClick={() => handleTogglePostingFromList(v)}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer ${
+                          v.status === 'POSTED'
+                            ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
+                            : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300'
+                        }`}
+                      >
+                        {v.status === 'POSTED' ? <RotateCcw size={11} /> : <CheckCircle2 size={11} />}
+                        <span>{v.status === 'POSTED' ? 'إلغاء الترحيل' : 'ترحيل'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomPreviewData({
+                            title: 'سند صرف داخلي',
+                            subtitle: 'سند صرف ومصروفات نقدية داخلية',
+                            docNumber: v.voucherNumber,
+                            date: v.date,
+                            partnerName: v.paidTo || 'جهة داخلية',
+                            paymentMethod: v.paymentMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : v.paymentMethod === 'CHECK' ? 'شيك' : 'نقداً',
+                            notes: v.description,
+                            grandTotal: v.amount,
+                            subtotal: v.amount,
+                            amount: v.amount,
+                            paidAmount: v.amount,
+                            voucherType: 'PAYMENT',
+                            amountInWords: tafqeet(v.amount),
+                            items: [{
+                              description: v.description || 'سند صرف داخلي',
+                              quantity: 1,
+                              unitPrice: v.amount,
+                              taxRate: 0,
+                              total: v.amount
+                            }]
+                          });
+                          setShowPrintPreview(true);
+                        }}
+                        className="p-1.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg cursor-pointer"
+                        title="معاينة"
+                      >
+                        <Eye size={13} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(v)}
+                        className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg cursor-pointer"
+                        title="تعديل"
+                      >
+                        <Edit3 size={13} />
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={v.status === 'POSTED'}
+                        onClick={() => handleDelete(v.id, v.voucherNumber)}
+                        className={`p-1.5 rounded-lg ${
+                          v.status === 'POSTED'
+                            ? 'text-slate-300 cursor-not-allowed opacity-40'
+                            : 'text-red-600 bg-red-50 hover:bg-red-100 cursor-pointer'
+                        }`}
+                        title="حذف"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table View (>= md) */}
+              <div className="hidden md:block overflow-x-auto max-h-56">
               <table className="w-full text-right text-xs">
                 <thead>
                   <tr className="border-b border-slate-100 text-slate-400">
@@ -1037,22 +1148,23 @@ export default function InternalPaymentVoucher() {
                 </tbody>
               </table>
             </div>
-          )}
+          </>
+        )}
         </div>
       )}
 
       {/* Main Voucher Edit Card */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mb-6 print:hidden overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 sm:p-5 md:p-6 shadow-sm mb-6 print:hidden overflow-hidden">
         {/* Status Indicator Banner */}
         {isCurrentVoucherPosted && (
-          <div className="bg-emerald-50 border-b border-emerald-200 -mx-6 -mt-6 mb-6 px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="bg-emerald-50 border-b border-emerald-200 -mx-3.5 -mt-3.5 sm:-mx-5 sm:-mt-5 md:-mx-6 md:-mt-6 mb-4 sm:mb-6 px-3.5 sm:px-5 md:px-6 py-3 sm:py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
                 <CheckCircle2 size={18} />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-black text-emerald-950 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-black text-emerald-950 text-xs sm:text-sm">
                     السند مرحل ومعتمد رسمياً في الحسابات العامة
                   </span>
                   <span className="text-[10px] bg-emerald-200 text-emerald-900 font-bold px-2.5 py-0.5 rounded-full">
@@ -1067,7 +1179,7 @@ export default function InternalPaymentVoucher() {
             <button
               type="button"
               onClick={handleUnpostCurrentVoucher}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border border-amber-600 rounded-lg text-xs font-black transition-colors cursor-pointer shrink-0 shadow-xs"
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border border-amber-600 rounded-lg text-xs font-black transition-colors cursor-pointer shrink-0 shadow-xs min-h-[38px]"
               title="إلغاء الترحيل وإعادة السند كمسودة مؤقتة وإيقاف أثره المالي"
             >
               <RotateCcw size={14} />
@@ -1077,14 +1189,14 @@ export default function InternalPaymentVoucher() {
         )}
 
         {isCurrentVoucherDraft && (
-          <div className="bg-amber-50 border-b border-amber-200 -mx-6 -mt-6 mb-6 px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="bg-amber-50 border-b border-amber-200 -mx-3.5 -mt-3.5 sm:-mx-5 sm:-mt-5 md:-mx-6 md:-mt-6 mb-4 sm:mb-6 px-3.5 sm:px-5 md:px-6 py-3 sm:py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
                 <AlertTriangle size={18} />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-black text-amber-950 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-black text-amber-950 text-xs sm:text-sm">
                     السند في وضع المسودة (غير مرحل في الحسابات)
                   </span>
                   <span className="text-[10px] bg-amber-200 text-amber-900 font-bold px-2.5 py-0.5 rounded-full">
@@ -1099,7 +1211,7 @@ export default function InternalPaymentVoucher() {
             <button
               type="button"
               onClick={handlePostCurrentVoucher}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer shrink-0 animate-pulse"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer shrink-0 animate-pulse min-h-[38px]"
               title="ترحيل السند في الحسابات العامة ودفتر الأستاذ"
             >
               <Send size={14} />
@@ -1108,8 +1220,8 @@ export default function InternalPaymentVoucher() {
           </div>
         )}
 
-        <form onSubmit={handleSave} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <form onSubmit={handleSave} className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
             {/* Voucher Number */}
             <div className="space-y-1">
               <label className="text-xs font-black uppercase text-slate-800 tracking-wide">رقم سند الصرف الداخلي</label>
@@ -1118,7 +1230,7 @@ export default function InternalPaymentVoucher() {
                   type="button"
                   onClick={handleNavigatePrevious}
                   disabled={!canGoPrevious}
-                  className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                  className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0 min-h-[42px] min-w-[40px] flex items-center justify-center"
                   title="تراجع للخلف (السابق)"
                 >
                   <ChevronRight size={14} />
@@ -1130,7 +1242,7 @@ export default function InternalPaymentVoucher() {
                     onChange={(e) => setVoucherNumber(e.target.value)}
                     placeholder={nextCalculatedVoucherNum}
                     required
-                    className={`w-full px-3 py-2 text-sm font-mono font-bold rounded-lg border outline-none transition-all ${
+                    className={`w-full px-3 py-2 text-sm sm:text-base font-mono font-bold rounded-lg border outline-none transition-all min-h-[42px] ${
                       isVoucherDuplicate
                         ? 'border-red-500 bg-red-50 text-red-900 focus:ring-2 focus:ring-red-200'
                         : 'border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500'
@@ -1139,7 +1251,7 @@ export default function InternalPaymentVoucher() {
                   <button
                     type="button"
                     onClick={() => setVoucherNumber(nextCalculatedVoucherNum)}
-                    className="absolute left-2 top-2 text-[10px] text-rose-600 hover:text-rose-800 font-bold bg-rose-50 px-1.5 py-0.5 rounded cursor-pointer"
+                    className="absolute left-2 top-2.5 text-[10px] text-rose-600 hover:text-rose-800 font-bold bg-rose-50 px-1.5 py-0.5 rounded cursor-pointer"
                     title="استعادة الرقم التسلسلي المقترح آلياً"
                   >
                     تلقائي
@@ -1149,7 +1261,7 @@ export default function InternalPaymentVoucher() {
                   type="button"
                   onClick={handleNavigateNext}
                   disabled={!canGoNext}
-                  className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                  className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0 min-h-[42px] min-w-[40px] flex items-center justify-center"
                   title="تقديم للأمام (التالي)"
                 >
                   <ChevronLeft size={14} />
@@ -1170,17 +1282,17 @@ export default function InternalPaymentVoucher() {
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
+                className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none min-h-[42px]"
               />
             </div>
 
             {/* Expense Type */}
-            <div className="space-y-1">
+            <div className="space-y-1 sm:col-span-2 md:col-span-1">
               <label className="text-xs font-black uppercase text-slate-800 tracking-wide">نوع وجهة الصرف الداخلي</label>
               <select
                 value={expenseType}
                 onChange={(e) => setExpenseType(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
+                className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none min-h-[42px]"
               >
                 {PAYMENT_EXPENSE_TYPES.map(s => (
                   <option key={s.id} value={s.id}>{s.label}</option>
@@ -1189,13 +1301,13 @@ export default function InternalPaymentVoucher() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
             {/* From Account (Disbursed from) */}
             <div className="space-y-1">
               <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Wallet size={14} className="text-rose-600" />
-                  الحساب المصروف منه (الخزينة أو البنك)
+                  الحساب المصروف منه
                 </span>
                 <span className="text-[10px] text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded font-bold">دليل الحسابات</span>
               </label>
@@ -1203,7 +1315,7 @@ export default function InternalPaymentVoucher() {
                 value={fromAccountId}
                 onChange={(e) => setFromAccountId(e.target.value)}
                 required
-                className="w-full px-3 py-2 text-sm rounded-lg border border-rose-300 bg-rose-50/40 text-rose-950 font-bold focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
+                className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-rose-300 bg-rose-50/40 text-rose-950 font-bold focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none min-h-[42px]"
               >
                 {internalAccountsList.map(a => (
                   <option key={a.id} value={a.id}>{a.name}</option>
@@ -1224,7 +1336,7 @@ export default function InternalPaymentVoucher() {
                 <select
                   value={toAccountId}
                   onChange={(e) => setToAccountId(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-indigo-300 bg-indigo-50/40 text-indigo-950 font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                  className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-indigo-300 bg-indigo-50/40 text-indigo-950 font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none min-h-[42px]"
                 >
                   <option value="">-- اختر الحساب المودع فيه --</option>
                   {internalAccountsList.map(a => (
@@ -1247,7 +1359,7 @@ export default function InternalPaymentVoucher() {
                   onChange={(e) => setPaidTo(e.target.value)}
                   placeholder="اسم الموظف / صاحب العهدة / المستلم"
                   list="employees-payment-list"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
+                  className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none min-h-[42px]"
                 />
                 <datalist id="employees-payment-list">
                   {employees.map(emp => (
@@ -1263,34 +1375,34 @@ export default function InternalPaymentVoucher() {
             </div>
 
             {/* Disbursed By (Cashier) */}
-            <div className="space-y-1">
+            <div className="space-y-1 sm:col-span-2 md:col-span-1">
               <label className="text-xs font-black uppercase text-slate-800 tracking-wide">الصارف / أمين الصندوق</label>
               <input
                 type="text"
                 value={disbursedBy}
                 onChange={(e) => setDisbursedBy(e.target.value)}
                 placeholder="اسم أمين الصندوق"
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
+                className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none min-h-[42px]"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
             {/* Amount */}
             <div className="space-y-1">
               <label className="text-xs font-black uppercase text-slate-800 tracking-wide">المبلغ المصروف ({currencyFullNameAr})</label>
               <div className="relative">
                 <input 
                   type="number" 
-                  step="0.01"
-                  min="0.01"
+                  step="0.01" 
+                  min="0.01" 
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.00"
+                  placeholder="0.00" 
                   required
-                  className="w-full px-3 py-2 text-base font-mono font-bold rounded-lg border border-rose-300 bg-rose-50/30 text-rose-800 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none pl-12"
+                  className="w-full px-3 py-2 text-base font-mono font-bold rounded-lg border border-rose-300 bg-rose-50/30 text-rose-800 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none pl-12 min-h-[42px]"
                 />
-                <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">{currencySymbol}</span>
+                <span className="absolute left-3 top-3 text-xs font-bold text-slate-400">{currencySymbol}</span>
               </div>
               {/* Tafqeet in Words */}
               <div className="mt-1.5 p-2 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center gap-1.5 text-xs text-slate-600">
@@ -1308,7 +1420,7 @@ export default function InternalPaymentVoucher() {
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('CASH')}
-                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
                     paymentMethod === 'CASH'
                       ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -1320,7 +1432,7 @@ export default function InternalPaymentVoucher() {
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('BANK_TRANSFER')}
-                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
                     paymentMethod === 'BANK_TRANSFER'
                       ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -1332,7 +1444,7 @@ export default function InternalPaymentVoucher() {
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('CHECK')}
-                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
                     paymentMethod === 'CHECK'
                       ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -1344,7 +1456,7 @@ export default function InternalPaymentVoucher() {
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('SPAN')}
-                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
                     paymentMethod === 'SPAN'
                       ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -1366,7 +1478,7 @@ export default function InternalPaymentVoucher() {
                 value={referenceNo}
                 onChange={(e) => setReferenceNo(e.target.value)}
                 placeholder={paymentMethod === 'CHECK' ? 'مثال: CHQ-8840' : 'رقم الحوالة أو الشيك'}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none font-mono"
+                className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none font-mono min-h-[42px]"
               />
             </div>
           </div>
@@ -1384,7 +1496,7 @@ export default function InternalPaymentVoucher() {
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
                   placeholder="مثال: مصرف الراجحي / البنك الأهلي"
-                  className="w-full px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
+                  className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none min-h-[42px]"
                 />
               </div>
 
@@ -1398,7 +1510,7 @@ export default function InternalPaymentVoucher() {
                     type="date"
                     value={checkDueDate}
                     onChange={(e) => setCheckDueDate(e.target.value)}
-                    className="w-full px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none font-mono"
+                    className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none font-mono min-h-[42px]"
                   />
                 </div>
               )}
@@ -1406,7 +1518,7 @@ export default function InternalPaymentVoucher() {
           )}
 
           {/* Cost Center & Description */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
             {/* Cost Center Selector */}
             <div className="space-y-1">
               <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
@@ -1421,7 +1533,7 @@ export default function InternalPaymentVoucher() {
               <select
                 value={costCenterId}
                 onChange={(e) => setCostCenterId(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none min-h-[42px]"
               >
                 <option value="">-- بدون تحديد مركز تكلفة (عام) --</option>
                 {costCenters.map(cc => (
@@ -1431,7 +1543,7 @@ export default function InternalPaymentVoucher() {
                 ))}
               </select>
               {selectedCostCenter && (
-                <div className="text-[11px] text-slate-600 flex items-center justify-between bg-indigo-50/70 px-2 py-1 rounded-md border border-indigo-100">
+                <div className="text-[11px] text-slate-600 flex flex-wrap items-center justify-between gap-1 bg-indigo-50/70 px-2.5 py-1.5 rounded-md border border-indigo-100">
                   <span className="font-bold text-indigo-900">المسؤول: {selectedCostCenter.manager || 'غير محدد'}</span>
                   <span className="font-mono text-indigo-700">الميزانية: {selectedCostCenter.budget?.toLocaleString() || 0} {currencyFullNameAr}</span>
                 </div>
@@ -1446,42 +1558,42 @@ export default function InternalPaymentVoucher() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="وذلك عن: صرف عهدة مشتريات / سداد مصاريف صيانة ونثرية..."
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
+                className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none min-h-[42px]"
               />
             </div>
           </div>
 
           {/* Live Interactive Card with Anti-Tamper Barcode & QR Code */}
-          <div className="p-4 rounded-xl border border-rose-200 bg-rose-50/30 space-y-3">
-            <div className="flex items-center justify-between text-xs font-bold text-rose-800">
+          <div className="p-3 sm:p-4 rounded-xl border border-rose-200 bg-rose-50/40 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-bold text-rose-800">
               <span className="flex items-center gap-1.5">
                 <CheckCircle2 size={14} className="text-rose-600" />
                 ملخص سند الصرف الداخلي والمطابقة الرقمية
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] bg-purple-100 text-purple-900 border border-purple-200 px-2 py-0.5 rounded font-bold flex items-center gap-1">
-                  <Scan size={11} /> رمز الاستجابة السريعة والباركود مفعل
+                  <Scan size={11} /> رمز QR والباركود مفعل
                 </span>
                 <span className="font-mono font-bold text-rose-900 bg-rose-100/80 px-2 py-0.5 rounded">
                   #{voucherNumber}
                 </span>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
               <div className="bg-white p-2.5 rounded-lg border border-rose-100">
                 <span className="text-slate-400 block text-[10px]">الحساب المصروف منه:</span>
-                <span className="font-bold text-slate-800">{getAccountName(fromAccountId)}</span>
+                <span className="font-bold text-slate-800 text-xs sm:text-sm">{getAccountName(fromAccountId)}</span>
               </div>
               <div className="bg-white p-2.5 rounded-lg border border-rose-100">
                 <span className="text-slate-400 block text-[10px]">المستفيد والبيان:</span>
-                <span className="font-bold text-slate-800">{paidTo || 'جهة داخلية'}</span>
+                <span className="font-bold text-slate-800 text-xs sm:text-sm">{paidTo || 'جهة داخلية'}</span>
                 <span className="text-[10px] text-rose-600 block truncate">
                   {PAYMENT_EXPENSE_TYPES.find(s => s.id === expenseType)?.label}
                 </span>
               </div>
               <div className="bg-white p-2.5 rounded-lg border border-rose-100 flex flex-col justify-between">
                 <span className="text-slate-400 block text-[10px]">صافي القيمة المصروفة:</span>
-                <span className="font-mono font-black text-rose-700 text-sm">
+                <span className="font-mono font-black text-rose-700 text-sm sm:text-base">
                   {(Number(amount) || 0).toLocaleString()} {currencyFullNameAr}
                 </span>
               </div>
@@ -1536,12 +1648,12 @@ export default function InternalPaymentVoucher() {
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100">
-            <div>
+            <div className="w-full sm:w-auto">
               {isCurrentVoucherPosted && (
                 <button
                   type="button"
                   onClick={handleUnpostCurrentVoucher}
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-amber-400 bg-amber-50 text-amber-900 font-bold text-xs hover:bg-amber-100 transition-colors cursor-pointer shadow-xs"
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-amber-400 bg-amber-50 text-amber-900 font-bold text-xs hover:bg-amber-100 transition-colors cursor-pointer shadow-xs min-h-[42px]"
                   title="إلغاء ترحيل هذا السند وإعادته كمسودة"
                 >
                   <RotateCcw size={15} />
@@ -1550,12 +1662,12 @@ export default function InternalPaymentVoucher() {
               )}
             </div>
 
-            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto justify-stretch sm:justify-end">
               {editingVoucherId && (
                 <button
                   type="button"
                   onClick={handleNewVoucher}
-                  className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="flex-1 sm:flex-none flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors cursor-pointer min-h-[42px]"
                 >
                   إلغاء
                 </button>
@@ -1565,7 +1677,7 @@ export default function InternalPaymentVoucher() {
                   type="button"
                   onClick={() => saveVoucherWithStatus('DRAFT')}
                   disabled={isVoucherDuplicate || !amount}
-                  className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer ${
+                  className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer min-h-[42px] ${
                     isVoucherDuplicate || !amount
                       ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                       : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40'
@@ -1581,7 +1693,7 @@ export default function InternalPaymentVoucher() {
                   type="button"
                   onClick={handlePostCurrentVoucher}
                   disabled={isVoucherDuplicate || !amount}
-                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs text-white transition-all shadow-md cursor-pointer ${
+                  className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs text-white transition-all shadow-md cursor-pointer min-h-[42px] ${
                     isVoucherDuplicate || !amount
                       ? 'bg-slate-400 cursor-not-allowed opacity-60'
                       : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-700/20'
@@ -1597,7 +1709,7 @@ export default function InternalPaymentVoucher() {
                   type="button"
                   onClick={() => saveVoucherWithStatus('POSTED')}
                   disabled={isVoucherDuplicate || !amount}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs text-white transition-all shadow-md cursor-pointer bg-rose-700 hover:bg-rose-800 shadow-rose-700/20"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs text-white transition-all shadow-md cursor-pointer bg-rose-700 hover:bg-rose-800 shadow-rose-700/20 min-h-[42px]"
                   title="حفظ التعديلات على السند المرحل"
                 >
                   <Save size={15} />

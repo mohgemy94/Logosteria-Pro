@@ -152,25 +152,7 @@ export default function InstallmentKpiModal({
     );
   }, [items, search]);
 
-  if (!isOpen || !type) return null;
-
-  // WhatsApp quick notification handler
-  const handleSendWhatsAppReminder = (contract: InstallmentContract, item: InstallmentScheduleItem, daysDiff: number) => {
-    if (!contract.customerPhone) {
-      alert('لا يتوفر رقم هاتف مسجل لهذا العميل');
-      return;
-    }
-
-    const cleanPhone = contract.customerPhone.replace(/[^\d]/g, '');
-    const isOver = daysDiff < 0;
-    const msg = isOver
-      ? `السلام عليكم ورحمة الله، الأخ/ت ${contract.customerName}، نفيدكم بوجود قسط مستحق متأخر بقيمة ${item.remainingAmount.toLocaleString()} ${currencySymbol} بعقد رقم ${contract.contractNumber} كان مستحقاً بتاريخ ${item.dueDate} (تأخر ${Math.abs(daysDiff)} يوم). نرجو التكرم بسرعة السداد شاكرين تعاونكم.`
-      : `السلام عليكم ورحمة الله، الأخ/ت ${contract.customerName}، تذكير بموعد استحقاق القسط رقم #${item.installmentNumber} بقيمة ${item.remainingAmount.toLocaleString()} ${currencySymbol} بعقد رقم ${contract.contractNumber} في تاريخ ${item.dueDate}. شاكرين حسن التزامكم.`;
-
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
-    window.open(url, '_blank');
-  };
-
+  // Export Headers & Rows
   const modalExportHeaders = [
     'رقم العقد',
     'اسم العميل',
@@ -198,6 +180,25 @@ export default function InstallmentKpiModal({
       i.receiptVoucherNumber || ''
     ]);
   }, [filteredItems]);
+
+  if (!isOpen || !type) return null;
+
+  // WhatsApp quick notification handler
+  const handleSendWhatsAppReminder = (contract: InstallmentContract, item: InstallmentScheduleItem, daysDiff: number) => {
+    if (!contract.customerPhone) {
+      alert('لا يتوفر رقم هاتف مسجل لهذا العميل');
+      return;
+    }
+
+    const cleanPhone = contract.customerPhone.replace(/[^\d]/g, '');
+    const isOver = daysDiff < 0;
+    const msg = isOver
+      ? `السلام عليكم ورحمة الله، الأخ/ت ${contract.customerName}، نفيدكم بوجود قسط مستحق متأخر بقيمة ${item.remainingAmount.toLocaleString()} ${currencySymbol} بعقد رقم ${contract.contractNumber} كان مستحقاً بتاريخ ${item.dueDate} (تأخر ${Math.abs(daysDiff)} يوم). نرجو التكرم بسرعة السداد شاكرين تعاونكم.`
+      : `السلام عليكم ورحمة الله، الأخ/ت ${contract.customerName}، تذكير بموعد استحقاق القسط رقم #${item.installmentNumber} بقيمة ${item.remainingAmount.toLocaleString()} ${currencySymbol} بعقد رقم ${contract.contractNumber} في تاريخ ${item.dueDate}. شاكرين حسن التزامكم.`;
+
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  };
 
   return (
     <div 

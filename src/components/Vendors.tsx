@@ -11,6 +11,7 @@ import PartnerStatementModal from './PartnerStatementModal';
 import VendorKpiModal, { VendorKpiModalType } from './VendorKpiModal';
 import AddVendorForm from './AddVendorForm';
 import BalanceConfirmationModal from './BalanceConfirmationModal';
+import ResponsiveModal from './ResponsiveModal';
 import { PartnerBalanceItem } from './PartnerBalances';
 import { 
   loadVendors, 
@@ -557,241 +558,227 @@ export default function Vendors() {
         </div>
       </div>
 
-      {/* Add Vendor Modal */}
-      {isAdding && (
-        <div 
-          className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-fadeIn"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsAdding(false);
-          }}
-        >
-          <div 
-            className="bg-white rounded-t-3xl sm:rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] animate-modalIn text-right"
-            onClick={e => e.stopPropagation()}
-            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-          >
-            {/* Mobile Handle */}
-            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
-
-            <div className="flex justify-between items-center p-4 border-b border-slate-100 shrink-0">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm sm:text-base">
-                <Truck size={18} className="text-purple-600" /> إضافة مورد جديد وربط الحساب
-              </h3>
+      {/* Add Vendor Modal (إضافة مورد جديد وربط الحساب) */}
+      <ResponsiveModal
+        isOpen={isAdding}
+        onClose={() => setIsAdding(false)}
+        id="modal-add-vendor"
+        maxWidthClass="max-w-full sm:max-w-xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl"
+        title="إضافة مورد جديد وربط الحساب"
+        subtitle="تسجيل مورد معتمد وتخصيص كود محاسبي وربطه تلقائياً بشجرة الحسابات العامة"
+        icon={<Truck className="text-purple-600" size={22} />}
+        badge={
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-bold bg-purple-100 text-purple-800 border border-purple-300 shrink-0">
+            سجل الموردين
+          </span>
+        }
+        footer={
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 w-full">
+            <div className="text-xs text-slate-500 hidden md:flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse shrink-0" />
+              <span>سيتم إنشاء الحساب في شجرة الحسابات تلقائياً برقم فريد</span>
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
               <button 
                 type="button" 
-                onClick={() => setIsAdding(false)}
-                className="btn-3d btn-3d-white p-1.5 rounded-xl text-slate-500 hover:text-slate-800 cursor-pointer hover:scale-105 active:scale-95 transition-all"
-                title="إغلاق النافذة"
+                onClick={() => setIsAdding(false)} 
+                className="btn-3d btn-3d-white px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-700 cursor-pointer w-full sm:w-auto text-center justify-center"
               >
-                <X size={16} />
+                إلغاء
+              </button>
+              <button 
+                type="submit" 
+                form="add-vendor-form"
+                className="btn-3d btn-3d-purple px-6 py-2.5 text-xs sm:text-sm font-bold text-white shadow-md cursor-pointer w-full sm:w-auto text-center justify-center flex items-center gap-2"
+              >
+                <Save size={16} />
+                <span>حفظ المورد وفتح الحساب ←</span>
               </button>
             </div>
-            <div className="p-0 overflow-y-auto flex-1">
-              <div className="p-4 sm:p-6">
-                <AddVendorForm 
-                  initialCode={generateVendorCode()}
-                  onSave={handleAddVendor} 
-                  onCancel={() => setIsAdding(false)} 
-                />
-              </div>
-            </div>
           </div>
-        </div>
-      )}
+        }
+      >
+        <AddVendorForm 
+          formId="add-vendor-form"
+          hideActions={true}
+          initialCode={generateVendorCode()}
+          onSave={handleAddVendor} 
+          onCancel={() => setIsAdding(false)} 
+        />
+      </ResponsiveModal>
 
       {/* Edit Vendor Modal */}
       {editingVendor && (
-        <div 
-          className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-fadeIn"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setEditingVendor(null);
-          }}
-        >
-          <div 
-            className="bg-white rounded-t-3xl sm:rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] animate-modalIn text-right"
-            onClick={e => e.stopPropagation()}
-            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-          >
-            {/* Mobile Handle */}
-            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
-
-            <div className="flex justify-between items-center p-4 sm:p-6 pb-4 border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
-                  <Edit3 size={16} />
-                </div>
-                <div>
-                  <h3 className="text-sm sm:text-base font-bold text-slate-900">تعديل بيانات المورد</h3>
-                  <p className="text-[11px] text-slate-400">تحديث معلومات المورد، شروط السداد، وسقف الائتمان</p>
-                </div>
-              </div>
-              <button 
-                type="button" 
+        <ResponsiveModal
+          isOpen={Boolean(editingVendor)}
+          onClose={() => setEditingVendor(null)}
+          id="modal-edit-vendor"
+          maxWidthClass="max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl"
+          title="تعديل بيانات المورد"
+          subtitle="تحديث معلومات المورد، شروط السداد، وسقف الائتمان"
+          icon={<Edit3 className="text-blue-600" size={20} />}
+          badge={
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-blue-100 text-blue-800 border border-blue-200">
+              {editingVendor.code || 'VEND'}
+            </span>
+          }
+          footer={
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 w-full">
+              <button
+                type="button"
                 onClick={() => setEditingVendor(null)}
-                className="btn-3d btn-3d-white p-1.5 rounded-xl text-slate-500 hover:text-slate-800 cursor-pointer hover:scale-105 active:scale-95 transition-all"
-                title="إغلاق النافذة"
+                className="btn-3d btn-3d-white px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-700 cursor-pointer w-full sm:w-auto text-center justify-center"
               >
-                <X size={16} />
+                إلغاء
+              </button>
+              <button
+                type="submit"
+                form="edit-vendor-form"
+                className="btn-3d btn-3d-blue px-6 py-2.5 text-xs sm:text-sm font-bold text-white shadow-md cursor-pointer w-full sm:w-auto text-center justify-center flex items-center gap-2"
+              >
+                <Save size={16} />
+                <span>حفظ التعديلات ←</span>
               </button>
             </div>
+          }
+        >
+          <form id="edit-vendor-form" onSubmit={handleUpdate} className="space-y-4 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">كود المورد:</label>
+                <input
+                  type="text"
+                  value={editingVendor.code || ''}
+                  onChange={(e) => setEditingVendor({...editingVendor, code: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+                  placeholder="VEND-001"
+                />
+              </div>
 
-            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
-              <form onSubmit={handleUpdate} className="space-y-4 text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">كود المورد:</label>
-                    <input
-                      type="text"
-                      value={editingVendor.code || ''}
-                      onChange={(e) => setEditingVendor({...editingVendor, code: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
-                      placeholder="VEND-001"
-                    />
-                  </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">اسم المورد / الشركة <span className="text-red-500">*</span>:</label>
+                <input
+                  type="text"
+                  required
+                  value={editingVendor.name}
+                  onChange={(e) => setEditingVendor({...editingVendor, name: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-medium"
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">اسم المورد / الشركة <span className="text-red-500">*</span>:</label>
-                    <input
-                      type="text"
-                      required
-                      value={editingVendor.name}
-                      onChange={(e) => setEditingVendor({...editingVendor, name: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-medium"
-                    />
-                  </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">الرقم الضريبي / السجل:</label>
+                <input
+                  type="text"
+                  value={editingVendor.taxNumber || ''}
+                  onChange={(e) => setEditingVendor({...editingVendor, taxNumber: e.target.value})}
+                  placeholder="300000000000005"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">الرقم الضريبي / السجل:</label>
-                    <input
-                      type="text"
-                      value={editingVendor.taxNumber || ''}
-                      onChange={(e) => setEditingVendor({...editingVendor, taxNumber: e.target.value})}
-                      placeholder="300000000000005"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
-                    />
-                  </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">رقم الهاتف الجوال / تليفون:</label>
+                <input
+                  type="text"
+                  value={editingVendor.phone || ''}
+                  onChange={(e) => setEditingVendor({...editingVendor, phone: e.target.value})}
+                  placeholder="05XXXXXXXX"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+                  dir="ltr"
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">رقم الهاتف الجوال / تليفون:</label>
-                    <input
-                      type="text"
-                      value={editingVendor.phone || ''}
-                      onChange={(e) => setEditingVendor({...editingVendor, phone: e.target.value})}
-                      placeholder="05XXXXXXXX"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
-                      dir="ltr"
-                    />
-                  </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">البريد الإلكتروني:</label>
+                <input
+                  type="email"
+                  value={editingVendor.email || ''}
+                  onChange={(e) => setEditingVendor({...editingVendor, email: e.target.value})}
+                  placeholder="vendor@company.com"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+                  dir="ltr"
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">البريد الإلكتروني:</label>
-                    <input
-                      type="email"
-                      value={editingVendor.email || ''}
-                      onChange={(e) => setEditingVendor({...editingVendor, email: e.target.value})}
-                      placeholder="vendor@company.com"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
-                      dir="ltr"
-                    />
-                  </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">الدولة:</label>
+                <select
+                  value={editingVendor.country || 'SA'}
+                  onChange={(e) => setEditingVendor({...editingVendor, country: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+                >
+                  {COUNTRIES_LIST.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.flag} {c.nameAr} ({c.iso3})
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">الدولة:</label>
-                    <select
-                      value={editingVendor.country || 'SA'}
-                      onChange={(e) => setEditingVendor({...editingVendor, country: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
-                    >
-                      {COUNTRIES_LIST.map((c) => (
-                        <option key={c.code} value={c.code}>
-                          {c.flag} {c.nameAr} ({c.iso3})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">العنوان / المقر:</label>
+                <input
+                  type="text"
+                  value={editingVendor.address || ''}
+                  onChange={(e) => setEditingVendor({...editingVendor, address: e.target.value})}
+                  placeholder="المدينة - الحي - الشارع"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">العنوان / المقر:</label>
-                    <input
-                      type="text"
-                      value={editingVendor.address || ''}
-                      onChange={(e) => setEditingVendor({...editingVendor, address: e.target.value})}
-                      placeholder="المدينة - الحي - الشارع"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">سقف الائتمان ({currencySymbol}):</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editingVendor.creditLimit !== undefined ? editingVendor.creditLimit : ''}
+                  onChange={(e) => setEditingVendor({
+                    ...editingVendor, 
+                    creditLimit: e.target.value ? Number(e.target.value) : undefined
+                  })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+                  placeholder="100000"
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">سقف الائتمان الممنوح (ريال):</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={editingVendor.creditLimit !== undefined ? editingVendor.creditLimit : ''}
-                      onChange={(e) => setEditingVendor({
-                        ...editingVendor, 
-                        creditLimit: e.target.value ? Number(e.target.value) : undefined
-                      })}
-                      placeholder="مثال: 100000"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">فترة السداد المتفق عليها:</label>
-                    <select
-                      value={editingVendor.paymentTermsDays || 0}
-                      onChange={(e) => setEditingVendor({
-                        ...editingVendor, 
-                        paymentTermsDays: Number(e.target.value) || 0
-                      })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
-                    >
-                      <option value="0">سداد فوري / نقدي (Cash on Delivery)</option>
-                      <option value="15">خلال 15 يوماً</option>
-                      <option value="30">خلال 30 يوماً (شهر)</option>
-                      <option value="45">خلال 45 يوماً</option>
-                      <option value="60">خلال 60 يوماً (شهران)</option>
-                      <option value="90">خلال 90 يوماً (3 أشهر)</option>
-                      <option value="120">خلال 120 يوماً (4 أشهر)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <label className="block text-slate-600 font-bold mb-1">الرصيد الافتتاحي السابق ({currencySymbol}):</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editingVendor.openingBalance || 0}
-                    onChange={(e) => setEditingVendor({...editingVendor, openingBalance: Number(e.target.value) || 0})}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
-                  />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    القيمة الموجبة تعني رصيد دائن للمورد علينا (التزام)، والقيمة السالبة تعني رصيد مدين له (دفعة مقدمة سابقة لصالحنا).
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setEditingVendor(null)}
-                    className="btn-3d btn-3d-white px-4 py-2 text-xs font-black hover:scale-105 active:scale-95 transition-all"
-                  >
-                    إلغاء
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn-3d btn-3d-blue px-5 py-2 text-xs font-black hover:scale-105 active:scale-95 transition-all"
-                  >
-                    <Save size={15} />
-                    <span>حفظ التعديلات</span>
-                  </button>
-                </div>
-              </form>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">فترة السداد المتفق عليها:</label>
+                <select
+                  value={editingVendor.paymentTermsDays || 0}
+                  onChange={(e) => setEditingVendor({
+                    ...editingVendor, 
+                    paymentTermsDays: Number(e.target.value) || 0
+                  })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value="0">سداد فوري / نقدي (Cash on Delivery)</option>
+                  <option value="15">خلال 15 يوماً</option>
+                  <option value="30">خلال 30 يوماً (شهر)</option>
+                  <option value="45">خلال 45 يوماً</option>
+                  <option value="60">خلال 60 يوماً (شهران)</option>
+                  <option value="90">خلال 90 يوماً (3 أشهر)</option>
+                  <option value="120">خلال 120 يوماً (4 أشهر)</option>
+                </select>
+              </div>
             </div>
-          </div>
-        </div>
+
+            <div className="pt-2">
+              <label className="block text-slate-600 font-bold mb-1">الرصيد الافتتاحي السابق ({currencySymbol}):</label>
+              <input
+                type="number"
+                step="0.01"
+                value={editingVendor.openingBalance || 0}
+                onChange={(e) => setEditingVendor({...editingVendor, openingBalance: Number(e.target.value) || 0})}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+              />
+              <span className="text-[10px] text-slate-400 mt-0.5 block">
+                القيمة الموجبة تعني رصيد دائن للمورد علينا (التزام)، والقيمة السالبة تعني رصيد مدين له (دفعة مقدمة سابقة لصالحنا).
+              </span>
+            </div>
+          </form>
+        </ResponsiveModal>
       )}
 
       {/* Print Header */}

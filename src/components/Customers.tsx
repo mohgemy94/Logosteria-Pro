@@ -11,6 +11,7 @@ import PrintDropdown from './PrintDropdown';
 import PartnerStatementModal from './PartnerStatementModal';
 import CustomerKpiModal, { CustomerKpiModalType } from './CustomerKpiModal';
 import BalanceConfirmationModal from './BalanceConfirmationModal';
+import ResponsiveModal from './ResponsiveModal';
 import { PartnerBalanceItem } from './PartnerBalances';
 import { 
   loadCustomers, 
@@ -554,240 +555,226 @@ export default function Customers() {
         </div>
       </div>
 
-      {/* Add Customer Modal */}
-      {isAdding && (
-        <div 
-          className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-fadeIn"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsAdding(false);
-          }}
-        >
-          <div 
-            className="bg-white rounded-t-3xl sm:rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] animate-modalIn text-right"
-            onClick={e => e.stopPropagation()}
-            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-          >
-            {/* Mobile Handle */}
-            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
-
-            <div className="flex justify-between items-center p-4 border-b border-slate-100 shrink-0">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm sm:text-base">
-                <Users size={18} className="text-blue-600" /> إضافة عميل جديد
-              </h3>
+      {/* Add Customer Modal (إضافة عميل جديد) */}
+      <ResponsiveModal
+        isOpen={isAdding}
+        onClose={() => setIsAdding(false)}
+        id="modal-add-customer"
+        maxWidthClass="max-w-full sm:max-w-xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl"
+        title="إضافة عميل جديد"
+        subtitle="إنشاء وتوثيق ملف عميل جديد وربطه تلقائياً بشجرة الحسابات العامة والذمم المدينة"
+        icon={<Users className="text-blue-600" size={22} />}
+        badge={
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300 shrink-0">
+            سجل العملاء
+          </span>
+        }
+        footer={
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 w-full">
+            <div className="text-xs text-slate-500 hidden md:flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shrink-0" />
+              <span>سيتم إنشاء الحساب في شجرة الحسابات وتخصيص كود فريد</span>
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
               <button 
                 type="button" 
-                onClick={() => setIsAdding(false)}
-                className="btn-3d btn-3d-white p-1.5 rounded-xl text-slate-500 hover:text-slate-800 cursor-pointer hover:scale-105 active:scale-95 transition-all"
-                title="إغلاق النافذة"
+                onClick={() => setIsAdding(false)} 
+                className="btn-3d btn-3d-white px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-700 cursor-pointer w-full sm:w-auto text-center justify-center"
               >
-                <X size={16} />
+                إلغاء
+              </button>
+              <button 
+                type="submit" 
+                form="add-customer-form"
+                className="btn-3d btn-3d-blue px-6 py-2.5 text-xs sm:text-sm font-bold text-white shadow-md cursor-pointer w-full sm:w-auto text-center justify-center flex items-center gap-2"
+              >
+                <Save size={16} />
+                <span>حفظ العميل وفتح الحساب ←</span>
               </button>
             </div>
-            <div className="p-0 overflow-y-auto flex-1">
-              <div className="p-4 sm:p-6">
-                <AddCustomerForm 
-                  initialCode={generateCustomerCode()}
-                  onSave={handleAddCustomer} 
-                  onCancel={() => setIsAdding(false)} 
-                />
-              </div>
-            </div>
           </div>
-        </div>
-      )}
+        }
+      >
+        <AddCustomerForm 
+          formId="add-customer-form"
+          hideActions={true}
+          initialCode={generateCustomerCode()}
+          onSave={handleAddCustomer} 
+          onCancel={() => setIsAdding(false)} 
+        />
+      </ResponsiveModal>
 
       {/* Edit Customer Modal */}
       {editingCustomer && (
-        <div 
-          className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-fadeIn"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setEditingCustomer(null);
-          }}
-        >
-          <div 
-            className="bg-white rounded-t-3xl sm:rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] animate-modalIn text-right"
-            onClick={e => e.stopPropagation()}
-            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-          >
-            {/* Mobile Handle */}
-            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
-
-            <div className="flex justify-between items-center p-4 sm:p-6 pb-4 border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
-                  <Edit3 size={16} />
-                </div>
-                <div>
-                  <h3 className="text-sm sm:text-base font-bold text-slate-900">تعديل بيانات العميل</h3>
-                  <p className="text-[11px] text-slate-400">تحديث معلومات الاتصال، الشروط الائتمانية، والرقم الضريبي</p>
-                </div>
-              </div>
-              <button 
-                type="button" 
+        <ResponsiveModal
+          isOpen={Boolean(editingCustomer)}
+          onClose={() => setEditingCustomer(null)}
+          id="modal-edit-customer"
+          maxWidthClass="max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl"
+          title="تعديل بيانات العميل"
+          subtitle="تحديث معلومات الاتصال، الشروط الائتمانية، والرقم الضريبي"
+          icon={<Edit3 className="text-blue-600" size={20} />}
+          badge={
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-blue-100 text-blue-800 border border-blue-200">
+              {editingCustomer.code || 'CUST'}
+            </span>
+          }
+          footer={
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 w-full">
+              <button
+                type="button"
                 onClick={() => setEditingCustomer(null)}
-                className="btn-3d btn-3d-white p-1.5 rounded-xl text-slate-500 hover:text-slate-800 cursor-pointer hover:scale-105 active:scale-95 transition-all"
-                title="إغلاق النافذة"
+                className="btn-3d btn-3d-white px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-700 cursor-pointer w-full sm:w-auto text-center justify-center"
               >
-                <X size={16} />
+                إلغاء
+              </button>
+              <button
+                type="submit"
+                form="edit-customer-form"
+                className="btn-3d btn-3d-blue px-6 py-2.5 text-xs sm:text-sm font-bold text-white shadow-md cursor-pointer w-full sm:w-auto text-center justify-center flex items-center gap-2"
+              >
+                <Save size={16} />
+                <span>حفظ التعديلات ←</span>
               </button>
             </div>
+          }
+        >
+          <form id="edit-customer-form" onSubmit={handleUpdateCustomer} className="space-y-4 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">كود العميل:</label>
+                <input
+                  type="text"
+                  value={editingCustomer.code || ''}
+                  onChange={(e) => setEditingCustomer({...editingCustomer, code: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+                  placeholder="CUST-001"
+                />
+              </div>
 
-            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
-              <form onSubmit={handleUpdateCustomer} className="space-y-4 text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">كود العميل:</label>
-                    <input
-                      type="text"
-                      value={editingCustomer.code || ''}
-                      onChange={(e) => setEditingCustomer({...editingCustomer, code: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
-                      placeholder="CUST-001"
-                    />
-                  </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">اسم العميل / المؤسسة <span className="text-red-500">*</span>:</label>
+                <input
+                  type="text"
+                  required
+                  value={editingCustomer.name}
+                  onChange={(e) => setEditingCustomer({...editingCustomer, name: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-medium"
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">اسم العميل / المؤسسة <span className="text-red-500">*</span>:</label>
-                    <input
-                      type="text"
-                      required
-                      value={editingCustomer.name}
-                      onChange={(e) => setEditingCustomer({...editingCustomer, name: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-medium"
-                    />
-                  </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">الرقم الضريبي:</label>
+                <input
+                  type="text"
+                  value={editingCustomer.taxNumber || ''}
+                  onChange={(e) => setEditingCustomer({...editingCustomer, taxNumber: e.target.value})}
+                  placeholder="300000000000003"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">الرقم الضريبي:</label>
-                    <input
-                      type="text"
-                      value={editingCustomer.taxNumber || ''}
-                      onChange={(e) => setEditingCustomer({...editingCustomer, taxNumber: e.target.value})}
-                      placeholder="300000000000003"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
-                    />
-                  </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">رقم الهاتف الجوال / تليفون:</label>
+                <input
+                  type="text"
+                  value={editingCustomer.phone || ''}
+                  onChange={(e) => setEditingCustomer({...editingCustomer, phone: e.target.value})}
+                  placeholder="05XXXXXXXX"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+                  dir="ltr"
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">رقم الهاتف الجوال / تليفون:</label>
-                    <input
-                      type="text"
-                      value={editingCustomer.phone || ''}
-                      onChange={(e) => setEditingCustomer({...editingCustomer, phone: e.target.value})}
-                      placeholder="05XXXXXXXX"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
-                      dir="ltr"
-                    />
-                  </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">البريد الإلكتروني:</label>
+                <input
+                  type="email"
+                  value={editingCustomer.email || ''}
+                  onChange={(e) => setEditingCustomer({...editingCustomer, email: e.target.value})}
+                  placeholder="billing@customer.com"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+                  dir="ltr"
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">البريد الإلكتروني:</label>
-                    <input
-                      type="email"
-                      value={editingCustomer.email || ''}
-                      onChange={(e) => setEditingCustomer({...editingCustomer, email: e.target.value})}
-                      placeholder="billing@customer.com"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
-                      dir="ltr"
-                    />
-                  </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">الدولة:</label>
+                <select
+                  value={editingCustomer.country || 'SA'}
+                  onChange={(e) => setEditingCustomer({...editingCustomer, country: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+                >
+                  {COUNTRIES_LIST.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.flag} {c.nameAr} ({c.iso3})
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">الدولة:</label>
-                    <select
-                      value={editingCustomer.country || 'SA'}
-                      onChange={(e) => setEditingCustomer({...editingCustomer, country: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
-                    >
-                      {COUNTRIES_LIST.map((c) => (
-                        <option key={c.code} value={c.code}>
-                          {c.flag} {c.nameAr} ({c.iso3})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">العنوان / المقر:</label>
+                <input
+                  type="text"
+                  value={editingCustomer.address || ''}
+                  onChange={(e) => setEditingCustomer({...editingCustomer, address: e.target.value})}
+                  placeholder="المدينة - الحي - الشارع"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">العنوان / المقر:</label>
-                    <input
-                      type="text"
-                      value={editingCustomer.address || ''}
-                      onChange={(e) => setEditingCustomer({...editingCustomer, address: e.target.value})}
-                      placeholder="المدينة - الحي - الشارع"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">حد الائتمان المسموح ({currencySymbol}):</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editingCustomer.creditLimit !== undefined ? editingCustomer.creditLimit : ''}
+                  onChange={(e) => setEditingCustomer({
+                    ...editingCustomer, 
+                    creditLimit: e.target.value ? Number(e.target.value) : undefined
+                  })}
+                  placeholder="مثال: 50000"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">حد الائتمان المسموح (ريال):</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={editingCustomer.creditLimit !== undefined ? editingCustomer.creditLimit : ''}
-                      onChange={(e) => setEditingCustomer({
-                        ...editingCustomer, 
-                        creditLimit: e.target.value ? Number(e.target.value) : undefined
-                      })}
-                      placeholder="مثال: 50000"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">فترة الائتمان / السداد:</label>
-                    <select
-                      value={editingCustomer.paymentTermsDays || 0}
-                      onChange={(e) => setEditingCustomer({
-                        ...editingCustomer, 
-                        paymentTermsDays: Number(e.target.value) || 0
-                      })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
-                    >
-                      <option value="0">سداد فوري / نقدي (Cash on Delivery)</option>
-                      <option value="15">خلال 15 يوماً</option>
-                      <option value="30">خلال 30 يوماً (شهر)</option>
-                      <option value="45">خلال 45 يوماً</option>
-                      <option value="60">خلال 60 يوماً (شهران)</option>
-                      <option value="90">خلال 90 يوماً (3 أشهر)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-slate-600 font-bold mb-1">الرصيد الافتتاحي السابق ({currencySymbol}):</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editingCustomer.openingBalance || 0}
-                    onChange={(e) => setEditingCustomer({...editingCustomer, openingBalance: Number(e.target.value) || 0})}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
-                  />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    القيمة الموجبة تعني رصيد مدين مستحق لنا، والقيمة السالبة تعني رصيد دائن للعميل.
-                  </span>
-                </div>
-
-                <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2 sm:gap-2.5 pt-3 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setEditingCustomer(null)}
-                    className="btn-3d btn-3d-white w-full sm:w-auto px-4 py-2.5 sm:py-2 text-xs font-black hover:scale-105 active:scale-95 transition-all text-center justify-center"
-                  >
-                    إلغاء
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn-3d btn-3d-blue w-full sm:w-auto px-5 py-2.5 sm:py-2 text-xs font-black hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <Save size={15} />
-                    <span>حفظ التعديلات</span>
-                  </button>
-                </div>
-              </form>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">فترة الائتمان / السداد:</label>
+                <select
+                  value={editingCustomer.paymentTermsDays || 0}
+                  onChange={(e) => setEditingCustomer({
+                    ...editingCustomer, 
+                    paymentTermsDays: Number(e.target.value) || 0
+                  })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value="0">سداد فوري / نقدي (Cash on Delivery)</option>
+                  <option value="15">خلال 15 يوماً</option>
+                  <option value="30">خلال 30 يوماً (شهر)</option>
+                  <option value="45">خلال 45 يوماً</option>
+                  <option value="60">خلال 60 يوماً (شهران)</option>
+                  <option value="90">خلال 90 يوماً (3 أشهر)</option>
+                </select>
+              </div>
             </div>
-          </div>
-        </div>
+
+            <div>
+              <label className="block text-slate-600 font-bold mb-1">الرصيد الافتتاحي السابق ({currencySymbol}):</label>
+              <input
+                type="number"
+                step="0.01"
+                value={editingCustomer.openingBalance || 0}
+                onChange={(e) => setEditingCustomer({...editingCustomer, openingBalance: Number(e.target.value) || 0})}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
+              />
+              <span className="text-[10px] text-slate-400 mt-0.5 block">
+                القيمة الموجبة تعني رصيد مدين مستحق لنا، والقيمة السالبة تعني رصيد دائن للعميل.
+              </span>
+            </div>
+          </form>
+        </ResponsiveModal>
       )}
 
       {/* Print Header */}

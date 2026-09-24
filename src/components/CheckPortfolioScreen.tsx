@@ -931,9 +931,256 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
         </div>
       </div>
 
-      {/* Main Checks Table */}
+      {/* Main Checks Table & Mobile Cards */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile View (< md) */}
+        <div className="block md:hidden">
+          {filteredChecks.length > 0 && (
+            <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
+              <label className="flex items-center gap-2 font-bold text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filteredChecks.length > 0 && selectedCheckIds.length === filteredChecks.length}
+                  onChange={toggleSelectAll}
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+                <span>تحديد جميع الشيكات ({filteredChecks.length})</span>
+              </label>
+              {selectedCheckIds.length > 0 && (
+                <span className="text-[11px] font-mono font-bold text-blue-700">
+                  محدد: {selectedCheckIds.length}
+                </span>
+              )}
+            </div>
+          )}
+
+          {filteredChecks.length === 0 ? (
+            <div className="py-12 px-4 text-center text-slate-400">
+              <div className="flex flex-col items-center justify-center gap-2">
+                <Landmark size={36} className="text-slate-300" />
+                <p className="font-bold text-slate-600 text-sm">لا توجد شيكات مسجلة تطابق محددات البحث</p>
+                <p className="text-xs text-slate-400 max-w-sm">
+                  يمكنك إضافة شيك جديد يدوياً، أو تسجيل سند قبض / صرف بطريقة دفع شيك ليتم إدراجه تلقائياً.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsNewCheckModalOpen(true)}
+                  className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 cursor-pointer min-h-[40px]"
+                >
+                  تسجيل شيك الآن
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100 p-2 sm:p-3 space-y-2.5">
+              {filteredChecks.map((check) => {
+                const urgency = getCheckUrgencyInfo(check.dueDate, check.status);
+                const isIncoming = check.type === 'INCOMING';
+                const isSelected = selectedCheckIds.includes(check.id);
+
+                return (
+                  <div 
+                    key={check.id}
+                    className={`p-3 rounded-xl border transition-all space-y-2.5 ${
+                      isSelected 
+                        ? 'bg-blue-50/50 border-blue-300 ring-1 ring-blue-300' 
+                        : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    {/* Header Row */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectCheck(check.id)}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4 mt-0.5"
+                        />
+                        <div>
+                          <div className="flex items-center gap-1.5 font-mono font-bold">
+                            <span className="text-blue-700 text-sm">#{check.checkNumber}</span>
+                            {check.sourceVoucherNumber && (
+                              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-mono">
+                                {check.sourceVoucherNumber}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-sans mt-0.5">
+                            {check.bankName} {check.branchName ? `(${check.branchName})` : ''}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-left font-mono">
+                        <div className="font-black text-slate-900 text-sm">
+                          {Number(check.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          <span className="text-[10px] font-normal text-slate-500 mr-1">{currencySymbol}</span>
+                        </div>
+                        {isIncoming ? (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 mt-0.5">
+                            <ArrowDownLeft size={10} /> وارد (قبض)
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 mt-0.5">
+                            <ArrowUpRight size={10} /> صادر (صرف)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Partner & Details */}
+                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-xs space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400 text-[11px]">الطرف:</span>
+                        <span className="font-bold text-slate-800">{check.partnerName}</span>
+                      </div>
+                      {check.drawerName && check.drawerName !== check.partnerName && (
+                        <div className="flex justify-between items-center text-[11px]">
+                          <span className="text-slate-400">الساحب:</span>
+                          <span className="text-slate-600">{check.drawerName}</span>
+                        </div>
+                      )}
+                      {check.endorsedToVendorName && (
+                        <div className="flex justify-between items-center text-[11px] text-purple-700 font-bold">
+                          <span>مظهر لمورد:</span>
+                          <span>{check.endorsedToVendorName}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center text-[11px] pt-1 border-t border-slate-200/60">
+                        <span className="text-slate-400">تاريخ الاستحقاق:</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-slate-800">{check.dueDate || '-'}</span>
+                          <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] border font-bold ${urgency.badgeClass}`}>
+                            {urgency.labelAr}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status & Journal Entry */}
+                    <div className="flex items-center justify-between gap-2 text-xs pt-1">
+                      <div>
+                        {check.status === 'UNDER_COLLECTION' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                            <Clock size={11} /> تحت التحصيل ⏳
+                          </span>
+                        ) : check.status === 'CLEARED' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                            <CheckCircle2 size={11} /> تم الصرف والتحصيل ✅
+                          </span>
+                        ) : check.status === 'ENDORSED' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-300">
+                            <ArrowRightLeft size={11} /> مظهر لمورد 🔄
+                          </span>
+                        ) : check.status === 'BOUNCED' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-300">
+                            <XCircle size={11} /> مرتد ❌
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">
+                            ملغي
+                          </span>
+                        )}
+                      </div>
+
+                      {check.journalEntryNumber && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenJournalEntry(check.journalEntryNumber)}
+                          className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-200 flex items-center gap-1 cursor-pointer"
+                        >
+                          <FileText size={11} />
+                          <span>قيد #{check.journalEntryNumber}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Lifecycle Action Buttons */}
+                    <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-100 flex-wrap">
+                      {check.status === 'UNDER_COLLECTION' ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenClearModal(check)}
+                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1 shadow-xs cursor-pointer min-h-[36px]"
+                            title="تأكيد صرف وتحصيل الشيك بالبنك"
+                          >
+                            <CheckCircle2 size={13} />
+                            <span>صرف / تحصيل</span>
+                          </button>
+
+                          {check.type === 'INCOMING' && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEndorseModal(check)}
+                              className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold text-xs rounded-lg transition-colors flex items-center gap-1 cursor-pointer min-h-[36px]"
+                              title="تظهير وتحويل الشيك لمورد"
+                            >
+                              <ArrowRightLeft size={13} />
+                              <span>تظهير</span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenBounceModal(check)}
+                            className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-lg transition-colors flex items-center gap-1 cursor-pointer min-h-[36px]"
+                            title="تسجيل ارتداد الشيك"
+                          >
+                            <XCircle size={13} />
+                            <span>مرتد</span>
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleResetCheck(check)}
+                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg transition-colors flex items-center gap-1 cursor-pointer min-h-[36px]"
+                          title="التراجع عن الحالة وعكس القيد"
+                        >
+                          <Undo2 size={13} />
+                          <span>تراجع</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setPrintableSingleCheckVoucher(check)}
+                        className="p-2 text-slate-500 hover:text-blue-700 bg-slate-50 hover:bg-blue-50 border border-slate-200 rounded-lg transition-colors cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center"
+                        title="طباعة سند استلام الشيك"
+                      >
+                        <Printer size={15} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setViewCheckCard(check)}
+                        className="p-2 text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center"
+                        title="عرض بطاقة الشيك"
+                      >
+                        <Eye size={15} />
+                      </button>
+
+                      {check.status !== 'CLEARED' && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCheck(check.id)}
+                          className="p-2 text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center"
+                          title="حذف الشيك"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop View (>= md) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-right text-xs border-collapse">
             <thead>
               <tr className="bg-slate-100/80 text-slate-600 font-bold border-b border-slate-200 select-none">

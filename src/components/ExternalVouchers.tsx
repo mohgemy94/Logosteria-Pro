@@ -1082,16 +1082,16 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
         </div>
 
         {/* Global 3D Responsive Voucher Actions Toolbar */}
-        <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
+        <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
           {/* Cluster 1: Sequential Navigation & History */}
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 max-w-full">
             {/* 3D Navigation Bar */}
-            <div className="nav-3d-segment">
+            <div className="nav-3d-segment max-w-full overflow-x-auto no-scrollbar">
               <button
                 type="button"
                 onClick={handleNavigateFirst}
                 disabled={!canGoFirst}
-                className="p-1.5 text-slate-600 hover:text-blue-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 text-slate-600 hover:text-blue-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed min-h-[34px] flex items-center justify-center"
                 title="السند الأول (الأقدم)"
               >
                 <ChevronsRight size={15} />
@@ -1100,7 +1100,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 type="button"
                 onClick={handleNavigatePrevious}
                 disabled={!canGoPrevious}
-                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs min-h-[34px]"
                 title="تراجع للخلف - السند السابق"
               >
                 <ChevronRight size={14} className="text-slate-700" />
@@ -1108,7 +1108,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 <span className="sm:hidden">السابق</span>
               </button>
 
-              <div className="px-2 sm:px-2.5 py-1 text-[11px] font-mono font-black text-slate-800 bg-slate-100 rounded-lg mx-0.5 select-none border border-slate-200 whitespace-nowrap">
+              <div className="px-2 sm:px-2.5 py-1 text-[11px] font-mono font-black text-slate-800 bg-slate-100 rounded-lg mx-0.5 select-none border border-slate-200 whitespace-nowrap flex items-center">
                 {currentVoucherIndex >= 0 ? (
                   <span>{currentVoucherIndex + 1} / {chronologicallyOrderedVouchers.length}</span>
                 ) : (
@@ -1120,7 +1120,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 type="button"
                 onClick={handleNavigateNext}
                 disabled={!canGoNext}
-                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs min-h-[34px]"
                 title="تقديم للأمام - السند التالي"
               >
                 <span className="hidden sm:inline">تقديم للأمام</span>
@@ -1131,7 +1131,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 type="button"
                 onClick={handleNavigateLast}
                 disabled={!canGoLast}
-                className="p-1.5 text-slate-600 hover:text-blue-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 text-slate-600 hover:text-blue-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed min-h-[34px] flex items-center justify-center"
                 title="السند الأخير (الأحدث)"
               >
                 <ChevronsLeft size={15} />
@@ -1142,7 +1142,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
             <button 
               type="button" 
               onClick={() => setShowHistory(!showHistory)} 
-              className={`btn-3d h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black ${
+              className={`btn-3d h-9 sm:h-10 px-2 sm:px-3 text-xs font-black min-h-[38px] ${
                 showHistory ? 'btn-3d-active' : 'btn-3d-white'
               }`}
             >
@@ -1154,7 +1154,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
               <button
                 type="button"
                 onClick={handleNewVoucher}
-                className="btn-3d btn-3d-white h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black text-slate-700 hover:text-slate-900"
+                className="btn-3d btn-3d-white h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black text-slate-700 hover:text-slate-900 min-h-[38px]"
               >
                 <X size={14} /> <span>إلغاء التعديل</span>
               </button>
@@ -1167,7 +1167,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
             <button 
               type="button" 
               onClick={handleNewVoucher} 
-              className="btn-3d btn-3d-blue h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black"
+              className="btn-3d btn-3d-blue h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black min-h-[38px]"
             >
               <Plus size={15} />
               <span>سند جديد #{nextCalculatedVoucherNum}</span>
@@ -1178,7 +1178,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
               <button
                 type="button"
                 onClick={handlePostCurrentVoucher}
-                className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black"
+                className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black min-h-[38px]"
                 title="ترحيل السند في الحسابات العامة ودفتر الأستاذ وتحديث الأرصدة"
               >
                 <Send size={14} />
@@ -1189,7 +1189,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
               <button
                 type="button"
                 onClick={handleUnpostCurrentVoucher}
-                className="btn-3d btn-3d-amber h-9 sm:h-10 px-3 sm:px-4 text-xs font-black"
+                className="btn-3d btn-3d-amber h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black min-h-[38px]"
                 title="إلغاء ترحيل هذا السند وإعادته كمسودة مؤقتة وإيقاف أثره المحاسبي"
               >
                 <RotateCcw size={14} />
@@ -1198,14 +1198,14 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
             )}
 
             {/* Print & Preview 3D Controls */}
-            <div className="flex items-center gap-1.5 border-r border-slate-300/80 pr-2 mr-0.5">
+            <div className="flex items-center gap-1.5 border-r border-slate-300/80 pr-1.5 sm:pr-2 mr-0.5">
               <button
                 type="button"
                 onClick={() => {
                   setCustomPreviewData(null);
                   setShowPrintPreview(true);
                 }}
-                className="btn-3d btn-3d-slate h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black"
+                className="btn-3d btn-3d-slate h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black min-h-[38px]"
                 title="معاينة السند قبل الطباعة"
               >
                 <Eye size={14} />
@@ -1226,7 +1226,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
               <button
                 type="button"
                 onClick={() => setShowApprovalCenterModal(true)}
-                className="btn-3d btn-3d-indigo h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black flex items-center gap-1.5 shadow-sm relative"
+                className="btn-3d btn-3d-indigo h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black flex items-center gap-1.5 shadow-sm relative min-h-[38px]"
                 title="مركز دورة الموافقات والاعتماد الهرمية للسندات الكبيرة"
               >
                 <ShieldCheck size={15} className="text-indigo-200" />
@@ -1244,23 +1244,23 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
             <button
               type="button"
               onClick={() => setShowScannerModal(true)}
-              className="btn-3d btn-3d-purple h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black flex items-center gap-1.5 shadow-sm"
+              className="btn-3d btn-3d-purple h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black flex items-center gap-1.5 shadow-sm min-h-[38px]"
               title="فحص السند بالماسح الضوئي وقارئ الباركود للتحقق من صحته ومطابقته لمنع التلاعب"
             >
               <Scan size={14} className="text-purple-200 animate-pulse" />
               <span className="hidden sm:inline">ماسح الباركود & QR</span>
-              <span className="sm:hidden">ماسح ضوئي</span>
+              <span className="sm:hidden">ماسح</span>
             </button>
 
             {/* 3D Export Vouchers Button */}
             <button
               type="button"
               onClick={() => setShowExportModal(true)}
-              className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black flex items-center gap-1.5 shadow-sm"
+              className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black flex items-center gap-1.5 shadow-sm min-h-[38px]"
               title="تصدير كشوفات السندات والعمليات إلى Excel (.xlsx) و CSV و PDF"
             >
               <FileSpreadsheet size={15} className="text-emerald-200" />
-              <span className="hidden sm:inline">تصدير الكشوفات (Excel/PDF)</span>
+              <span className="hidden sm:inline">تصدير (Excel/PDF)</span>
               <span className="sm:hidden">تصدير</span>
             </button>
           </div>
@@ -1380,8 +1380,199 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
           {currentSavedList.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-4">لا توجد سندات محفوظة بعد. السند القادم سيبدأ برقم #{nextCalculatedVoucherNum}.</p>
           ) : (
-            <div className="overflow-x-auto max-h-72">
-              <table className="w-full text-right text-xs">
+            <>
+              {/* Mobile Cards View (< md) */}
+              <div className="md:hidden divide-y divide-slate-100 max-h-72 overflow-y-auto space-y-2">
+                {currentSavedList
+                  .filter(v => {
+                    if (historyPostingFilter === 'POSTED') return v.status === 'POSTED';
+                    if (historyPostingFilter === 'DRAFT') return v.status === 'DRAFT' || !v.status;
+                    return true;
+                  })
+                  .map(v => {
+                    const matchedPartner = allPartnersCombined.find(p => p.id === v.partnerId || p.name === v.partnerName);
+                    const isPosted = v.status === 'POSTED';
+                    return (
+                      <div
+                        key={v.id}
+                        className={`p-3 rounded-xl space-y-2 transition-all border ${
+                          editingVoucherId === v.id
+                            ? 'bg-blue-50/70 border-blue-300 ring-1 ring-blue-200'
+                            : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-100/60'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`font-mono font-black text-xs px-2 py-0.5 rounded-md border ${
+                              isReceipt ? 'text-emerald-900 bg-emerald-100/80 border-emerald-300' : 'text-rose-900 bg-rose-100/80 border-rose-300'
+                            }`}>
+                              #{v.voucherNumber}
+                            </span>
+                            <span className="text-[11px] text-slate-500 font-mono">{v.date}</span>
+                          </div>
+                          <div>
+                            {isPosted ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                <CheckCircle2 size={10} className="text-emerald-600" />
+                                <span>مرحل</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                <AlertTriangle size={10} className="text-amber-600" />
+                                <span>مسودة</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">الطرف:</span>
+                            <span className="font-semibold text-slate-800 truncate block">{v.partnerName}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">المبلغ:</span>
+                            <span className={`font-mono font-black ${isReceipt ? 'text-emerald-700' : 'text-rose-700'}`}>
+                              {v.amount.toLocaleString()} {currencySymbol}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">الحساب:</span>
+                            <span className="text-slate-700 truncate block">{getAccountDisplay(v.accountId)}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">طريقة الدفع:</span>
+                            <span className="text-slate-600 truncate block">
+                              {v.paymentMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : v.paymentMethod === 'CHECK' ? 'شيك' : v.paymentMethod === 'SPAN' ? 'مدى' : 'نقداً'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {v.description && (
+                          <p className="text-[11px] text-slate-600 truncate bg-white p-1.5 rounded-md border border-slate-200/70">
+                            {v.description}
+                          </p>
+                        )}
+
+                        {/* Actions row */}
+                        <div className="flex items-center justify-between pt-1 gap-2 border-t border-slate-200/60">
+                          <div className="flex items-center gap-1">
+                            {!isPosted ? (
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePostingFromList(v)}
+                                className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                              >
+                                <CheckCircle2 size={11} />
+                                <span>ترحيل</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePostingFromList(v)}
+                                className="flex items-center gap-1 px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                              >
+                                <RotateCcw size={11} />
+                                <span>إلغاء الترحيل</span>
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            {matchedPartner && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPartnerForStatement(matchedPartner)}
+                                className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg border border-emerald-200 cursor-pointer"
+                                title="كشف الحساب"
+                              >
+                                <FileText size={14} />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const matchedPartnerStmt = matchedPartner ? getPartnerAccountStatement(matchedPartner) : null;
+                                const remainingVal = matchedPartnerStmt ? Math.abs(matchedPartnerStmt.netBalance) : 0;
+                                const methodLabel = v.paymentMethod === 'BANK_TRANSFER'
+                                  ? `تحويل بنكي ${v.bankName ? '(' + v.bankName + ')' : ''} ${v.referenceNo ? 'مرجع: ' + v.referenceNo : ''}`
+                                  : v.paymentMethod === 'CHECK'
+                                    ? `شيك مصرفي ${v.bankName ? '(' + v.bankName + ')' : ''} ${v.referenceNo ? 'رقم: ' + v.referenceNo : ''} ${v.checkDueDate ? 'تاريخ الاستحقاق: ' + v.checkDueDate : ''}`
+                                    : v.paymentMethod === 'SPAN'
+                                      ? `شبكة / مدى ${v.referenceNo ? 'عملية #' + v.referenceNo : ''}`
+                                      : `${getAccountDisplay(v.accountId)} (نقداً)`;
+
+                                setCustomPreviewData({
+                                  title: isReceipt ? 'سند قبض مالي معتمد' : 'سند صرف مالي معتمد',
+                                  subtitle: isReceipt ? 'سند استلام نقدية من طرف خارجي ومرحل بالحسابات' : 'سند دفع نقدية لطرف خارجي ومرحل بالحسابات',
+                                  docNumber: v.voucherNumber,
+                                  date: v.date,
+                                  partnerName: v.partnerName,
+                                  partnerType: (matchedPartner?.type || v.partnerType || (isReceipt ? 'CUSTOMER' : 'VENDOR')),
+                                  paymentMethod: methodLabel,
+                                  notes: v.description,
+                                  grandTotal: v.amount,
+                                  subtotal: v.amount,
+                                  amount: v.amount,
+                                  paidAmount: v.amount,
+                                  remainingAmount: remainingVal,
+                                  remainingBalance: remainingVal,
+                                  voucherType: isReceipt ? 'RECEIPT' : 'PAYMENT',
+                                  amountInWords: tafqeet(v.amount),
+                                  allocatedInvoices: v.allocations?.map(a => ({
+                                    invoiceNumber: a.invoiceNumber,
+                                    allocatedAmount: a.allocatedAmount,
+                                    invoiceTotal: a.invoiceTotal,
+                                    remainingBalance: a.newRemaining,
+                                    date: a.date,
+                                    dueDate: a.dueDate
+                                  })),
+                                  items: [{
+                                    description: v.description || (isReceipt ? 'مقبوضات نقدية' : 'مدفوعات نقدية'),
+                                    quantity: 1,
+                                    unitPrice: v.amount,
+                                    taxRate: 0,
+                                    total: v.amount
+                                  }]
+                                });
+                                setShowPrintPreview(true);
+                              }}
+                              className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg border border-indigo-200 cursor-pointer"
+                              title="معاينة"
+                            >
+                              <Eye size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(v)}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg border border-blue-200 cursor-pointer"
+                              title="تعديل"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isPosted}
+                              onClick={() => handleDelete(v.id, v.voucherNumber)}
+                              className={`p-1.5 rounded-lg border transition-colors ${
+                                isPosted
+                                  ? 'bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed opacity-40'
+                                  : 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-200 cursor-pointer'
+                              }`}
+                              title={isPosted ? 'السند مرحل بالحسابات. يجب إلغاء الترحيل أولاً لحذفه' : 'حذف'}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {/* Desktop Table View (>= md) */}
+              <div className="hidden md:block overflow-x-auto max-h-72">
+                <table className="w-full text-right text-xs">
                 <thead>
                   <tr className="border-b border-slate-100 text-slate-400">
                     <th className="pb-2 font-semibold">رقم السند</th>
@@ -1653,7 +1844,8 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 </tbody>
               </table>
             </div>
-          )}
+          </>
+        )}
         </div>
       )}
 
@@ -1674,7 +1866,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
           )}
 
           {/* Top Parameters */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 p-6 border-b border-slate-200 bg-slate-100/90 print:bg-transparent print:p-0 print:mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 p-3.5 sm:p-5 md:p-6 border-b border-slate-200 bg-slate-100/90 print:bg-transparent print:p-0 print:mb-6">
             
             {/* Voucher Number */}
             <div className="flex flex-col gap-1.5">
@@ -1687,10 +1879,10 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                   type="button"
                   onClick={handleNavigatePrevious}
                   disabled={!canGoPrevious}
-                  className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                  className="w-10 h-10 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
                   title="تراجع للخلف (السابق)"
                 >
-                  <ChevronRight size={14} />
+                  <ChevronRight size={16} />
                 </button>
                 <div className="relative flex-1">
                   <input 
@@ -1699,7 +1891,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                     value={voucherNumber} 
                     onChange={e => setVoucherNumber(e.target.value)} 
                     disabled={isCurrentVoucherPosted}
-                    className={`w-full border-2 p-2.5 rounded-xl text-sm focus:outline-none font-mono font-black text-center shadow-2xs ${
+                    className={`w-full border-2 px-3 py-2 h-10 rounded-xl text-sm sm:text-base focus:outline-none font-mono font-black text-center shadow-2xs ${
                       isVoucherDuplicate 
                         ? 'border-red-500 text-red-700 bg-red-50/60' 
                         : isCurrentVoucherPosted
@@ -1712,9 +1904,9 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                       type="button"
                       onClick={() => setVoucherNumber(nextCalculatedVoucherNum)}
                       title="تطبيق الرقم التسلسلي التالي تلقائياً"
-                      className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] text-blue-700 hover:text-blue-900 bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded-lg font-black transition-colors cursor-pointer border border-blue-200"
+                      className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] text-blue-700 hover:text-blue-900 bg-blue-100 hover:bg-blue-200 px-2 py-0.5 rounded-lg font-black transition-colors cursor-pointer border border-blue-200"
                     >
-                      #{nextCalculatedVoucherNum}
+                      تلقائي
                     </button>
                   )}
                 </div>
@@ -1722,10 +1914,10 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                   type="button"
                   onClick={handleNavigateNext}
                   disabled={!canGoNext}
-                  className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                  className="w-10 h-10 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
                   title="تقديم للأمام (التالي)"
                 >
-                  <ChevronLeft size={14} />
+                  <ChevronLeft size={16} />
                 </button>
               </div>
               {isVoucherDuplicate && (
@@ -1754,14 +1946,14 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 value={date} 
                 onChange={e => setDate(e.target.value)} 
                 disabled={isCurrentVoucherPosted}
-                className={`border-2 p-2.5 rounded-xl text-sm font-bold shadow-2xs focus:outline-none focus:border-blue-600 ${
+                className={`border-2 px-3 py-2 h-10 rounded-xl text-sm sm:text-base font-bold shadow-2xs focus:outline-none focus:border-blue-600 ${
                   isCurrentVoucherPosted ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'border-slate-300 text-slate-800 bg-white'
                 }`} 
               />
             </div>
 
             {/* Partner Selector (Customer / Vendor) */}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 sm:col-span-2 md:col-span-1">
               <div className="flex items-center justify-between">
                 <label className={`text-xs font-black uppercase tracking-wide ${isReceipt ? 'text-emerald-950' : 'text-rose-950'}`}>
                   {isReceipt ? 'مستلم من (حساب العميل / المورد)' : 'يصرف إلى (حساب المورد / العميل)'}
@@ -1783,7 +1975,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 value={partnerId} 
                 onChange={e => setPartnerId(e.target.value)} 
                 disabled={isCurrentVoucherPosted}
-                className={`border-2 p-2.5 rounded-xl text-sm focus:outline-none font-bold shadow-2xs ${
+                className={`border-2 px-3 py-2 h-10 rounded-xl text-sm sm:text-base focus:outline-none font-bold shadow-2xs ${
                   isCurrentVoucherPosted
                     ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed'
                     : isReceipt 
@@ -1804,23 +1996,23 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
 
           {/* 🌟 LIVE PARTNER FINANCIAL BALANCE & IMPACT CARD 🌟 */}
           {selectedPartner && selectedPartnerStatement && balanceSimulation && (
-            <div className="p-4 bg-gradient-to-r from-slate-50 via-indigo-50/40 to-slate-50 border-b border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in duration-150">
+            <div className="p-3 sm:p-4 bg-gradient-to-r from-slate-50 via-indigo-50/40 to-slate-50 border-b border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 animate-in fade-in duration-150">
               <div className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 border ${
                   selectedPartner.type === 'CUSTOMER' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-purple-100 text-purple-700 border-purple-200'
                 }`}>
                   {selectedPartner.type === 'CUSTOMER' ? <Users size={18} /> : <Truck size={18} />}
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900 text-sm">{selectedPartner.name}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-slate-900 text-xs sm:text-sm">{selectedPartner.name}</span>
                     <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
                       selectedPartner.type === 'CUSTOMER' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-purple-50 text-purple-700 border-purple-200'
                     }`}>
                       {selectedPartner.type === 'CUSTOMER' ? 'حساب عميل' : 'حساب مورد'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] sm:text-xs text-slate-500 mt-0.5">
                     {selectedPartner.taxNumber && <span>الرقم الضريبي: {selectedPartner.taxNumber}</span>}
                     {selectedPartner.phone && <span>هاتف: {selectedPartner.phone}</span>}
                   </div>
@@ -1828,12 +2020,12 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
               </div>
 
               {/* Balances Comparison */}
-              <div className="flex flex-wrap items-center gap-3 md:gap-6 text-xs bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2.5 sm:gap-4 md:gap-6 text-xs bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200 shadow-2xs">
                 
                 {/* Current Balance */}
                 <div className="flex flex-col">
                   <span className="text-[10px] text-slate-400 font-medium">الرصيد الحالي قبل السند:</span>
-                  <span className="font-bold font-mono text-slate-800 text-sm">
+                  <span className="font-bold font-mono text-slate-800 text-xs sm:text-sm">
                     {balanceSimulation.currentBalanceFormatted} ريال
                   </span>
                   <span className="text-[10px] text-slate-500">{balanceSimulation.currentBalanceLabel}</span>
@@ -1844,7 +2036,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 {/* Voucher Impact */}
                 <div className="flex flex-col">
                   <span className="text-[10px] text-slate-400 font-medium">قيمة السند الحالي:</span>
-                  <span className={`font-bold font-mono text-sm ${isReceipt ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  <span className={`font-bold font-mono text-xs sm:text-sm ${isReceipt ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {isReceipt ? '+' : '-'} {balanceSimulation.voucherImpact.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
                   </span>
                   <span className="text-[10px] text-slate-500">{isReceipt ? 'مقبوضات تسدد الحساب' : 'مدفوعات تصرف للطرف'}</span>
@@ -1853,9 +2045,9 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 <span className="text-slate-300 font-light text-xl hidden sm:inline">←</span>
 
                 {/* Projected New Balance */}
-                <div className="flex flex-col bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+                <div className="flex flex-col bg-slate-50 p-1.5 rounded-lg border border-slate-100 col-span-2 sm:col-span-1">
                   <span className="text-[10px] text-indigo-600 font-bold">الرصيد المتوقع بعد الترحيل:</span>
-                  <span className="font-bold font-mono text-indigo-700 text-sm">
+                  <span className="font-bold font-mono text-indigo-700 text-xs sm:text-sm">
                     {balanceSimulation.projectedNetFormatted} {currencySymbol}
                   </span>
                   <span className="text-[10px] text-slate-600 font-semibold">{balanceSimulation.projectedLabel}</span>
@@ -1865,10 +2057,10 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 <button
                   type="button"
                   onClick={() => setSelectedPartnerForStatement(selectedPartner)}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                  className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition-colors cursor-pointer min-h-[38px]"
                   title="عرض كشف حساب تفصيلي كامل ومطابقة الحركات"
                 >
-                  <FileText size={13} />
+                  <FileText size={14} />
                   <span>كشف الحساب</span>
                 </button>
 
@@ -1877,10 +2069,10 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
           )}
 
           {/* Account / Safe / Bank & Amount Details */}
-          <div className="p-6 bg-white print:p-0 print:mb-6 flex flex-col gap-6">
+          <div className="p-3.5 sm:p-5 md:p-6 bg-white print:p-0 print:mb-6 flex flex-col gap-4 sm:gap-6">
             
             {/* Row 1: Account, Payment Method & Amount */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4 md:gap-6">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
                   <span>حساب الصندوق / البنك <span className="text-red-500">*</span></span>
@@ -1891,7 +2083,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                   value={accountId} 
                   onChange={e => setAccountId(e.target.value)} 
                   disabled={isCurrentVoucherPosted}
-                  className={`border-2 p-2.5 rounded-xl text-sm font-bold focus:outline-none focus:border-blue-600 shadow-2xs ${
+                  className={`border-2 p-2.5 rounded-xl text-sm font-bold focus:outline-none focus:border-blue-600 shadow-2xs min-h-[42px] ${
                     isCurrentVoucherPosted ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'border-slate-300 text-slate-900 bg-white'
                   }`}
                 >
@@ -1914,7 +2106,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                     type="button"
                     disabled={isCurrentVoucherPosted}
                     onClick={() => setPaymentMethod('CASH')}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer min-h-[40px] ${
                       paymentMethod === 'CASH'
                         ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -1928,7 +2120,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                     type="button"
                     disabled={isCurrentVoucherPosted}
                     onClick={() => setPaymentMethod('BANK_TRANSFER')}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer min-h-[40px] ${
                       paymentMethod === 'BANK_TRANSFER'
                         ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -1942,7 +2134,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                     type="button"
                     disabled={isCurrentVoucherPosted}
                     onClick={() => setPaymentMethod('CHECK')}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer min-h-[40px] ${
                       paymentMethod === 'CHECK'
                         ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -1956,7 +2148,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                     type="button"
                     disabled={isCurrentVoucherPosted}
                     onClick={() => setPaymentMethod('SPAN')}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer min-h-[40px] ${
                       paymentMethod === 'SPAN'
                         ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -1984,7 +2176,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                   onChange={e => setAmount(e.target.value)} 
                   disabled={isCurrentVoucherPosted}
                   placeholder="0.00" 
-                  className={`border-2 p-2.5 rounded-xl text-base focus:outline-none font-mono text-left font-black shadow-2xs ${
+                  className={`border-2 p-2.5 rounded-xl text-base sm:text-base focus:outline-none font-mono text-left font-black shadow-2xs min-h-[42px] ${
                     isCurrentVoucherPosted
                       ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed'
                       : isReceipt 
@@ -2002,7 +2194,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
 
             {/* Row 2: Conditional Payment Method Metadata */}
             {paymentMethod !== 'CASH' && (
-              <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/90 grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fadeIn">
+              <div className="p-3.5 sm:p-4 bg-slate-50/80 rounded-2xl border border-slate-200/90 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 animate-fadeIn">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                     <Hash size={13} className="text-indigo-600" />
@@ -2016,7 +2208,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                     onChange={e => setReferenceNo(e.target.value)}
                     disabled={isCurrentVoucherPosted}
                     placeholder={paymentMethod === 'CHECK' ? 'مثال: CHQ-98214' : 'مثال: TRF-2024-001'}
-                    className="border border-slate-300 p-2 rounded-xl text-sm font-mono font-bold focus:outline-none focus:border-blue-600 bg-white"
+                    className="border border-slate-300 p-2 sm:p-2.5 rounded-xl text-sm font-mono font-bold focus:outline-none focus:border-blue-600 bg-white min-h-[40px]"
                   />
                 </div>
 
@@ -2032,13 +2224,13 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                       onChange={e => setBankName(e.target.value)}
                       disabled={isCurrentVoucherPosted}
                       placeholder="مثال: مصرف الراجحي / البنك الأهلي"
-                      className="border border-slate-300 p-2 rounded-xl text-sm font-bold focus:outline-none focus:border-blue-600 bg-white"
+                      className="border border-slate-300 p-2 sm:p-2.5 rounded-xl text-sm font-bold focus:outline-none focus:border-blue-600 bg-white min-h-[40px]"
                     />
                   </div>
                 )}
 
                 {paymentMethod === 'CHECK' && (
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col gap-1.5 sm:col-span-2 md:col-span-1">
                     <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                       <Calendar size={13} className="text-amber-600" />
                       <span>تاريخ استحقاق وصرف الشيك</span>
@@ -2048,7 +2240,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                       value={checkDueDate}
                       onChange={e => setCheckDueDate(e.target.value)}
                       disabled={isCurrentVoucherPosted}
-                      className="border border-slate-300 p-2 rounded-xl text-sm font-mono font-bold focus:outline-none focus:border-blue-600 bg-white"
+                      className="border border-slate-300 p-2 sm:p-2.5 rounded-xl text-sm font-mono font-bold focus:outline-none focus:border-blue-600 bg-white min-h-[40px]"
                     />
                   </div>
                 )}
@@ -2056,7 +2248,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
             )}
 
             {/* Row 3: Cost Center, Balance & Description */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5 sm:gap-4 md:gap-6">
               {/* Cost Center Selector */}
               <div className="flex flex-col gap-1.5 md:col-span-2">
                 <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
@@ -2072,7 +2264,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                   value={costCenterId}
                   onChange={e => setCostCenterId(e.target.value)}
                   disabled={isCurrentVoucherPosted}
-                  className={`border-2 p-2.5 rounded-xl text-sm font-bold focus:outline-none focus:border-indigo-600 shadow-2xs ${
+                  className={`border-2 p-2.5 rounded-xl text-sm font-bold focus:outline-none focus:border-indigo-600 shadow-2xs min-h-[42px] ${
                     isCurrentVoucherPosted ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'border-slate-300 text-slate-900 bg-white'
                   }`}
                 >
@@ -2084,7 +2276,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                   ))}
                 </select>
                 {selectedCostCenter && (
-                  <div className="text-[11px] text-slate-600 flex items-center justify-between bg-indigo-50/70 px-2.5 py-1 rounded-lg border border-indigo-100">
+                  <div className="text-[11px] text-slate-600 flex flex-wrap items-center justify-between gap-1 bg-indigo-50/70 px-2.5 py-1.5 rounded-lg border border-indigo-100">
                     <span className="font-bold text-indigo-900">المسؤول: {selectedCostCenter.manager || 'غير محدد'}</span>
                     <span className="font-mono text-indigo-700">الميزانية: {selectedCostCenter.budget?.toLocaleString() || 0} {currencyFullNameAr}</span>
                   </div>
@@ -2101,7 +2293,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                     </span>
                   )}
                 </label>
-                <div className="border-2 border-slate-300 bg-slate-50 p-2.5 rounded-xl text-base font-mono text-left font-black text-slate-900 shadow-2xs flex justify-between items-center" dir="ltr">
+                <div className="border-2 border-slate-300 bg-slate-50 p-2.5 rounded-xl text-base font-mono text-left font-black text-slate-900 shadow-2xs flex justify-between items-center min-h-[42px]" dir="ltr">
                   <span>{balanceSimulation ? balanceSimulation.projectedNetFormatted : '0.00'}</span>
                   <span className="text-xs font-sans text-slate-500 font-bold">{currencyFullNameAr}</span>
                 </div>
@@ -2117,7 +2309,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                   onChange={e => setDescription(e.target.value)} 
                   disabled={isCurrentVoucherPosted}
                   placeholder={isReceipt ? 'سداد دفعة عن فاتورة مبيعات / دفعة مقدمة...' : 'سداد مستحقات توريد / دفعة لمورد...'} 
-                  className={`border-2 p-2.5 rounded-xl text-sm font-bold focus:outline-none focus:border-blue-600 shadow-2xs ${
+                  className={`border-2 p-2.5 rounded-xl text-sm sm:text-base font-bold focus:outline-none focus:border-blue-600 shadow-2xs min-h-[42px] ${
                     isCurrentVoucherPosted ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'border-slate-300 text-slate-900 bg-white'
                   }`} 
                 />
@@ -2126,18 +2318,18 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
 
             {/* 🌟 INVOICE MATCHING & ALLOCATION CARD (البند رقم 1: تسوية وتخصيص السندات على الفواتير) 🌟 */}
             {selectedPartner && (
-              <div className="p-4 sm:p-5 bg-slate-50/80 rounded-2xl border-2 border-slate-200 flex flex-col gap-3.5 shadow-2xs">
+              <div className="p-3.5 sm:p-5 bg-slate-50/80 rounded-2xl border-2 border-slate-200 flex flex-col gap-3.5 shadow-2xs">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black ${
+                  <div className="flex items-start sm:items-center gap-2.5">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black shrink-0 ${
                       isReceipt ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300'
                     }`}>
                       <SplitSquareVertical size={18} />
                     </div>
                     <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-sm font-black text-slate-900">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                        <h3 className="text-xs sm:text-sm font-black text-slate-900">
                           تسوية وتخصيص الفواتير المستحقة (Invoice Matching & Allocation)
                         </h3>
                         <span className="text-[10px] bg-indigo-50 text-indigo-800 px-2 py-0.5 rounded-full font-bold border border-indigo-200">
@@ -2156,12 +2348,12 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                   </div>
 
                   {/* Mode Selector */}
-                  <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs self-start sm:self-auto">
+                  <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs self-start sm:self-auto w-full sm:w-auto">
                     <button
                       type="button"
                       disabled={isCurrentVoucherPosted}
                       onClick={() => setAllocationMode('AUTO_ALLOCATE')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         allocationMode === 'AUTO_ALLOCATE'
                           ? (isReceipt ? 'bg-emerald-600 text-white shadow-xs' : 'bg-rose-600 text-white shadow-xs')
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -2177,7 +2369,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                         setAllocationMode('GENERAL_ON_ACCOUNT');
                         setAllocationsMap({});
                       }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         allocationMode === 'GENERAL_ON_ACCOUNT'
                           ? 'bg-slate-800 text-white shadow-xs'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -2200,14 +2392,14 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 )}
 
                 {allocationMode === 'GENERAL_ON_ACCOUNT' ? (
-                  <div className="p-4 bg-white rounded-xl border border-dashed border-slate-300 text-slate-600 text-xs font-medium flex items-center gap-2.5">
+                  <div className="p-3.5 sm:p-4 bg-white rounded-xl border border-dashed border-slate-300 text-slate-600 text-xs font-medium flex items-center gap-2.5">
                     <Banknote size={18} className="text-slate-400 shrink-0" />
                     <span>
                       تم اختيار تسجيل هذا السند كـ <strong>دفعة عامة على الحساب</strong> دون ربطه بفواتير معينة. سيتم تسجيل السند مباشرة وتحديث رصيد ({selectedPartner.name}) في دفتر الأستاذ وكشف الحساب.
                     </span>
                   </div>
                 ) : pendingInvoices.length === 0 ? (
-                  <div className="p-4 bg-emerald-50/70 rounded-xl border border-emerald-200 text-emerald-900 text-xs font-medium flex items-center gap-2.5">
+                  <div className="p-3.5 sm:p-4 bg-emerald-50/70 rounded-xl border border-emerald-200 text-emerald-900 text-xs font-medium flex items-center gap-2.5">
                     <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
                     <span>
                       لا توجد أي فواتير معلقة أو غير مسددة لـ ({selectedPartner.name}) حالياً. جميع فواتيره السابقة مسددة بالكامل، ومبلغ هذا السند سيقيد كدفعة في رصيده العام.
@@ -2217,24 +2409,24 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                   <div className="flex flex-col gap-3">
                     {/* Action buttons */}
                     {!isCurrentVoucherPosted && (
-                      <div className="flex flex-wrap items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                        <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200 shadow-2xs">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                           <span className="text-xs font-black text-slate-700">أدوات التسوية السريعة:</span>
                           <button
                             type="button"
                             onClick={handleDistributeFifo}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
                             title="توزيع المبلغ المدخل تلقائياً على الفواتير الأقدم أولاً (FIFO)"
                           >
                             <Sparkles size={13} className="text-indigo-600" />
-                            <span>توزيع تلقائي للمبلغ (FIFO - الأقدم أولاً)</span>
+                            <span>توزيع تلقائي (FIFO)</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={handleMatchVoucherToAllocations}
                             disabled={totalAllocatedAmount <= 0}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
                             title="ضبط خانة مبلغ السند ليطابق إجمالي الفواتير المخصصة"
                           >
                             <Calculator size={13} className="text-emerald-600" />
@@ -2244,7 +2436,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                           <button
                             type="button"
                             onClick={handlePayAllInvoices}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
                             title="تخصيص كامل المتبقي لجميع الفواتير دفعة واحدة وتحديث مبلغ السند"
                           >
                             <CheckCircle2 size={13} className="text-blue-600" />
@@ -2278,7 +2470,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                           <button
                             type="button"
                             onClick={handleMatchVoucherToAllocations}
-                            className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-black transition-colors cursor-pointer shadow-2xs"
+                            className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-black transition-colors cursor-pointer shadow-2xs"
                           >
                             مطابقة وتحديث مبلغ السند فوراً
                           </button>
@@ -2286,9 +2478,109 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                       </div>
                     )}
 
-                    {/* Table of Invoices */}
-                    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
-                      <table className="w-full text-right text-xs">
+                    {/* Responsive Mobile Cards (< sm) & Desktop Table (>= sm) */}
+                    {/* Mobile Invoices List (< sm) */}
+                    <div className="block sm:hidden space-y-2.5">
+                      {pendingInvoices.map(inv => {
+                        const currentAlloc = allocationsMap[inv.id] ?? allocationsMap[inv.invoiceNumber] ?? 0;
+                        const newRem = Math.max(0, inv.remainingBeforeCurrent - currentAlloc);
+                        const willBeFullyPaid = currentAlloc > 0 && newRem <= 0.001;
+                        const willBePartial = currentAlloc > 0 && newRem > 0.001;
+
+                        return (
+                          <div
+                            key={inv.id}
+                            className={`p-3 rounded-xl border transition-all ${
+                              currentAlloc > 0
+                                ? 'bg-indigo-50/50 border-indigo-300 shadow-xs'
+                                : 'bg-white border-slate-200'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-black text-xs text-blue-700">#{inv.invoiceNumber}</span>
+                                <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                                  inv.status === 'POSTED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                }`}>
+                                  {inv.status === 'POSTED' ? 'مرحلة' : 'مسودة'}
+                                </span>
+                              </div>
+                              <span className="text-[11px] font-mono text-slate-500">{inv.date || '-'}</span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50/80 p-2 rounded-lg mb-2">
+                              <div>
+                                <span className="text-[10px] text-slate-500 block">إجمالي الفاتورة:</span>
+                                <span className="font-mono font-bold text-slate-800" dir="ltr">
+                                  {inv.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-slate-500 block">المتبقي المستحق:</span>
+                                <span className="font-mono font-black text-rose-700" dir="ltr">
+                                  {inv.remainingBeforeCurrent.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Settlement Allocation Input */}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between text-[11px] font-bold">
+                                <span className="text-slate-700">المبلغ المخصص بالسند:</span>
+                                {willBeFullyPaid ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 font-black">
+                                    <CheckCircle2 size={11} className="text-emerald-600" />
+                                    <span>سداد كامل</span>
+                                  </span>
+                                ) : willBePartial ? (
+                                  <span className="text-[10px] text-blue-700 font-bold">
+                                    متبقي: {newRem.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  max={inv.remainingBeforeCurrent}
+                                  value={currentAlloc > 0 ? currentAlloc : ''}
+                                  onChange={e => handleSingleInvoiceAllocationChange(inv.id, parseFloat(e.target.value) || 0, inv.remainingBeforeCurrent)}
+                                  disabled={isCurrentVoucherPosted}
+                                  placeholder="0.00"
+                                  className={`flex-1 border-2 p-2 rounded-lg text-sm font-mono font-bold text-left focus:outline-none shadow-2xs min-h-[40px] ${
+                                    isCurrentVoucherPosted
+                                      ? 'bg-slate-100 border-slate-200 text-slate-500'
+                                      : currentAlloc > 0
+                                        ? 'border-indigo-500 bg-indigo-50/50 text-indigo-950 font-black'
+                                        : 'border-slate-300 bg-white text-slate-900 focus:border-indigo-600'
+                                  }`}
+                                  dir="ltr"
+                                />
+                                {!isCurrentVoucherPosted && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSettleInvoiceFull(inv.id, inv.remainingBeforeCurrent)}
+                                    className={`px-3 py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer whitespace-nowrap shadow-2xs min-h-[40px] ${
+                                      willBeFullyPaid
+                                        ? 'bg-emerald-600 text-white border-emerald-600'
+                                        : 'bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 text-slate-700 border-slate-200'
+                                    }`}
+                                  >
+                                    سداد كامل
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Table of Invoices (Desktop >= sm) */}
+                    <div className="hidden sm:block overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs -mx-1 sm:mx-0">
+                      <table className="w-full text-right text-xs min-w-[680px]">
                         <thead>
                           <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
                             <th className="py-2.5 px-3">رقم الفاتورة والحالة</th>
@@ -2296,7 +2588,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                             <th className="py-2.5 px-3 text-left">إجمالي الفاتورة</th>
                             <th className="py-2.5 px-3 text-left">المسدد سابقاً</th>
                             <th className="py-2.5 px-3 text-left">المتبقي المستحق</th>
-                            <th className="py-2.5 px-3 w-48 text-center">المبلغ المخصص بالسند</th>
+                            <th className="py-2.5 px-3 w-44 text-center">المبلغ المخصص بالسند</th>
                             <th className="py-2.5 px-3 text-center">الرصيد والحالة بعد التسوية</th>
                           </tr>
                         </thead>
@@ -2359,7 +2651,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                                       onChange={e => handleSingleInvoiceAllocationChange(inv.id, parseFloat(e.target.value) || 0, inv.remainingBeforeCurrent)}
                                       disabled={isCurrentVoucherPosted}
                                       placeholder="0.00"
-                                      className={`w-28 border-2 p-1.5 rounded-lg text-xs font-mono font-bold text-left focus:outline-none shadow-2xs ${
+                                      className={`w-28 border-2 p-1.5 rounded-lg text-xs font-mono font-bold text-left focus:outline-none shadow-2xs min-h-[36px] ${
                                         isCurrentVoucherPosted
                                           ? 'bg-slate-100 border-slate-200 text-slate-500'
                                           : currentAlloc > 0
@@ -2372,7 +2664,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                                       <button
                                         type="button"
                                         onClick={() => handleSettleInvoiceFull(inv.id, inv.remainingBeforeCurrent)}
-                                        className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer whitespace-nowrap shadow-2xs ${
+                                        className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer whitespace-nowrap shadow-2xs min-h-[36px] ${
                                           willBeFullyPaid
                                             ? 'bg-emerald-600 text-white border-emerald-600'
                                             : 'bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 text-slate-700 border-slate-200'
@@ -2412,10 +2704,10 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                     </div>
 
                     {/* Summary row */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
                       <div className="flex flex-col">
                         <span className="text-[11px] font-bold text-slate-500">إجمالي المخصص للفواتير:</span>
-                        <span className="text-base font-mono font-black text-indigo-700">
+                        <span className="text-sm sm:text-base font-mono font-black text-indigo-700">
                           {totalAllocatedAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencyFullNameAr}
                         </span>
                         <span className="text-[10px] text-slate-400">
@@ -2425,7 +2717,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
 
                       <div className="flex flex-col">
                         <span className="text-[11px] font-bold text-slate-500">مبلغ السند الإجمالي:</span>
-                        <span className={`text-base font-mono font-black ${
+                        <span className={`text-sm sm:text-base font-mono font-black ${
                           isReceipt ? 'text-emerald-700' : 'text-rose-700'
                         }`}>
                           {voucherNumericAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencyFullNameAr}
@@ -2435,7 +2727,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
 
                       <div className="flex flex-col">
                         <span className="text-[11px] font-bold text-slate-500">المتبقي كدفعة عامة على الحساب:</span>
-                        <span className="text-base font-mono font-black text-slate-800">
+                        <span className="text-sm sm:text-base font-mono font-black text-slate-800">
                           {unallocatedAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencyFullNameAr}
                         </span>
                         <span className="text-[10px] text-slate-400">
@@ -2451,13 +2743,13 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
           </div>
           
           {/* Live Anti-Tamper Barcode & QR Verification Banner */}
-          <div className="p-3.5 bg-slate-50 border-t border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs print:hidden">
+          <div className="p-3 sm:p-3.5 bg-slate-50 border-t border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs print:hidden">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-purple-100 text-purple-700 rounded-xl">
+              <div className="p-2 bg-purple-100 text-purple-700 rounded-xl shrink-0">
                 <Scan size={18} />
               </div>
               <div>
-                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                <div className="font-bold text-slate-800 flex flex-wrap items-center gap-1.5">
                   <span>المطابقة الضوئية لمنع التلاعب (Anti-Tamper Barcode & QR)</span>
                   <span className="text-[10px] bg-purple-100 text-purple-900 border border-purple-200 px-1.5 py-0.5 rounded font-mono font-bold">
                     #{voucherNumber}
@@ -2468,7 +2760,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs">
+            <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs self-center sm:self-auto">
               <div className="h-8 flex items-center overflow-hidden">
                 <BarcodeImage value={voucherNumber || nextCalculatedVoucherNum} height={26} barWidth={1.05} fontSize={7} />
               </div>
@@ -2481,7 +2773,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
           </div>
 
           {/* Action Bar */}
-          <div className="bg-slate-900 text-white p-5 sm:p-6 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0 print:hidden border-t-2 border-slate-800">
+          <div className="bg-slate-900 text-white p-4 sm:p-5 md:p-6 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0 print:hidden border-t-2 border-slate-800">
             <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
               <div>
                 <div className="flex items-center gap-2 mb-0.5">
@@ -2496,7 +2788,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                     </span>
                   )}
                 </div>
-                <span className={`text-2xl sm:text-3xl font-mono font-black ${
+                <span className={`text-xl sm:text-2xl md:text-3xl font-mono font-black ${
                   isReceipt ? 'text-emerald-400' : 'text-rose-400'
                 }`}>
                   {amount ? Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
@@ -2505,14 +2797,14 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto justify-stretch sm:justify-end">
               <button
                 type="button"
                 onClick={() => {
                   setCustomPreviewData(null);
                   setShowPrintPreview(true);
                 }}
-                className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded-xl font-bold text-xs border border-slate-700 transition-colors cursor-pointer"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded-xl font-bold text-xs border border-slate-700 transition-colors cursor-pointer min-h-[42px]"
               >
                 <Eye size={15} />
                 <span>معاينة الطباعة</span>
@@ -2522,11 +2814,11 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
               {!isCurrentVoucherPosted && (
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-800 hover:bg-amber-950/40 text-amber-300 hover:text-amber-200 border border-amber-500/40 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-800 hover:bg-amber-950/40 text-amber-300 hover:text-amber-200 border border-amber-500/40 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs min-h-[42px]"
                   title="حفظ السند كمسودة غير مرحلة بانتظار الترحيل اليدوي"
                 >
                   <Save size={15} />
-                  <span>حفظ كمسودة (غير مرحل)</span>
+                  <span>حفظ كمسودة</span>
                 </button>
               )}
 
@@ -2535,7 +2827,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 <button
                   type="button"
                   onClick={handleUnpostCurrentVoucher}
-                  className="flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl shadow-lg shadow-amber-950/40 text-sm font-black transition-all cursor-pointer border border-amber-400/40"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl shadow-lg shadow-amber-950/40 text-sm font-black transition-all cursor-pointer border border-amber-400/40 min-h-[42px]"
                   title="إلغاء ترحيل هذا السند فوراً وإعادته كمسودة وإيقاف أثره المالي"
                 >
                   <RotateCcw size={17} />
@@ -2548,7 +2840,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                 <button 
                   type="button"
                   onClick={handlePostCurrentVoucher}
-                  className={`flex items-center justify-center gap-2 px-6 py-3 text-white rounded-xl shadow-lg text-sm font-black transition-all cursor-pointer border ${
+                  className={`w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-white rounded-xl shadow-lg text-sm font-black transition-all cursor-pointer border min-h-[42px] ${
                     isReceipt
                       ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 border-emerald-400/30 shadow-emerald-950/40'
                       : 'bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 hover:from-rose-500 hover:to-red-600 border-rose-400/30 shadow-rose-950/40'

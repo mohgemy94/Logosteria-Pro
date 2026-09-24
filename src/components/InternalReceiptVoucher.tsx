@@ -642,16 +642,16 @@ export default function InternalReceiptVoucher() {
         </div>
 
         {/* Global 3D Responsive Voucher Actions Toolbar */}
-        <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
+        <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
           {/* Cluster 1: Sequential Navigation & History */}
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 max-w-full">
             {/* 3D Navigation Bar */}
-            <div className="nav-3d-segment">
+            <div className="nav-3d-segment max-w-full overflow-x-auto no-scrollbar">
               <button
                 type="button"
                 onClick={handleNavigateFirst}
                 disabled={!canGoFirst}
-                className="p-1.5 text-slate-600 hover:text-teal-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 text-slate-600 hover:text-teal-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed min-h-[34px] flex items-center justify-center"
                 title="السند الأول (الأقدم)"
               >
                 <ChevronsRight size={15} />
@@ -660,7 +660,7 @@ export default function InternalReceiptVoucher() {
                 type="button"
                 onClick={handleNavigatePrevious}
                 disabled={!canGoPrevious}
-                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs min-h-[34px]"
                 title="تراجع للخلف - السند السابق"
               >
                 <ChevronRight size={14} className="text-slate-700" />
@@ -668,7 +668,7 @@ export default function InternalReceiptVoucher() {
                 <span className="sm:hidden">السابق</span>
               </button>
 
-              <div className="px-2 sm:px-2.5 py-1 text-[11px] font-mono font-black text-teal-950 bg-teal-50 rounded-lg mx-0.5 select-none border border-teal-200 whitespace-nowrap">
+              <div className="px-2 sm:px-2.5 py-1 text-[11px] font-mono font-black text-teal-950 bg-teal-50 rounded-lg mx-0.5 select-none border border-teal-200 whitespace-nowrap flex items-center">
                 {currentVoucherIndex >= 0 ? (
                   <span>{currentVoucherIndex + 1} / {chronologicallyOrderedVouchers.length}</span>
                 ) : (
@@ -680,7 +680,7 @@ export default function InternalReceiptVoucher() {
                 type="button"
                 onClick={handleNavigateNext}
                 disabled={!canGoNext}
-                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs min-h-[34px]"
                 title="تقديم للأمام - السند التالي"
               >
                 <span className="hidden sm:inline">تقديم للأمام</span>
@@ -691,7 +691,7 @@ export default function InternalReceiptVoucher() {
                 type="button"
                 onClick={handleNavigateLast}
                 disabled={!canGoLast}
-                className="p-1.5 text-slate-600 hover:text-teal-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 text-slate-600 hover:text-teal-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed min-h-[34px] flex items-center justify-center"
                 title="السند الأخير (الأحدث)"
               >
                 <ChevronsLeft size={15} />
@@ -702,7 +702,7 @@ export default function InternalReceiptVoucher() {
             <button 
               type="button" 
               onClick={() => setShowHistory(!showHistory)} 
-              className={`btn-3d h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black ${
+              className={`btn-3d h-9 sm:h-10 px-2 sm:px-3 text-xs font-black min-h-[38px] ${
                 showHistory ? 'btn-3d-active' : 'btn-3d-white'
               }`}
             >
@@ -714,7 +714,7 @@ export default function InternalReceiptVoucher() {
               <button
                 type="button"
                 onClick={handleNewVoucher}
-                className="btn-3d btn-3d-white h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black text-slate-700 hover:text-slate-900"
+                className="btn-3d btn-3d-white h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black text-slate-700 hover:text-slate-900 min-h-[38px]"
               >
                 <X size={14} /> <span>إلغاء التعديل</span>
               </button>
@@ -727,7 +727,7 @@ export default function InternalReceiptVoucher() {
             <button 
               type="button" 
               onClick={handleNewVoucher} 
-              className="btn-3d btn-3d-teal h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black"
+              className="btn-3d btn-3d-teal h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black min-h-[38px]"
             >
               <Plus size={15} />
               <span>سند جديد #{nextCalculatedVoucherNum}</span>
@@ -738,7 +738,7 @@ export default function InternalReceiptVoucher() {
               <button
                 type="button"
                 onClick={handlePostCurrentVoucher}
-                className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black"
+                className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black min-h-[38px]"
                 title="ترحيل السند في الحسابات العامة ودفتر الأستاذ وتحديث الأرصدة"
               >
                 <Send size={14} />
@@ -749,7 +749,7 @@ export default function InternalReceiptVoucher() {
               <button
                 type="button"
                 onClick={handleUnpostCurrentVoucher}
-                className="btn-3d btn-3d-amber h-9 sm:h-10 px-3 sm:px-4 text-xs font-black"
+                className="btn-3d btn-3d-amber h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black min-h-[38px]"
                 title="إلغاء ترحيل هذا السند وإعادته كمسودة مؤقتة وإيقاف أثره المحاسبي"
               >
                 <RotateCcw size={14} />
@@ -758,19 +758,18 @@ export default function InternalReceiptVoucher() {
             )}
 
             {/* Print & Preview Group */}
-            <div className="flex items-center gap-1.5 border-r border-slate-300/80 pr-2 mr-0.5">
+            <div className="flex items-center gap-1.5 border-r border-slate-300/80 pr-1.5 sm:pr-2 mr-0.5">
               <button
                 type="button"
                 onClick={() => {
                   setCustomPreviewData(null);
                   setShowPrintPreview(true);
                 }}
-                className="btn-3d btn-3d-slate h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black"
+                className="btn-3d btn-3d-slate h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black min-h-[38px]"
                 title="معاينة سند القبض الداخلي قبل الطباعة"
               >
                 <Eye size={14} />
-                <span className="hidden sm:inline">معاينة قبل الطباعة</span>
-                <span className="sm:hidden">معاينة</span>
+                <span className="hidden sm:inline">معاينة</span>
               </button>
 
               <PrintDropdown 
@@ -785,23 +784,23 @@ export default function InternalReceiptVoucher() {
             <button
               type="button"
               onClick={() => setShowScannerModal(true)}
-              className="btn-3d btn-3d-purple h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black flex items-center gap-1.5 shadow-sm"
+              className="btn-3d btn-3d-purple h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black flex items-center gap-1.5 shadow-sm min-h-[38px]"
               title="فحص السند بالماسح الضوئي وقارئ الباركود للتحقق من صحته ومطابقته لمنع التلاعب"
             >
               <Scan size={14} className="text-purple-200 animate-pulse" />
               <span className="hidden sm:inline">ماسح الباركود & QR</span>
-              <span className="sm:hidden">ماسح ضوئي</span>
+              <span className="sm:hidden">ماسح</span>
             </button>
 
             {/* 3D Export Vouchers Button */}
             <button
               type="button"
               onClick={() => setShowExportModal(true)}
-              className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black flex items-center gap-1.5 shadow-sm"
+              className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black flex items-center gap-1.5 shadow-sm min-h-[38px]"
               title="تصدير كشوفات السندات والعمليات إلى Excel (.xlsx) و CSV و PDF"
             >
               <FileSpreadsheet size={15} className="text-emerald-200" />
-              <span className="hidden sm:inline">تصدير الكشوفات (Excel/PDF)</span>
+              <span className="hidden sm:inline">تصدير (Excel/PDF)</span>
               <span className="sm:hidden">تصدير</span>
             </button>
 
@@ -810,7 +809,7 @@ export default function InternalReceiptVoucher() {
               <button
                 type="button"
                 onClick={() => setShowApprovalCenterModal(true)}
-                className="btn-3d btn-3d-amber h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black flex items-center gap-1.5 shadow-sm relative"
+                className="btn-3d btn-3d-amber h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black flex items-center gap-1.5 shadow-sm relative min-h-[38px]"
                 title="مركز اعتمادات وموافقات الإدارة المالية"
               >
                 <UserCheck size={15} className="text-amber-200" />
@@ -858,207 +857,352 @@ export default function InternalReceiptVoucher() {
           {savedVouchers.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-4">لا توجد سندات قبض داخلية محفوظة بعد. السند القادم سيبدأ برقم #{nextCalculatedVoucherNum}.</p>
           ) : (
-            <div className="overflow-x-auto max-h-56">
-              <table className="w-full text-right text-xs">
-                <thead>
-                  <tr className="border-b border-slate-100 text-slate-400">
-                    <th className="pb-2 font-semibold">رقم السند</th>
-                    <th className="pb-2 font-semibold text-center">حالة الترحيل</th>
-                    <th className="pb-2 font-semibold">المودع فيه (المستلم)</th>
-                    <th className="pb-2 font-semibold">مركز التكلفة</th>
-                    <th className="pb-2 font-semibold">المسلّم / المصدر</th>
-                    <th className="pb-2 font-semibold">نوع التوريد</th>
-                    <th className="pb-2 font-semibold">المبلغ</th>
-                    <th className="pb-2 font-semibold">التاريخ</th>
-                    <th className="pb-2 font-semibold">البيان</th>
-                    <th className="pb-2 font-semibold text-center">إجراءات</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {savedVouchers.map(v => (
-                    <tr key={v.id} className={`hover:bg-slate-50 transition-colors ${editingVoucherId === v.id ? 'bg-teal-50/60' : ''}`}>
-                      <td className="py-2 font-mono font-bold text-teal-700">#{v.voucherNumber}</td>
-                      <td className="py-2 text-center">
+            <>
+              {/* Mobile Cards View (< md) */}
+              <div className="md:hidden divide-y divide-slate-100 max-h-72 overflow-y-auto space-y-2">
+                {savedVouchers.map(v => (
+                  <div 
+                    key={v.id} 
+                    className={`p-3 rounded-xl space-y-2 transition-all border ${
+                      editingVoucherId === v.id 
+                        ? 'bg-teal-50/70 border-teal-300 ring-1 ring-teal-200' 
+                        : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-100/60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-black text-teal-900 text-xs bg-teal-100/80 border border-teal-300 px-2 py-0.5 rounded-md">
+                          #{v.voucherNumber}
+                        </span>
+                        <span className="text-[11px] text-slate-500 font-mono">{v.date}</span>
+                      </div>
+                      <div>
                         {v.status === 'POSTED' ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                            <CheckCircle2 size={11} className="text-emerald-600" />
-                            <span>مرحل بالحسابات</span>
+                            <CheckCircle2 size={10} className="text-emerald-600" />
+                            <span>مرحل</span>
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                            <AlertTriangle size={11} className="text-amber-600" />
-                            <span>مسودة (غير مرحل)</span>
+                            <AlertTriangle size={10} className="text-amber-600" />
+                            <span>مسودة</span>
                           </span>
                         )}
+                      </div>
+                    </div>
 
-                        {systemSettings?.approvalWorkflow?.enabled && (
-                          <div className="mt-1">
-                            {v.approvalStatus === 'APPROVED' ? (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <span>معتمد ({v.approvalRole || 'الإدارة'})</span>
-                              </span>
-                            ) : v.approvalStatus === 'REJECTED' ? (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                <span>مرفوض</span>
-                              </span>
-                            ) : v.approvalStatus === 'PENDING_APPROVAL' ? (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200 animate-pulse">
-                                <span>بانتظار الاعتماد</span>
-                              </span>
-                            ) : (
-                              <span className="text-[9px] text-slate-400">لا يتطلب</span>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-2 text-slate-700 font-medium">
-                        <div className="flex flex-col gap-0.5">
-                          <span>{getAccountName(v.toAccountId)}</span>
-                          <div className="flex items-center gap-1 text-[10px]">
-                            {v.paymentMethod === 'BANK_TRANSFER' ? (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
-                                <Landmark size={10} />
-                                <span>تحويل بنكي {v.referenceNo ? `#${v.referenceNo}` : ''}</span>
-                              </span>
-                            ) : v.paymentMethod === 'CHECK' ? (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 font-bold border border-amber-200">
-                                <FileText size={10} />
-                                <span>شيك {v.referenceNo ? `#${v.referenceNo}` : ''}</span>
-                              </span>
-                            ) : v.paymentMethod === 'SPAN' ? (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 font-bold border border-purple-200">
-                                <CreditCard size={10} />
-                                <span>مدى {v.referenceNo ? `#${v.referenceNo}` : ''}</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
-                                <Banknote size={10} />
-                                <span>نقداً</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-2">
-                        {v.costCenterId ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" title={v.costCenterName || v.costCenterId}>
-                            <Building2 size={10} className="text-indigo-600" />
-                            <span className="max-w-[110px] truncate">{v.costCenterName || v.costCenterId}</span>
-                          </span>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block">المودع فيه:</span>
+                        <span className="font-semibold text-slate-800 truncate block">{getAccountName(v.toAccountId)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block">المبلغ:</span>
+                        <span className="font-mono font-black text-emerald-700">{v.amount.toLocaleString()} {currencySymbol}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block">المسلّم:</span>
+                        <span className="text-slate-700 truncate block">{v.receivedFrom || 'جهة داخلية'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block">نوع التوريد:</span>
+                        <span className="text-slate-600 truncate block">{RECEIPT_SOURCE_TYPES.find(s => s.id === v.sourceType)?.label || v.sourceType}</span>
+                      </div>
+                    </div>
+
+                    {v.description && (
+                      <p className="text-[11px] text-slate-600 truncate bg-white p-1.5 rounded-md border border-slate-200/70">
+                        {v.description}
+                      </p>
+                    )}
+
+                    {/* Actions row */}
+                    <div className="flex items-center justify-between pt-1 gap-2 border-t border-slate-200/60">
+                      <div className="flex items-center gap-1">
+                        {v.status === 'POSTED' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePostingFromList(v)}
+                            className="flex items-center gap-1 px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            <RotateCcw size={11} />
+                            <span>إلغاء الترحيل</span>
+                          </button>
                         ) : (
-                          <span className="text-[10px] text-slate-400 font-medium">عام</span>
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePostingFromList(v)}
+                            className="flex items-center gap-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                          >
+                            <Send size={11} />
+                            <span>ترحيل</span>
+                          </button>
                         )}
-                      </td>
-                      <td className="py-2 text-slate-700 font-medium">{v.receivedFrom}</td>
-                      <td className="py-2 text-slate-500">
-                        {RECEIPT_SOURCE_TYPES.find(s => s.id === v.sourceType)?.label || v.sourceType}
-                      </td>
-                      <td className="py-2 font-mono font-bold text-emerald-700">{v.amount.toLocaleString()} {currencySymbol}</td>
-                      <td className="py-2 text-slate-500">{v.date}</td>
-                      <td className="py-2 text-slate-500 truncate max-w-xs">{v.description}</td>
-                      <td className="py-2 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {v.status === 'POSTED' ? (
-                            <button
-                              type="button"
-                              onClick={() => handleTogglePostingFromList(v)}
-                              className="flex items-center gap-1 px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded text-[11px] font-bold cursor-pointer transition-colors"
-                              title="إلغاء الترحيل وإعادته كمسودة مؤقتة"
-                            >
-                              <RotateCcw size={11} />
-                              <span>إلغاء الترحيل</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleTogglePostingFromList(v)}
-                              className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold cursor-pointer transition-colors shadow-2xs"
-                              title="ترحيل السند في الحسابات العامة"
-                            >
-                              <Send size={11} />
-                              <span>ترحيل</span>
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCustomPreviewData({
-                                title: 'سند قبض داخلي',
-                                subtitle: 'سند توريد واستلام نقدية لحسابات وصناديق المنشأة الداخلية',
-                                docNumber: v.voucherNumber,
-                                date: v.date,
-                                partnerName: `المسلّم: ${v.receivedFrom} | المستلم: ${v.receivedBy}`,
-                                paymentMethod: v.paymentMethod === 'CASH' ? 'نقداً (خزينة)' : v.paymentMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك مصرفي',
-                                notes: v.description,
-                                grandTotal: v.amount,
-                                subtotal: v.amount,
-                                amount: v.amount,
-                                paidAmount: v.amount,
-                                voucherType: 'RECEIPT',
-                                amountInWords: tafqeet(v.amount),
-                                items: [{
-                                  description: `قبض داخلي لحساب (${getAccountName(v.toAccountId)}) - من: ${v.receivedFrom} [${RECEIPT_SOURCE_TYPES.find(s => s.id === v.sourceType)?.label || ''}]`,
-                                  quantity: 1,
-                                  unitPrice: v.amount,
-                                  taxRate: 0,
-                                  total: v.amount
-                                }]
-                              });
-                              setShowPrintPreview(true);
-                            }}
-                            className="p-1 text-indigo-600 hover:bg-indigo-50 rounded cursor-pointer"
-                            title="معاينة السند الداخلي"
-                          >
-                            <Eye size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleEdit(v)}
-                            className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
-                            title="تعديل السند"
-                          >
-                            <Edit3 size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={v.status === 'POSTED'}
-                            onClick={() => handleDelete(v.id, v.voucherNumber)}
-                            className={`p-1 rounded ${
-                              v.status === 'POSTED'
-                                ? 'text-slate-300 cursor-not-allowed opacity-40'
-                                : 'text-red-600 hover:bg-red-50 cursor-pointer'
-                            }`}
-                            title={v.status === 'POSTED' ? 'السند مرحل بالحسابات. يجب إلغاء الترحيل أولاً لحذفه' : 'حذف السند'}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </td>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomPreviewData({
+                              title: 'سند قبض داخلي',
+                              subtitle: 'سند توريد واستلام نقدية لحسابات وصناديق المنشأة الداخلية',
+                              docNumber: v.voucherNumber,
+                              date: v.date,
+                              partnerName: `المسلّم: ${v.receivedFrom} | المستلم: ${v.receivedBy}`,
+                              paymentMethod: v.paymentMethod === 'CASH' ? 'نقداً (خزينة)' : v.paymentMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك مصرفي',
+                              notes: v.description,
+                              grandTotal: v.amount,
+                              subtotal: v.amount,
+                              amount: v.amount,
+                              paidAmount: v.amount,
+                              voucherType: 'RECEIPT',
+                              amountInWords: tafqeet(v.amount),
+                              items: [{
+                                description: `قبض داخلي لحساب (${getAccountName(v.toAccountId)}) - من: ${v.receivedFrom} [${RECEIPT_SOURCE_TYPES.find(s => s.id === sourceType)?.label || ''}]`,
+                                quantity: 1,
+                                unitPrice: v.amount,
+                                taxRate: 0,
+                                total: v.amount
+                              }]
+                            });
+                            setShowPrintPreview(true);
+                          }}
+                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg border border-indigo-200 cursor-pointer"
+                          title="معاينة السند"
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(v)}
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg border border-blue-200 cursor-pointer"
+                          title="تعديل السند"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={v.status === 'POSTED'}
+                          onClick={() => handleDelete(v.id, v.voucherNumber)}
+                          className={`p-1.5 rounded-lg border transition-colors ${
+                            v.status === 'POSTED'
+                              ? 'text-slate-300 border-slate-200 opacity-40 cursor-not-allowed'
+                              : 'text-red-600 hover:bg-red-50 border-red-200 cursor-pointer'
+                          }`}
+                          title={v.status === 'POSTED' ? 'السند مرحل بالحسابات. يجب إلغاء الترحيل أولاً لحذفه' : 'حذف السند'}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table View (>= md) */}
+              <div className="hidden md:block overflow-x-auto max-h-56">
+                <table className="w-full text-right text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-slate-400">
+                      <th className="pb-2 font-semibold">رقم السند</th>
+                      <th className="pb-2 font-semibold text-center">حالة الترحيل</th>
+                      <th className="pb-2 font-semibold">المودع فيه (المستلم)</th>
+                      <th className="pb-2 font-semibold">مركز التكلفة</th>
+                      <th className="pb-2 font-semibold">المسلّم / المصدر</th>
+                      <th className="pb-2 font-semibold">نوع التوريد</th>
+                      <th className="pb-2 font-semibold">المبلغ</th>
+                      <th className="pb-2 font-semibold">التاريخ</th>
+                      <th className="pb-2 font-semibold">البيان</th>
+                      <th className="pb-2 font-semibold text-center">إجراءات</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {savedVouchers.map(v => (
+                      <tr key={v.id} className={`hover:bg-slate-50 transition-colors ${editingVoucherId === v.id ? 'bg-teal-50/60' : ''}`}>
+                        <td className="py-2 font-mono font-bold text-teal-700">#{v.voucherNumber}</td>
+                        <td className="py-2 text-center">
+                          {v.status === 'POSTED' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              <CheckCircle2 size={11} className="text-emerald-600" />
+                              <span>مرحل بالحسابات</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                              <AlertTriangle size={11} className="text-amber-600" />
+                              <span>مسودة (غير مرحل)</span>
+                            </span>
+                          )}
+
+                          {systemSettings?.approvalWorkflow?.enabled && (
+                            <div className="mt-1">
+                              {v.approvalStatus === 'APPROVED' ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <span>معتمد ({v.approvalRole || 'الإدارة'})</span>
+                                </span>
+                              ) : v.approvalStatus === 'REJECTED' ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                  <span>مرفوض</span>
+                                </span>
+                              ) : v.approvalStatus === 'PENDING_APPROVAL' ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200 animate-pulse">
+                                  <span>بانتظار الاعتماد</span>
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-slate-400">لا يتطلب</span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2 text-slate-700 font-medium">
+                          <div className="flex flex-col gap-0.5">
+                            <span>{getAccountName(v.toAccountId)}</span>
+                            <div className="flex items-center gap-1 text-[10px]">
+                              {v.paymentMethod === 'BANK_TRANSFER' ? (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
+                                  <Landmark size={10} />
+                                  <span>تحويل بنكي {v.referenceNo ? `#${v.referenceNo}` : ''}</span>
+                                </span>
+                              ) : v.paymentMethod === 'CHECK' ? (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 font-bold border border-amber-200">
+                                  <FileText size={10} />
+                                  <span>شيك {v.referenceNo ? `#${v.referenceNo}` : ''}</span>
+                                </span>
+                              ) : v.paymentMethod === 'SPAN' ? (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 font-bold border border-purple-200">
+                                  <CreditCard size={10} />
+                                  <span>مدى {v.referenceNo ? `#${v.referenceNo}` : ''}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
+                                  <Banknote size={10} />
+                                  <span>نقداً</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-2">
+                          {v.costCenterId ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" title={v.costCenterName || v.costCenterId}>
+                              <Building2 size={10} className="text-indigo-600" />
+                              <span className="max-w-[110px] truncate">{v.costCenterName || v.costCenterId}</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-medium">عام</span>
+                          )}
+                        </td>
+                        <td className="py-2 text-slate-700 font-medium">{v.receivedFrom}</td>
+                        <td className="py-2 text-slate-500">
+                          {RECEIPT_SOURCE_TYPES.find(s => s.id === v.sourceType)?.label || v.sourceType}
+                        </td>
+                        <td className="py-2 font-mono font-bold text-emerald-700">{v.amount.toLocaleString()} {currencySymbol}</td>
+                        <td className="py-2 text-slate-500">{v.date}</td>
+                        <td className="py-2 text-slate-500 truncate max-w-xs">{v.description}</td>
+                        <td className="py-2 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {v.status === 'POSTED' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePostingFromList(v)}
+                                className="flex items-center gap-1 px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded text-[11px] font-bold cursor-pointer transition-colors"
+                                title="إلغاء الترحيل وإعادته كمسودة مؤقتة"
+                              >
+                                <RotateCcw size={11} />
+                                <span>إلغاء الترحيل</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePostingFromList(v)}
+                                className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold cursor-pointer transition-colors shadow-2xs"
+                                title="ترحيل السند في الحسابات العامة"
+                              >
+                                <Send size={11} />
+                                <span>ترحيل</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCustomPreviewData({
+                                  title: 'سند قبض داخلي',
+                                  subtitle: 'سند توريد واستلام نقدية لحسابات وصناديق المنشأة الداخلية',
+                                  docNumber: v.voucherNumber,
+                                  date: v.date,
+                                  partnerName: `المسلّم: ${v.receivedFrom} | المستلم: ${v.receivedBy}`,
+                                  paymentMethod: v.paymentMethod === 'CASH' ? 'نقداً (خزينة)' : v.paymentMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك مصرفي',
+                                  notes: v.description,
+                                  grandTotal: v.amount,
+                                  subtotal: v.amount,
+                                  amount: v.amount,
+                                  paidAmount: v.amount,
+                                  voucherType: 'RECEIPT',
+                                  amountInWords: tafqeet(v.amount),
+                                  items: [{
+                                    description: `قبض داخلي لحساب (${getAccountName(v.toAccountId)}) - من: ${v.receivedFrom} [${RECEIPT_SOURCE_TYPES.find(s => s.id === sourceType)?.label || ''}]`,
+                                    quantity: 1,
+                                    unitPrice: v.amount,
+                                    taxRate: 0,
+                                    total: v.amount
+                                  }]
+                                });
+                                setShowPrintPreview(true);
+                              }}
+                              className="p-1 text-indigo-600 hover:bg-indigo-50 rounded cursor-pointer"
+                              title="معاينة السند الداخلي"
+                            >
+                              <Eye size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(v)}
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                              title="تعديل السند"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={v.status === 'POSTED'}
+                              onClick={() => handleDelete(v.id, v.voucherNumber)}
+                              className={`p-1 rounded ${
+                                v.status === 'POSTED'
+                                  ? 'text-slate-300 cursor-not-allowed opacity-40'
+                                  : 'text-red-600 hover:bg-red-50 cursor-pointer'
+                              }`}
+                              title={v.status === 'POSTED' ? 'السند مرحل بالحسابات. يجب إلغاء الترحيل أولاً لحذفه' : 'حذف السند'}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
 
       {/* Main Voucher Edit Card */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mb-6 print:hidden overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 sm:p-5 md:p-6 shadow-sm mb-6 print:hidden overflow-hidden">
         {/* Status Indicator Banner */}
         {isCurrentVoucherPosted && (
-          <div className="bg-emerald-50 border-b border-emerald-200 -mx-6 -mt-6 mb-6 px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="bg-emerald-50 border-b border-emerald-200 -mx-3.5 sm:-mx-5 md:-mx-6 -mt-3.5 sm:-mt-5 md:-mt-6 mb-4 sm:mb-6 px-3.5 sm:px-5 md:px-6 py-3 sm:py-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
                 <CheckCircle2 size={18} />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-black text-emerald-950 text-sm">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  <span className="font-black text-emerald-950 text-xs sm:text-sm">
                     السند مرحل ومعتمد رسمياً في الحسابات العامة
                   </span>
-                  <span className="text-[10px] bg-emerald-200 text-emerald-900 font-bold px-2.5 py-0.5 rounded-full">
-                    مؤثر على الحسابات ودفتر الأستاذ
+                  <span className="text-[10px] bg-emerald-200 text-emerald-900 font-bold px-2 py-0.5 rounded-full shrink-0">
+                    مؤثر على الحسابات والأستاذ
                   </span>
                 </div>
                 <p className="text-emerald-800 text-[11px] mt-0.5">
@@ -1069,7 +1213,7 @@ export default function InternalReceiptVoucher() {
             <button
               type="button"
               onClick={handleUnpostCurrentVoucher}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border border-amber-600 rounded-lg text-xs font-black transition-colors cursor-pointer shrink-0 shadow-xs"
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border border-amber-600 rounded-lg text-xs font-black transition-colors cursor-pointer shrink-0 shadow-xs min-h-[38px]"
               title="إلغاء الترحيل وإعادة السند كمسودة مؤقتة وإيقاف أثره المالي"
             >
               <RotateCcw size={14} />
@@ -1079,18 +1223,18 @@ export default function InternalReceiptVoucher() {
         )}
 
         {isCurrentVoucherDraft && (
-          <div className="bg-amber-50 border-b border-amber-200 -mx-6 -mt-6 mb-6 px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="bg-amber-50 border-b border-amber-200 -mx-3.5 sm:-mx-5 md:-mx-6 -mt-3.5 sm:-mt-5 md:-mt-6 mb-4 sm:mb-6 px-3.5 sm:px-5 md:px-6 py-3 sm:py-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
                 <AlertTriangle size={18} />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-black text-amber-950 text-sm">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  <span className="font-black text-amber-950 text-xs sm:text-sm">
                     السند في وضع المسودة (غير مرحل في الحسابات)
                   </span>
-                  <span className="text-[10px] bg-amber-200 text-amber-900 font-bold px-2.5 py-0.5 rounded-full">
-                    لا يؤثر على الأرصدة أو الحسابات
+                  <span className="text-[10px] bg-amber-200 text-amber-900 font-bold px-2 py-0.5 rounded-full shrink-0">
+                    لا يؤثر على الأرصدة
                   </span>
                 </div>
                 <p className="text-amber-800 text-[11px] mt-0.5">
@@ -1101,7 +1245,7 @@ export default function InternalReceiptVoucher() {
             <button
               type="button"
               onClick={handlePostCurrentVoucher}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer shrink-0 animate-pulse"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer shrink-0 animate-pulse min-h-[38px]"
               title="ترحيل السند في الحسابات العامة ودفتر الأستاذ"
             >
               <Send size={14} />
@@ -1111,7 +1255,7 @@ export default function InternalReceiptVoucher() {
         )}
 
         <form onSubmit={handleSave} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
             {/* Voucher Number */}
             <div className="space-y-1">
               <label className="text-xs font-black uppercase text-slate-800 tracking-wide">رقم سند القبض الداخلي</label>
@@ -1120,10 +1264,10 @@ export default function InternalReceiptVoucher() {
                   type="button"
                   onClick={handleNavigatePrevious}
                   disabled={!canGoPrevious}
-                  className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                  className="w-10 h-10 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
                   title="تراجع للخلف (السابق)"
                 >
-                  <ChevronRight size={14} />
+                  <ChevronRight size={16} />
                 </button>
                 <div className="relative flex-1">
                   <input 
@@ -1132,7 +1276,7 @@ export default function InternalReceiptVoucher() {
                     onChange={(e) => setVoucherNumber(e.target.value)}
                     placeholder={nextCalculatedVoucherNum}
                     required
-                    className={`w-full px-3 py-2 text-sm font-mono font-bold rounded-lg border outline-none transition-all ${
+                    className={`w-full px-3 py-2.5 h-10 text-sm sm:text-base font-mono font-bold rounded-lg border outline-none transition-all ${
                       isVoucherDuplicate
                         ? 'border-red-500 bg-red-50 text-red-900 focus:ring-2 focus:ring-red-200'
                         : 'border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500'
@@ -1141,7 +1285,7 @@ export default function InternalReceiptVoucher() {
                   <button
                     type="button"
                     onClick={() => setVoucherNumber(nextCalculatedVoucherNum)}
-                    className="absolute left-2 top-2 text-[10px] text-teal-600 hover:text-teal-800 font-bold bg-teal-50 px-1.5 py-0.5 rounded cursor-pointer"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-teal-700 hover:text-teal-900 font-bold bg-teal-100/80 px-2 py-0.5 rounded cursor-pointer"
                     title="استعادة الرقم التسلسلي المقترح آلياً"
                   >
                     تلقائي
@@ -1151,10 +1295,10 @@ export default function InternalReceiptVoucher() {
                   type="button"
                   onClick={handleNavigateNext}
                   disabled={!canGoNext}
-                  className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                  className="w-10 h-10 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
                   title="تقديم للأمام (التالي)"
                 >
-                  <ChevronLeft size={14} />
+                  <ChevronLeft size={16} />
                 </button>
               </div>
               {isVoucherDuplicate && (
@@ -1172,17 +1316,17 @@ export default function InternalReceiptVoucher() {
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
+                className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
               />
             </div>
 
             {/* Source Type */}
-            <div className="space-y-1">
+            <div className="space-y-1 sm:col-span-2 md:col-span-1">
               <label className="text-xs font-black uppercase text-slate-800 tracking-wide">نوع ومصدر التوريد الداخلي</label>
               <select
                 value={sourceType}
                 onChange={(e) => setSourceType(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
+                className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
               >
                 {RECEIPT_SOURCE_TYPES.map(s => (
                   <option key={s.id} value={s.id}>{s.label}</option>
@@ -1191,7 +1335,7 @@ export default function InternalReceiptVoucher() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {/* To Account (Deposit into) */}
             <div className="space-y-1">
               <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
@@ -1205,7 +1349,7 @@ export default function InternalReceiptVoucher() {
                 value={toAccountId}
                 onChange={(e) => setToAccountId(e.target.value)}
                 required
-                className="w-full px-3 py-2 text-sm rounded-lg border border-teal-300 bg-teal-50/40 text-teal-950 font-bold focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
+                className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-teal-300 bg-teal-50/40 text-teal-950 font-bold focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
               >
                 {internalAccountsList.map(a => (
                   <option key={a.id} value={a.id}>{a.name}</option>
@@ -1226,7 +1370,7 @@ export default function InternalReceiptVoucher() {
                 <select
                   value={fromAccountId}
                   onChange={(e) => setFromAccountId(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-indigo-300 bg-indigo-50/40 text-indigo-950 font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                  className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-indigo-300 bg-indigo-50/40 text-indigo-950 font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
                 >
                   <option value="">-- اختر الحساب المسحوب منه --</option>
                   {internalAccountsList.map(a => (
@@ -1249,7 +1393,7 @@ export default function InternalReceiptVoucher() {
                   onChange={(e) => setReceivedFrom(e.target.value)}
                   placeholder="اسم الموظف / صاحب العهدة / الفرع"
                   list="employees-list"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
+                  className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
                 />
                 <datalist id="employees-list">
                   {employees.map(emp => (
@@ -1272,12 +1416,12 @@ export default function InternalReceiptVoucher() {
                 value={receivedBy}
                 onChange={(e) => setReceivedBy(e.target.value)}
                 placeholder="اسم أمين الصندوق"
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
+                className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
             {/* Amount */}
             <div className="space-y-1">
               <label className="text-xs font-black uppercase text-slate-800 tracking-wide">المبلغ المقبوض ({currencyFullNameAr})</label>
@@ -1290,7 +1434,7 @@ export default function InternalReceiptVoucher() {
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0.00"
                   required
-                  className="w-full px-3 py-2 text-base font-mono font-bold rounded-lg border border-emerald-300 bg-emerald-50/30 text-emerald-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none pl-12"
+                  className="w-full px-3 py-2.5 h-10 text-base sm:text-lg font-mono font-bold rounded-lg border border-emerald-300 bg-emerald-50/30 text-emerald-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none pl-12"
                 />
                 <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">{currencySymbol}</span>
               </div>
@@ -1310,49 +1454,49 @@ export default function InternalReceiptVoucher() {
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('CASH')}
-                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
                     paymentMethod === 'CASH'
                       ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
-                  <Banknote size={13} />
+                  <Banknote size={15} />
                   <span>نقداً</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('BANK_TRANSFER')}
-                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
                     paymentMethod === 'BANK_TRANSFER'
                       ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
-                  <Landmark size={13} />
+                  <Landmark size={15} />
                   <span>تحويل بنكي</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('CHECK')}
-                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
                     paymentMethod === 'CHECK'
                       ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
-                  <FileText size={13} />
+                  <FileText size={15} />
                   <span>شيك</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('SPAN')}
-                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
                     paymentMethod === 'SPAN'
                       ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
-                  <CreditCard size={13} />
+                  <CreditCard size={15} />
                   <span>مدى / شبكة</span>
                 </button>
               </div>
@@ -1368,14 +1512,14 @@ export default function InternalReceiptVoucher() {
                 value={referenceNo}
                 onChange={(e) => setReferenceNo(e.target.value)}
                 placeholder={paymentMethod === 'CHECK' ? 'مثال: CHQ-5521' : 'رقم العملية البنكية أو الإيصال'}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none font-mono"
+                className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none font-mono"
               />
             </div>
           </div>
 
           {/* Conditional Bank & Check details */}
           {(paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CHECK') && (
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fadeIn">
+            <div className="p-3 sm:p-3.5 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fadeIn">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                   <Landmark size={13} className="text-teal-600" />
@@ -1386,7 +1530,7 @@ export default function InternalReceiptVoucher() {
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
                   placeholder="مثال: مصرف الراجحي / البنك الأهلي"
-                  className="w-full px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
+                  className="w-full px-3 py-2 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
                 />
               </div>
 
@@ -1400,7 +1544,7 @@ export default function InternalReceiptVoucher() {
                     type="date"
                     value={checkDueDate}
                     onChange={(e) => setCheckDueDate(e.target.value)}
-                    className="w-full px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none font-mono"
+                    className="w-full px-3 py-2 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none font-mono"
                   />
                 </div>
               )}
@@ -1408,7 +1552,7 @@ export default function InternalReceiptVoucher() {
           )}
 
           {/* Cost Center & Description */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
             {/* Cost Center Selector */}
             <div className="space-y-1">
               <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
@@ -1423,7 +1567,7 @@ export default function InternalReceiptVoucher() {
               <select
                 value={costCenterId}
                 onChange={(e) => setCostCenterId(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
               >
                 <option value="">-- بدون تحديد مركز تكلفة (عام) --</option>
                 {costCenters.map(cc => (
@@ -1448,47 +1592,47 @@ export default function InternalReceiptVoucher() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="وذلك عن: استرداد باقي عهدة مشتريات / سداد سلفة شهرية..."
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
+                className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
               />
             </div>
           </div>
 
           {/* Live Interactive Card with Anti-Tamper Barcode & QR Code */}
-          <div className="p-4 rounded-xl border border-teal-200 bg-teal-50/30 space-y-3">
-            <div className="flex items-center justify-between text-xs font-bold text-teal-800">
+          <div className="p-3 sm:p-4 rounded-xl border border-teal-200 bg-teal-50/40 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-bold text-teal-800">
               <span className="flex items-center gap-1.5">
-                <CheckCircle2 size={14} className="text-teal-600" />
-                ملخص سند القبض الداخلي والمطابقة الرقمية
+                <CheckCircle2 size={15} className="text-teal-600 shrink-0" />
+                <span>ملخص سند القبض الداخلي والمطابقة الرقمية</span>
               </span>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] bg-purple-100 text-purple-900 border border-purple-200 px-2 py-0.5 rounded font-bold flex items-center gap-1">
-                  <Scan size={11} /> رمز الاستجابة السريعة والباركود مفعل
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] sm:text-xs bg-purple-100 text-purple-900 border border-purple-200 px-2 py-0.5 rounded font-bold flex items-center gap-1 shrink-0">
+                  <Scan size={11} /> رمز الاستجابة والباركود مفعل
                 </span>
-                <span className="font-mono font-bold text-teal-900 bg-teal-100/80 px-2 py-0.5 rounded">
+                <span className="font-mono font-bold text-teal-900 bg-teal-100/90 px-2 py-0.5 rounded text-[11px] sm:text-xs shrink-0">
                   #{voucherNumber}
                 </span>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-              <div className="bg-white p-2.5 rounded-lg border border-teal-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
+              <div className="bg-white p-2.5 sm:p-3 rounded-lg border border-teal-100 shadow-2xs">
                 <span className="text-slate-400 block text-[10px]">الحساب المستلم المودع فيه:</span>
-                <span className="font-bold text-slate-800">{getAccountName(toAccountId)}</span>
+                <span className="font-bold text-slate-800 truncate block mt-0.5">{getAccountName(toAccountId)}</span>
               </div>
-              <div className="bg-white p-2.5 rounded-lg border border-teal-100">
+              <div className="bg-white p-2.5 sm:p-3 rounded-lg border border-teal-100 shadow-2xs">
                 <span className="text-slate-400 block text-[10px]">المسلّم والبيان:</span>
-                <span className="font-bold text-slate-800">{receivedFrom || 'جهة داخلية'}</span>
-                <span className="text-[10px] text-teal-600 block truncate">
+                <span className="font-bold text-slate-800 truncate block mt-0.5">{receivedFrom || 'جهة داخلية'}</span>
+                <span className="text-[10px] text-teal-600 block truncate mt-0.5 font-medium">
                   {RECEIPT_SOURCE_TYPES.find(s => s.id === sourceType)?.label}
                 </span>
               </div>
-              <div className="bg-white p-2.5 rounded-lg border border-teal-100 flex flex-col justify-between">
+              <div className="bg-white p-2.5 sm:p-3 rounded-lg border border-teal-100 flex flex-col justify-between shadow-2xs">
                 <span className="text-slate-400 block text-[10px]">صافي القيمة المقبوضة:</span>
-                <span className="font-mono font-black text-emerald-700 text-sm">
+                <span className="font-mono font-black text-emerald-700 text-sm sm:text-base mt-0.5">
                   {(Number(amount) || 0).toLocaleString()} {currencyFullNameAr}
                 </span>
               </div>
-              <div className="bg-white p-2 rounded-lg border border-teal-100 flex items-center justify-between gap-2">
-                <div className="flex-1 overflow-hidden">
+              <div className="bg-white p-2 sm:p-2.5 rounded-lg border border-teal-100 flex items-center justify-between gap-2 shadow-2xs overflow-hidden">
+                <div className="flex-1 overflow-hidden min-w-0">
                   <BarcodeImage 
                     value={voucherNumber || nextCalculatedVoucherNum} 
                     height={30} 
@@ -1497,7 +1641,9 @@ export default function InternalReceiptVoucher() {
                   />
                 </div>
                 {systemSettings?.taxAndInvoice?.enableQrCode !== false && (
-                  <VoucherQrCodeImage data={currentPreviewObject} size={38} showVerificationHash={false} />
+                  <div className="shrink-0">
+                    <VoucherQrCodeImage data={currentPreviewObject} size={38} showVerificationHash={false} />
+                  </div>
                 )}
               </div>
             </div>
@@ -1537,13 +1683,13 @@ export default function InternalReceiptVoucher() {
           )}
 
           {/* Actions */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
             <div>
               {isCurrentVoucherPosted && (
                 <button
                   type="button"
                   onClick={handleUnpostCurrentVoucher}
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-amber-400 bg-amber-50 text-amber-900 font-bold text-xs hover:bg-amber-100 transition-colors cursor-pointer shadow-xs"
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-amber-400 bg-amber-50 text-amber-900 font-bold text-xs sm:text-sm hover:bg-amber-100 transition-colors cursor-pointer shadow-xs min-h-[42px]"
                   title="إلغاء ترحيل هذا السند وإعادته كمسودة"
                 >
                   <RotateCcw size={15} />
@@ -1552,54 +1698,54 @@ export default function InternalReceiptVoucher() {
               )}
             </div>
 
-            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto justify-end">
               {editingVoucherId && (
                 <button
                   type="button"
                   onClick={handleNewVoucher}
-                  className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="w-full sm:w-auto flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs sm:text-sm hover:bg-slate-100 transition-colors cursor-pointer min-h-[42px]"
                 >
                   إلغاء
                 </button>
               )}
               {!isCurrentVoucherPosted && (
-                <button
-                  type="button"
-                  onClick={() => saveVoucherWithStatus('DRAFT')}
-                  disabled={isVoucherDuplicate || !amount}
-                  className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer ${
-                    isVoucherDuplicate || !amount
-                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                      : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40'
-                  }`}
-                  title="حفظ السند كمسودة غير مرحلة في الحسابات"
-                >
-                  <Save size={15} />
-                  <span>حفظ كمسودة (غير مرحل)</span>
-                </button>
-              )}
-              {!isCurrentVoucherPosted && (
-                <button
-                  type="button"
-                  onClick={handlePostCurrentVoucher}
-                  disabled={isVoucherDuplicate || !amount}
-                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs text-white transition-all shadow-md cursor-pointer ${
-                    isVoucherDuplicate || !amount
-                      ? 'bg-slate-400 cursor-not-allowed opacity-60'
-                      : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-700/20'
-                  }`}
-                  title="ترحيل السند في الحسابات العامة ودفتر الأستاذ"
-                >
-                  <Send size={15} />
-                  <span>ترحيل السند في الحسابات</span>
-                </button>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => saveVoucherWithStatus('DRAFT')}
+                    disabled={isVoucherDuplicate || !amount}
+                    className={`w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-xs cursor-pointer min-h-[42px] ${
+                      isVoucherDuplicate || !amount
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40'
+                    }`}
+                    title="حفظ السند كمسودة غير مرحلة في الحسابات"
+                  >
+                    <Save size={15} />
+                    <span>حفظ كمسودة (غير مرحل)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePostCurrentVoucher}
+                    disabled={isVoucherDuplicate || !amount}
+                    className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-md cursor-pointer min-h-[42px] ${
+                      isVoucherDuplicate || !amount
+                        ? 'bg-slate-400 cursor-not-allowed opacity-60'
+                        : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-700/20'
+                    }`}
+                    title="ترحيل السند في الحسابات العامة ودفتر الأستاذ"
+                  >
+                    <Send size={15} />
+                    <span>ترحيل السند في الحسابات</span>
+                  </button>
+                </div>
               )}
               {isCurrentVoucherPosted && (
                 <button
                   type="button"
                   onClick={() => saveVoucherWithStatus('POSTED')}
                   disabled={isVoucherDuplicate || !amount}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs text-white transition-all shadow-md cursor-pointer bg-teal-700 hover:bg-teal-800 shadow-teal-700/20"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-md cursor-pointer bg-teal-700 hover:bg-teal-800 shadow-teal-700/20 min-h-[42px]"
                   title="حفظ التعديلات على السند المرحل"
                 >
                   <Save size={15} />

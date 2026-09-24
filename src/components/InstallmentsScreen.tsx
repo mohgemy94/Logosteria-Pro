@@ -34,6 +34,7 @@ import { Partner } from '../types/accounting';
 import { loadCustomers } from '../utils/partnerLedger';
 import InstallmentKpiModal, { InstallmentKpiModalType } from './InstallmentKpiModal';
 import ExportButtonGroup from './ExportButtonGroup';
+import ResponsiveModal from './ResponsiveModal';
 
 export default function InstallmentsScreen() {
   const { symbol: currencySymbol, fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
@@ -512,6 +513,7 @@ export default function InstallmentsScreen() {
       drawer: systemSettings.company.nameAr || 'شركة لوجوستريا للأنظمة المحاسبية',
       payee: systemSettings.company.nameAr || 'شركة لوجوستريا للأنظمة المحاسبية',
       guarantor: newFreeNote.guarantor,
+      guarantorNationalId: newFreeNote.guarantorNationalId,
       placeOfPayment: newFreeNote.placeOfPayment,
       bankName: newFreeNote.bankName,
       status: 'PORTFOLIO',
@@ -1325,275 +1327,418 @@ export default function InstallmentsScreen() {
         </div>
       )}
 
-      {/* MODAL 1: NEW CONTRACT */}
-      {isNewContractModalOpen && (
-        <div 
-          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 animate-fadeIn"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsNewContractModalOpen(false);
-          }}
-        >
-          <div 
-            className="bg-white rounded-t-3xl sm:rounded-3xl max-w-3xl w-full p-4 sm:p-6 md:p-8 shadow-2xl border border-slate-200 text-right max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-modalIn"
-            onClick={e => e.stopPropagation()}
-            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-          >
-            {/* Mobile Handle */}
-            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
-
-            <div className="flex items-center justify-between pb-3 sm:pb-4 mb-3 sm:mb-4 border-b border-slate-200 shrink-0">
-              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
-                <CreditCard className="text-emerald-600" size={20} />
-                <span>إنشاء عقد بيع بالتقسيط وإصدار الأوراق التجارية</span>
-              </h3>
+      {/* MODAL 1: NEW CONTRACT (إنشاء عقد بيع بالتقسيط وإصدار الأوراق التجارية) */}
+      <ResponsiveModal
+        isOpen={isNewContractModalOpen}
+        onClose={() => setIsNewContractModalOpen(false)}
+        id="modal-new-installment-contract"
+        maxWidthClass="max-w-full sm:max-w-xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl"
+        title="إنشاء عقد بيع بالتقسيط وإصدار الأوراق التجارية"
+        subtitle="إعداد جدول السداد التلقائي واحتساب أرباح المرابحة وتوليد الكمبيالات النظامية"
+        icon={<CreditCard className="text-emerald-600" size={22} />}
+        badge={
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300 shrink-0">
+            عقد مرابحة وتقسيط
+          </span>
+        }
+        footer={
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 w-full">
+            <div className="text-xs text-slate-500 hidden md:flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span>
+                إجمالي العقد:{' '}
+                <strong className="text-slate-800 font-mono">
+                  {calculatedContractValues.totalFinanced.toLocaleString()} {currencySymbol}
+                </strong>{' '}
+                | القسط الشهري:{' '}
+                <strong className="text-emerald-700 font-mono">
+                  {calculatedContractValues.singleInstallment.toLocaleString()} {currencySymbol}
+                </strong>
+              </span>
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setIsNewContractModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="btn-3d btn-3d-white px-5 py-2.5 text-xs sm:text-sm text-slate-700 font-semibold cursor-pointer w-full sm:w-auto text-center justify-center"
               >
-                <X size={18} />
+                إلغاء
+              </button>
+              <button
+                type="submit"
+                form="new-contract-form"
+                className="btn-3d btn-3d-emerald px-6 py-2.5 text-xs sm:text-sm text-white font-bold shadow-md cursor-pointer w-full sm:w-auto text-center justify-center flex items-center gap-2"
+              >
+                <FileCheck size={16} />
+                <span>اعتماد وحفظ العقد وتوليد الأقساط ←</span>
               </button>
             </div>
-
-            <form onSubmit={handleSaveContract} className="space-y-4 text-xs sm:text-sm overflow-y-auto flex-1 pr-0.5">
-              {/* Customer Info */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                <div className="font-bold text-slate-800 flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5">
-                    <ShieldCheck size={16} className="text-blue-600" />
-                    بيانات العميل (المشتري / المدين)
-                  </span>
-                  {customers.length > 0 && (
-                    <span className="text-[11px] text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md font-medium">
-                      متصل بسجل العملاء ({customers.length} عميل)
-                    </span>
-                  )}
-                </div>
-
-                {/* Fast Select from Existing Customers */}
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1 text-xs">
-                    اختيار سريع من قاعدة بيانات العملاء (تعبئة تلقائية)
-                  </label>
-                  <select
-                    onChange={e => {
-                      const selected = customers.find(c => c.id === e.target.value);
-                      if (selected) {
-                        setNewContract(prev => ({
-                          ...prev,
-                          customerName: selected.name,
-                          customerPhone: selected.phone || '',
-                          customerNationalId: selected.taxNumber || '',
-                          customerAddress: selected.address || ''
-                        }));
-                      }
-                    }}
-                    defaultValue=""
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-2xs mb-2"
-                  >
-                    <option value="" disabled>-- اختر عميلاً مسجلاً لجلب بياناته تلقائياً --</option>
-                    {customers.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.phone ? `(${c.phone})` : ''} {c.code ? `[${c.code}]` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">اسم العميل *</label>
-                    <input
-                      type="text"
-                      required
-                      value={newContract.customerName}
-                      onChange={e => setNewContract({ ...newContract, customerName: e.target.value })}
-                      placeholder="الاسم الثلاثي أو اسم الشركة"
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">رقم الهوية / السجل التجاري</label>
-                    <input
-                      type="text"
-                      value={newContract.customerNationalId}
-                      onChange={e => setNewContract({ ...newContract, customerNationalId: e.target.value })}
-                      placeholder="10XXXXXXXX"
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">رقم الجوال *</label>
-                    <input
-                      type="text"
-                      value={newContract.customerPhone}
-                      onChange={e => setNewContract({ ...newContract, customerPhone: e.target.value })}
-                      placeholder="05XXXXXXXX"
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Guarantor Info */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                <div className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
-                  <ShieldCheck size={16} className="text-purple-600" />
-                  بيانات الكفيل الغارم / الضامن المتضامن (اختياري)
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">اسم الكفيل</label>
-                    <input
-                      type="text"
-                      value={newContract.guarantorName}
-                      onChange={e => setNewContract({ ...newContract, guarantorName: e.target.value })}
-                      placeholder="اسم الكفيل الضامن"
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">رقم هوية الكفيل</label>
-                    <input
-                      type="text"
-                      value={newContract.guarantorNationalId}
-                      onChange={e => setNewContract({ ...newContract, guarantorNationalId: e.target.value })}
-                      placeholder="10XXXXXXXX"
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">هاتف الكفيل</label>
-                    <input
-                      type="text"
-                      value={newContract.guarantorPhone}
-                      onChange={e => setNewContract({ ...newContract, guarantorPhone: e.target.value })}
-                      placeholder="05XXXXXXXX"
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Financial & Installment Terms */}
-              <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-200 space-y-3">
-                <div className="font-bold text-emerald-950 flex items-center gap-1.5 text-xs">
-                  <Percent size={16} className="text-emerald-700" />
-                  شروط العقد، المبالغ، ونسب الأرباح
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">وصف البضاعة / الخدمة المباعة</label>
-                  <input
-                    type="text"
-                    value={newContract.itemDescription}
-                    onChange={e => setNewContract({ ...newContract, itemDescription: e.target.value })}
-                    placeholder="مثال: توريد 5 أجهزة لابتوب + شاشات عرض"
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">سعر الكاش ({currencySymbol})</label>
-                    <input
-                      type="number"
-                      value={newContract.cashPrice}
-                      onChange={e => setNewContract({ ...newContract, cashPrice: Number(e.target.value) })}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">الدفعة المقدمة ({currencySymbol})</label>
-                    <input
-                      type="number"
-                      value={newContract.downPayment}
-                      onChange={e => setNewContract({ ...newContract, downPayment: Number(e.target.value) })}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">نسبة الربح %</label>
-                    <input
-                      type="number"
-                      value={newContract.profitRate}
-                      onChange={e => setNewContract({ ...newContract, profitRate: Number(e.target.value) })}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">عدد الأقساط (أشهر)</label>
-                    <input
-                      type="number"
-                      value={newContract.monthsCount}
-                      onChange={e => setNewContract({ ...newContract, monthsCount: Number(e.target.value) })}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">تاريخ استحقاق أول قسط</label>
-                    <input
-                      type="date"
-                      value={newContract.startDate}
-                      onChange={e => setNewContract({ ...newContract, startDate: e.target.value })}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 pt-6">
-                    <input
-                      type="checkbox"
-                      id="autoGen"
-                      checked={newContract.autoGenerateNotes}
-                      onChange={e => setNewContract({ ...newContract, autoGenerateNotes: e.target.checked })}
-                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                    />
-                    <label htmlFor="autoGen" className="text-slate-800 font-bold cursor-pointer">
-                      توليد كمبيالات وسندات لأمر تلقائياً لكل قسط
-                    </label>
-                  </div>
-                </div>
-
-                {/* Calculation summary banner */}
-                <div className="bg-white p-3.5 rounded-xl border border-emerald-200 grid grid-cols-3 text-center">
-                  <div>
-                    <span className="text-[11px] text-slate-500">إجمالي الأرباح</span>
-                    <div className="font-bold text-emerald-700">{calculatedContractValues.profit.toLocaleString()} {currencySymbol}</div>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-500">إجمالي العقد بالفوائد</span>
-                    <div className="font-bold text-blue-700">{calculatedContractValues.totalFinanced.toLocaleString()} {currencySymbol}</div>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-500">قيمة القسط الشهري</span>
-                    <div className="font-bold text-emerald-800 text-sm sm:text-base">
-                      {calculatedContractValues.singleInstallment.toLocaleString()} {currencySymbol}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setIsNewContractModalOpen(false)}
-                  className="btn-3d btn-3d-white px-5 py-2.5 text-slate-700 font-semibold cursor-pointer"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  className="btn-3d btn-3d-emerald px-6 py-2.5 text-white font-bold shadow-sm cursor-pointer"
-                >
-                  اعتماد وحفظ العقد وتوليد الأقساط ←
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form id="new-contract-form" onSubmit={handleSaveContract} className="space-y-4 sm:space-y-5 text-xs sm:text-sm">
+          {/* Section 1: Customer Info */}
+          <div className="bg-slate-50/70 p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 space-y-3 sm:space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-2.5">
+              <span className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-2">
+                <ShieldCheck size={18} className="text-blue-600" />
+                1. بيانات العميل (المشتري / المدين)
+              </span>
+              {customers.length > 0 && (
+                <span className="text-[10px] sm:text-xs text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md font-medium w-fit">
+                  متصل بسجل العملاء ({customers.length} عميل)
+                </span>
+              )}
+            </div>
+
+            {/* Fast Select from Customers */}
+            <div>
+              <label className="block text-slate-600 font-medium mb-1 text-[11px] sm:text-xs">
+                اختيار سريع من قاعدة بيانات العملاء (تعبئة تلقائية):
+              </label>
+              <select
+                onChange={e => {
+                  const selected = customers.find(c => c.id === e.target.value);
+                  if (selected) {
+                    setNewContract(prev => ({
+                      ...prev,
+                      customerName: selected.name,
+                      customerPhone: selected.phone || '',
+                      customerNationalId: selected.taxNumber || '',
+                      customerAddress: selected.address || ''
+                    }));
+                  }
+                }}
+                defaultValue=""
+                className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer shadow-2xs"
+              >
+                <option value="" disabled>-- اختر عميلاً مسجلاً لجلب بياناته تلقائياً --</option>
+                {customers.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {c.phone ? `(${c.phone})` : ''} {c.code ? `[${c.code}]` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  اسم العميل (المشتري) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newContract.customerName}
+                  onChange={e => setNewContract({ ...newContract, customerName: e.target.value })}
+                  placeholder="الاسم الثلاثي أو اسم الشركة"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  رقم الهوية / السجل التجاري
+                </label>
+                <input
+                  type="text"
+                  value={newContract.customerNationalId}
+                  onChange={e => setNewContract({ ...newContract, customerNationalId: e.target.value })}
+                  placeholder="10XXXXXXXX"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  رقم الجوال *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newContract.customerPhone}
+                  onChange={e => setNewContract({ ...newContract, customerPhone: e.target.value })}
+                  placeholder="05XXXXXXXX"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
+                />
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  العنوان الوطني / مكان الإقامة
+                </label>
+                <input
+                  type="text"
+                  value={newContract.customerAddress}
+                  onChange={e => setNewContract({ ...newContract, customerAddress: e.target.value })}
+                  placeholder="المدينة، الحي، اسم الشارع، الرمز البريدي"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Financial & Installment Terms */}
+          <div className="bg-emerald-50/40 p-3.5 sm:p-5 rounded-2xl border border-emerald-200/80 space-y-3 sm:space-y-4">
+            <div className="flex items-center justify-between border-b border-emerald-200/60 pb-2.5">
+              <span className="font-bold text-emerald-950 text-xs sm:text-sm flex items-center gap-2">
+                <Percent size={18} className="text-emerald-700" />
+                2. شروط العقد، تفاصيل المبيع، ونسب الأرباح
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                وصف البضاعة / الخدمة المباعة
+              </label>
+              <input
+                type="text"
+                value={newContract.itemDescription}
+                onChange={e => setNewContract({ ...newContract, itemDescription: e.target.value })}
+                placeholder="مثال: توريد 5 أجهزة لابتوب + شاشات عرض وملحقاتها"
+                className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  سعر الكاش ({currencySymbol}) *
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    step="any"
+                    required
+                    value={newContract.cashPrice}
+                    onChange={e => setNewContract({ ...newContract, cashPrice: Number(e.target.value) })}
+                    className="w-full pl-10 pr-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-sm sm:text-base font-bold text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
+                  />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 font-mono pointer-events-none">
+                    {currencySymbol}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  الدفعة المقدمة ({currencySymbol})
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={newContract.downPayment}
+                    onChange={e => setNewContract({ ...newContract, downPayment: Number(e.target.value) })}
+                    className="w-full pl-10 pr-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-sm sm:text-base font-bold text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
+                  />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 font-mono pointer-events-none">
+                    {currencySymbol}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  نسبة ربح المرابحة %
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={newContract.profitRate}
+                    onChange={e => setNewContract({ ...newContract, profitRate: Number(e.target.value) })}
+                    className="w-full pl-8 pr-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-sm sm:text-base font-bold text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
+                  />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 font-mono pointer-events-none">
+                    %
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  عدد الأقساط (بالشهور) *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={newContract.monthsCount}
+                  onChange={e => setNewContract({ ...newContract, monthsCount: Math.max(1, Number(e.target.value)) })}
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-sm sm:text-base font-bold text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 pt-1">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  تاريخ استحقاق أول قسط
+                </label>
+                <input
+                  type="date"
+                  value={newContract.startDate}
+                  onChange={e => setNewContract({ ...newContract, startDate: e.target.value })}
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-xs sm:text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  دورية السداد
+                </label>
+                <select
+                  value={newContract.installmentFrequency}
+                  onChange={e => setNewContract({ ...newContract, installmentFrequency: e.target.value as any })}
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
+                >
+                  <option value="MONTHLY">شهري (كل شهر)</option>
+                  <option value="QUARTERLY">ربع سنوي (كل 3 شهور)</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-1 flex items-center">
+                <label 
+                  htmlFor="autoGen" 
+                  className="flex items-center gap-2.5 p-2.5 bg-white/90 border border-emerald-300/80 rounded-xl cursor-pointer hover:bg-emerald-50/50 transition-all w-full select-none"
+                >
+                  <input
+                    type="checkbox"
+                    id="autoGen"
+                    checked={newContract.autoGenerateNotes}
+                    onChange={e => setNewContract({ ...newContract, autoGenerateNotes: e.target.checked })}
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <span className="text-xs sm:text-sm text-slate-900 font-bold block leading-tight">
+                      إصدار سندات لأمر وكمبيالات
+                    </span>
+                    <span className="text-[10px] text-slate-500 block">
+                      توليد كمبيالة وسند رسمي لكل قسط آلياً
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Calculation summary banner */}
+            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-emerald-200/90 shadow-2xs space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-center divide-x-reverse divide-slate-100">
+                <div className="p-2 bg-slate-50/80 rounded-lg">
+                  <span className="text-[11px] text-slate-500 block mb-0.5">صافي التمويل</span>
+                  <div className="font-bold text-slate-800 font-mono text-xs sm:text-sm">
+                    {calculatedContractValues.netPrincipal.toLocaleString()} {currencySymbol}
+                  </div>
+                </div>
+
+                <div className="p-2 bg-emerald-50/70 rounded-lg">
+                  <span className="text-[11px] text-emerald-700 block mb-0.5">أرباح المرابحة</span>
+                  <div className="font-bold text-emerald-700 font-mono text-xs sm:text-sm">
+                    {calculatedContractValues.profit.toLocaleString()} {currencySymbol}
+                  </div>
+                </div>
+
+                <div className="p-2 bg-blue-50/70 rounded-lg">
+                  <span className="text-[11px] text-blue-700 block mb-0.5">إجمالي المديونية</span>
+                  <div className="font-bold text-blue-800 font-mono text-xs sm:text-sm">
+                    {calculatedContractValues.totalFinanced.toLocaleString()} {currencySymbol}
+                  </div>
+                </div>
+
+                <div className="p-2 bg-emerald-600 text-white rounded-lg col-span-2 sm:col-span-1 shadow-xs">
+                  <span className="text-[11px] text-emerald-100 block mb-0.5">القسط الشهري</span>
+                  <div className="font-bold font-mono text-sm sm:text-base">
+                    {calculatedContractValues.singleInstallment.toLocaleString()} {currencySymbol}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tafqeet preview for monthly installment */}
+              <div className="flex items-center gap-2 pt-1 text-[11px] sm:text-xs text-slate-600 font-serif">
+                <Sparkles size={14} className="text-emerald-600 shrink-0" />
+                <span>
+                  قيمة القسط كتابةً:{' '}
+                  <strong className="text-emerald-900 font-bold">
+                    {tafqeet(calculatedContractValues.singleInstallment)}
+                  </strong>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Guarantor Info */}
+          <div className="bg-slate-50/70 p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 space-y-3 sm:space-y-4">
+            <div className="font-bold text-slate-800 flex items-center gap-1.5 text-xs sm:text-sm border-b border-slate-200/60 pb-2.5">
+              <ShieldCheck size={18} className="text-purple-600" />
+              <span>3. بيانات الكفيل الغارم / الضامن المتضامن (اختياري)</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">اسم الكفيل</label>
+                <input
+                  type="text"
+                  value={newContract.guarantorName}
+                  onChange={e => setNewContract({ ...newContract, guarantorName: e.target.value })}
+                  placeholder="اسم الكفيل الضامن"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all shadow-2xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">رقم هوية الكفيل</label>
+                <input
+                  type="text"
+                  value={newContract.guarantorNationalId}
+                  onChange={e => setNewContract({ ...newContract, guarantorNationalId: e.target.value })}
+                  placeholder="10XXXXXXXX"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-mono focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all shadow-2xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">هاتف الكفيل</label>
+                <input
+                  type="text"
+                  value={newContract.guarantorPhone}
+                  onChange={e => setNewContract({ ...newContract, guarantorPhone: e.target.value })}
+                  placeholder="05XXXXXXXX"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-mono focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all shadow-2xs"
+                />
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">عنوان الكفيل</label>
+                <input
+                  type="text"
+                  value={newContract.guarantorAddress}
+                  onChange={e => setNewContract({ ...newContract, guarantorAddress: e.target.value })}
+                  placeholder="عنوان إقامة أو عمل الكفيل"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all shadow-2xs"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: Notes */}
+          <div className="bg-slate-50/70 p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 space-y-2">
+            <label className="block text-slate-700 font-semibold text-xs sm:text-sm">
+              شروط وأحكام أو ملاحظات إضافية على العقد
+            </label>
+            <input
+              type="text"
+              value={newContract.notes}
+              onChange={e => setNewContract({ ...newContract, notes: e.target.value })}
+              placeholder="مثال: تسليم البضاعة مشروط بسداد الدفعة الأولى، الالتزام بالتقسيط في الأول من كل شهر..."
+              className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
+            />
+          </div>
+        </form>
+      </ResponsiveModal>
 
       {/* MODAL 2: EXECUTE PAYMENT */}
       {isPayModalOpen && selectedScheduleForPayment && (
@@ -1881,282 +2026,415 @@ export default function InstallmentsScreen() {
 
       {/* MODAL 4: PRINT PROMISSORY NOTE (Official Legal Template) */}
       {isPrintNoteModalOpen && selectedNoteForPrint && (
-        <div 
-          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 animate-fadeIn"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsPrintNoteModalOpen(false);
-          }}
+        <ResponsiveModal
+          isOpen={isPrintNoteModalOpen}
+          onClose={() => setIsPrintNoteModalOpen(false)}
+          id="modal-print-promissory-note"
+          maxWidthClass="max-w-full sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl"
+          title="معاينة السند الإذني / الكمبيالة القانونية"
+          subtitle="معاينة نموذج الورقة التجارية وفق الاشتراطات النظامية المعتمدة"
+          icon={<FileCheck className="text-emerald-600" size={22} />}
+          badge={
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
+              {selectedNoteForPrint.noteNumber}
+            </span>
+          }
+          headerActions={
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="btn-3d btn-3d-emerald flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 text-xs font-bold shadow-xs cursor-pointer"
+            >
+              <Printer size={15} />
+              <span>طباعة الورقة</span>
+            </button>
+          }
         >
-          <div 
-            className="bg-white rounded-t-3xl sm:rounded-3xl max-w-2xl w-full p-4 sm:p-6 md:p-8 shadow-2xl border border-slate-200 text-right max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-modalIn"
-            onClick={e => e.stopPropagation()}
-            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-          >
-            {/* Mobile Handle */}
-            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
-
-            <div className="flex items-center justify-between pb-3 sm:pb-4 mb-3 sm:mb-4 border-b border-slate-200 print:hidden shrink-0">
-              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
-                <FileCheck className="text-emerald-600" size={18} />
-                <span>معاينة السند الإذني / الكمبيالة القانونية</span>
-              </h3>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="btn-3d btn-3d-emerald flex items-center gap-1 px-3 sm:px-3.5 py-1.5 text-xs font-bold shadow-xs cursor-pointer"
-                >
-                  <Printer size={14} />
-                  <span>طباعة الورقة</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsPrintNoteModalOpen(false)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
+          {/* Official Legal Promissory Note Sheet (Scrollable & Responsive) */}
+          <div className="border-4 border-double border-slate-800 p-4 sm:p-6 md:p-8 rounded-2xl bg-[#fffdf8] text-slate-950 space-y-5 sm:space-y-6">
+            <div className="text-center border-b-2 border-slate-800 pb-3 sm:pb-4">
+              <div className="text-[11px] sm:text-xs tracking-widest text-slate-600 font-bold mb-1">
+                المملكة العربية السعودية - نظام الأوراق التجارية
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold font-serif">
+                {selectedNoteForPrint.type === 'PROMISSORY_NOTE' ? 'سـنــــد لأمـــــر' : 'كـمـبـيـالــــة تـجـاريــــة'}
+              </h2>
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-2 mt-3 text-xs font-mono font-bold">
+                <span>الرقم: {selectedNoteForPrint.noteNumber}</span>
+                <span>المبلغ: {selectedNoteForPrint.amount.toLocaleString()} {selectedNoteForPrint.currency}</span>
               </div>
             </div>
 
-            {/* Official Legal Promissory Note Sheet (Scrollable) */}
-            <div className="overflow-y-auto flex-1 pr-0.5 space-y-4">
-            <div className="border-4 border-double border-slate-800 p-6 sm:p-8 rounded-2xl bg-[#fffdf8] text-slate-950 space-y-6">
-              <div className="text-center border-b-2 border-slate-800 pb-4">
-                <div className="text-xs tracking-widest text-slate-600 font-bold mb-1">المملكة العربية السعودية - نظام الأوراق التجارية</div>
-                <h2 className="text-2xl font-bold font-serif">
-                  {selectedNoteForPrint.type === 'PROMISSORY_NOTE' ? 'سـنــــد لأمـــــر' : 'كـمـبـيـالــــة تـجـاريــــة'}
-                </h2>
-                <div className="flex justify-between items-center mt-3 text-xs font-mono font-bold">
-                  <span>الرقم: {selectedNoteForPrint.noteNumber}</span>
-                  <span>المبلغ: {selectedNoteForPrint.amount.toLocaleString()} {selectedNoteForPrint.currency}</span>
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 text-xs">
+              <div className="bg-white/80 p-2.5 rounded-lg border border-slate-200">
+                <span className="text-slate-600 block mb-0.5">تاريخ التحرير:</span>
+                <span className="font-bold font-mono text-sm">{selectedNoteForPrint.issueDate}م</span>
               </div>
-
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div>
-                  <span className="text-slate-600">تاريخ التحرير:</span>{' '}
-                  <span className="font-bold font-mono">{selectedNoteForPrint.issueDate}م</span>
-                </div>
-                <div>
-                  <span className="text-slate-600">تاريخ الاستحقاق:</span>{' '}
-                  <span className="font-bold font-mono">{selectedNoteForPrint.dueDate}م</span>
-                </div>
-                <div>
-                  <span className="text-slate-600">مكان التحرير والوفاء:</span>{' '}
-                  <span className="font-bold">{selectedNoteForPrint.placeOfPayment}</span>
-                </div>
+              <div className="bg-white/80 p-2.5 rounded-lg border border-slate-200">
+                <span className="text-slate-600 block mb-0.5">تاريخ الاستحقاق:</span>
+                <span className="font-bold font-mono text-sm">{selectedNoteForPrint.dueDate}م</span>
               </div>
-
-              <div className="bg-slate-100/70 p-4 rounded-xl text-sm leading-loose text-justify font-serif border border-slate-300">
-                أتعهد أنا الموقع أدناه بأن أدفع بموجب هذا السند لأمر دون قيد أو شرط لأمر /{' '}
-                <strong className="text-slate-950 font-bold underline">{selectedNoteForPrint.payee}</strong>، المبلغ وقدره:{' '}
-                <strong className="text-emerald-950 font-bold">{selectedNoteForPrint.amountInWords}</strong>، وذلك وفاءً للقيمة
-                المستحقة بذمتي في ميعاد الاستحقاق المحدد أعلاه دون حاجة إلى احتجاج أو إشعار بعدم الدفع.
-              </div>
-
-              <div className="grid grid-cols-2 gap-6 pt-4 text-xs">
-                <div className="border border-slate-300 p-3 rounded-xl space-y-1">
-                  <div className="font-bold text-slate-900 mb-1">بيانات المحرر (المدين / المشتري):</div>
-                  <div>الاسم: <strong>{selectedNoteForPrint.drawee}</strong></div>
-                  <div>رقم الهوية: <strong>{selectedNoteForPrint.draweeNationalId || '—'}</strong></div>
-                  <div>الجوال: <strong>{selectedNoteForPrint.draweePhone || '—'}</strong></div>
-                  <div className="pt-4 text-center">
-                    <span>التوقيع والبصمة:</span>
-                    <div className="h-10 border-b border-dashed border-slate-400 mt-2" />
-                  </div>
-                </div>
-
-                <div className="border border-slate-300 p-3 rounded-xl space-y-1">
-                  <div className="font-bold text-slate-900 mb-1">بيانات الكفيل الغارم المتضامن:</div>
-                  <div>الاسم: <strong>{selectedNoteForPrint.guarantor || '—'}</strong></div>
-                  <div>رقم الهوية: <strong>{selectedNoteForPrint.guarantorNationalId || '—'}</strong></div>
-                  <div>الجوال: <strong>{selectedNoteForPrint.guarantorPhone || '—'}</strong></div>
-                  <div className="pt-4 text-center">
-                    <span>توقيع الكفيل:</span>
-                    <div className="h-10 border-b border-dashed border-slate-400 mt-2" />
-                  </div>
-                </div>
+              <div className="bg-white/80 p-2.5 rounded-lg border border-slate-200 sm:col-span-2 md:col-span-1">
+                <span className="text-slate-600 block mb-0.5">مكان التحرير والوفاء:</span>
+                <span className="font-bold">{selectedNoteForPrint.placeOfPayment}</span>
               </div>
             </div>
+
+            <div className="bg-slate-100/70 p-3.5 sm:p-4 rounded-xl text-xs sm:text-sm leading-relaxed sm:leading-loose text-justify font-serif border border-slate-300">
+              أتعهد أنا الموقع أدناه بأن أدفع بموجب هذا السند لأمر دون قيد أو شرط لأمر /{' '}
+              <strong className="text-slate-950 font-bold underline">{selectedNoteForPrint.payee}</strong>، المبلغ وقدره:{' '}
+              <strong className="text-emerald-950 font-bold">{selectedNoteForPrint.amountInWords}</strong>، وذلك وفاءً للقيمة
+              المستحقة بذمتي في ميعاد الاستحقاق المحدد أعلاه دون حاجة إلى احتجاج أو إشعار بعدم الدفع.
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-2 text-xs">
+              <div className="border border-slate-300 p-3 sm:p-4 rounded-xl space-y-1.5 bg-white/60">
+                <div className="font-bold text-slate-900 mb-1 border-b border-slate-200 pb-1">
+                  بيانات المحرر (المدين / المشتري):
+                </div>
+                <div>الاسم: <strong>{selectedNoteForPrint.drawee}</strong></div>
+                <div>رقم الهوية: <strong>{selectedNoteForPrint.draweeNationalId || '—'}</strong></div>
+                <div>الجوال: <strong>{selectedNoteForPrint.draweePhone || '—'}</strong></div>
+                <div className="pt-3 text-center">
+                  <span className="text-slate-600">التوقيع والبصمة:</span>
+                  <div className="h-10 border-b border-dashed border-slate-400 mt-2" />
+                </div>
+              </div>
+
+              <div className="border border-slate-300 p-3 sm:p-4 rounded-xl space-y-1.5 bg-white/60">
+                <div className="font-bold text-slate-900 mb-1 border-b border-slate-200 pb-1">
+                  بيانات الكفيل الغارم المتضامن:
+                </div>
+                <div>الاسم: <strong>{selectedNoteForPrint.guarantor || '—'}</strong></div>
+                <div>رقم الهوية: <strong>{selectedNoteForPrint.guarantorNationalId || '—'}</strong></div>
+                <div>الجوال: <strong>{selectedNoteForPrint.guarantorPhone || '—'}</strong></div>
+                <div className="pt-3 text-center">
+                  <span className="text-slate-600">توقيع الكفيل:</span>
+                  <div className="h-10 border-b border-dashed border-slate-400 mt-2" />
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        </ResponsiveModal>
       )}
 
-      {/* MODAL 5: NEW FREE PROMISSORY NOTE */}
-      {isNewNoteModalOpen && (
-        <div 
-          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 animate-fadeIn"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsNewNoteModalOpen(false);
-          }}
-        >
-          <div 
-            className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-200 text-right max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-modalIn"
-            onClick={e => e.stopPropagation()}
-            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-          >
-            {/* Mobile Handle */}
-            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
-
-            <div className="flex items-center justify-between pb-3 sm:pb-4 mb-3 sm:mb-4 border-b border-slate-200 shrink-0">
-              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
-                <FileCheck className="text-emerald-600" size={20} />
-                <span>تحرير كمبيالة أو سند لأمر مستقل</span>
-              </h3>
+      {/* MODAL 5: NEW FREE PROMISSORY NOTE (تحرير كمبيالة أو سند لأمر مستقل) */}
+      <ResponsiveModal
+        isOpen={isNewNoteModalOpen}
+        onClose={() => setIsNewNoteModalOpen(false)}
+        id="modal-new-promissory-note"
+        maxWidthClass="max-w-full sm:max-w-xl md:max-w-3xl lg:max-w-4xl"
+        title="تحرير كمبيالة أو سند لأمر مستقل"
+        subtitle="إنشاء وتوثيق ورقة تجارية نظامية معتمدة مع التفقيط التلقائي وحفظها في المحفظة المالية"
+        icon={<FileCheck className="text-emerald-600" size={22} />}
+        badge={
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0">
+            {newFreeNote.type === 'PROMISSORY_NOTE' ? 'سند لأمر معتمد' : 'كمبيالة تجارية'}
+          </span>
+        }
+        footer={
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 w-full">
+            <div className="text-xs text-slate-500 hidden md:flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span>سند رسمي ملزم وفقاً لنظام الأوراق التجارية الصادر بالمرسوم الملكي</span>
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setIsNewNoteModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="btn-3d btn-3d-white px-5 py-2.5 text-xs sm:text-sm text-slate-700 font-semibold cursor-pointer w-full sm:w-auto text-center justify-center"
               >
-                <X size={18} />
+                إلغاء
+              </button>
+              <button
+                type="submit"
+                form="new-free-note-form"
+                className="btn-3d btn-3d-emerald px-6 py-2.5 text-xs sm:text-sm text-white font-bold shadow-md cursor-pointer w-full sm:w-auto text-center justify-center flex items-center gap-2"
+              >
+                <FileCheck size={16} />
+                <span>حفظ في محفظة الأوراق المالية ←</span>
               </button>
             </div>
+          </div>
+        }
+      >
+        <form id="new-free-note-form" onSubmit={handleSaveFreeNote} className="space-y-4 sm:space-y-5 text-xs sm:text-sm">
+          {/* Section 1: البيانات المالية ونوع الورقة */}
+          <div className="bg-slate-50/70 p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 space-y-3 sm:space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
+              <span className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" />
+                1. نوع الورقة التجارية والمبلغ المالي
+              </span>
+              <span className="text-[11px] text-slate-500 font-mono">
+                {newFreeNote.type === 'PROMISSORY_NOTE' ? 'PN-FORM' : 'BE-FORM'}
+              </span>
+            </div>
 
-            <form onSubmit={handleSaveFreeNote} className="space-y-4 text-xs sm:text-sm overflow-y-auto flex-1 pr-0.5">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">نوع الورقة التجارية</label>
-                  <select
-                    value={newFreeNote.type}
-                    onChange={e => setNewFreeNote({ ...newFreeNote, type: e.target.value as any })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
-                  >
-                    <option value="PROMISSORY_NOTE">سند لأمر رسمي</option>
-                    <option value="BILL_OF_EXCHANGE">كمبيالة تجارية</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">المبلغ المالي ({currencySymbol}) *</label>
-                  <input
-                    type="number"
-                    required
-                    value={newFreeNote.amount}
-                    onChange={e => setNewFreeNote({ ...newFreeNote, amount: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  نوع الورقة التجارية *
+                </label>
+                <select
+                  value={newFreeNote.type}
+                  onChange={e => setNewFreeNote({ ...newFreeNote, type: e.target.value as any })}
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
+                >
+                  <option value="PROMISSORY_NOTE">سند لأمر رسمي (Promissory Note)</option>
+                  <option value="BILL_OF_EXCHANGE">كمبيالة تجارية (Bill of Exchange)</option>
+                </select>
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-slate-700 font-semibold text-xs">اسم المسحوب عليه (المدين) *</label>
-                  {customers.length > 0 && (
-                    <span className="text-[10px] text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md font-medium">
-                      اختيار من سجل العملاء
-                    </span>
-                  )}
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  المبلغ المالي ({currencySymbol}) *
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    step="any"
+                    required
+                    value={newFreeNote.amount}
+                    onChange={e => setNewFreeNote({ ...newFreeNote, amount: Number(e.target.value) })}
+                    className="w-full pl-12 pr-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-sm sm:text-base font-bold text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
+                    placeholder="0.00"
+                  />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 font-mono pointer-events-none">
+                    {currencySymbol}
+                  </span>
                 </div>
+              </div>
 
-                {/* Fast Select from Customers */}
-                <select
-                  onChange={e => {
-                    const selected = customers.find(c => c.id === e.target.value);
-                    if (selected) {
-                      setNewFreeNote(prev => ({
-                        ...prev,
-                        drawee: selected.name,
-                        draweePhone: selected.phone || '',
-                        draweeNationalId: selected.taxNumber || '',
-                        draweeAddress: selected.address || ''
-                      }));
-                    }
-                  }}
-                  defaultValue=""
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-2xs mb-2"
-                >
-                  <option value="" disabled>-- اختر من قاعدة بيانات العملاء لجلب البيانات تلقائياً --</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} {c.phone ? `(${c.phone})` : ''} {c.code ? `[${c.code}]` : ''}
-                    </option>
-                  ))}
-                </select>
+              <div className="sm:col-span-2 lg:col-span-1">
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  مكان التحرير والوفاء
+                </label>
+                <input
+                  type="text"
+                  value={newFreeNote.placeOfPayment}
+                  onChange={e => setNewFreeNote({ ...newFreeNote, placeOfPayment: e.target.value })}
+                  placeholder="الرياض - المقر الرئيسي"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
+                />
+              </div>
+            </div>
 
+            {/* Live Tafqeet Banner */}
+            <div className="bg-emerald-50/90 border border-emerald-200/90 rounded-xl p-2.5 sm:p-3 flex items-start gap-2.5">
+              <Sparkles size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-bold text-emerald-800">المبلغ كتابةً وتفقيطاً بالنص القانوني:</div>
+                <div className="text-xs sm:text-sm font-bold text-emerald-950 mt-0.5 leading-relaxed break-words font-serif">
+                  {tafqeet(Number(newFreeNote.amount) || 0)}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: بيانات المسحوب عليه (المدين) */}
+          <div className="bg-slate-50/70 p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 space-y-3 sm:space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-2.5">
+              <span className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-blue-600 inline-block" />
+                2. بيانات المسحوب عليه (المدين / المحرر)
+              </span>
+              {customers.length > 0 && (
+                <span className="text-[10px] sm:text-xs text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md font-medium w-fit">
+                  متاح الاختيار السريع من سجل العملاء
+                </span>
+              )}
+            </div>
+
+            {/* Fast Select from Customers */}
+            <div>
+              <label className="block text-slate-600 font-medium mb-1 text-[11px] sm:text-xs">
+                استيراد بيانات من قائمة العملاء المسجلين (اختياري):
+              </label>
+              <select
+                onChange={e => {
+                  const selected = customers.find(c => c.id === e.target.value);
+                  if (selected) {
+                    setNewFreeNote(prev => ({
+                      ...prev,
+                      drawee: selected.name,
+                      draweePhone: selected.phone || '',
+                      draweeNationalId: selected.taxNumber || '',
+                      draweeAddress: selected.address || ''
+                    }));
+                  }
+                }}
+                defaultValue=""
+                className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer shadow-2xs"
+              >
+                <option value="" disabled>-- اضغط لاختيار عميل مسجل لتعبئة الحقول آلياً --</option>
+                {customers.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {c.phone ? `(${c.phone})` : ''} {c.code ? `[${c.code}]` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  اسم المسحوب عليه (المدين) *
+                </label>
                 <input
                   type="text"
                   required
                   value={newFreeNote.drawee}
                   onChange={e => setNewFreeNote({ ...newFreeNote, drawee: e.target.value })}
                   placeholder="اسم الشخص أو المؤسسة المدينة"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">رقم الهوية الوطنية</label>
-                  <input
-                    type="text"
-                    value={newFreeNote.draweeNationalId}
-                    onChange={e => setNewFreeNote({ ...newFreeNote, draweeNationalId: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">رقم الجوال</label>
-                  <input
-                    type="text"
-                    value={newFreeNote.draweePhone}
-                    onChange={e => setNewFreeNote({ ...newFreeNote, draweePhone: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">تاريخ التحرير</label>
-                  <input
-                    type="date"
-                    value={newFreeNote.issueDate}
-                    onChange={e => setNewFreeNote({ ...newFreeNote, issueDate: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">تاريخ الاستحقاق *</label>
-                  <input
-                    type="date"
-                    required
-                    value={newFreeNote.dueDate}
-                    onChange={e => setNewFreeNote({ ...newFreeNote, dueDate: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  رقم الهوية الوطنية / السجل
+                </label>
+                <input
+                  type="text"
+                  value={newFreeNote.draweeNationalId}
+                  onChange={e => setNewFreeNote({ ...newFreeNote, draweeNationalId: e.target.value })}
+                  placeholder="10 أو 700 أرقام"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
+                />
               </div>
 
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">الكفيل الضامن (إن وجد)</label>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  رقم الجوال
+                </label>
+                <input
+                  type="text"
+                  value={newFreeNote.draweePhone}
+                  onChange={e => setNewFreeNote({ ...newFreeNote, draweePhone: e.target.value })}
+                  placeholder="05XXXXXXXX"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
+                />
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  العنوان الوطني / مكان الإقامة
+                </label>
+                <input
+                  type="text"
+                  value={newFreeNote.draweeAddress}
+                  onChange={e => setNewFreeNote({ ...newFreeNote, draweeAddress: e.target.value })}
+                  placeholder="المدينة، الحي، الرمز البريدي"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: التواريخ والمصرف */}
+          <div className="bg-slate-50/70 p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 space-y-3 sm:space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
+              <span className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                3. التواريخ المحددة والبنك المسحوب عليه
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  تاريخ التحرير
+                </label>
+                <input
+                  type="date"
+                  value={newFreeNote.issueDate}
+                  onChange={e => setNewFreeNote({ ...newFreeNote, issueDate: e.target.value })}
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-xs sm:text-sm focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100 transition-all shadow-2xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  تاريخ الاستحقاق *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={newFreeNote.dueDate}
+                  onChange={e => setNewFreeNote({ ...newFreeNote, dueDate: e.target.value })}
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono font-bold text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100 transition-all shadow-2xs"
+                />
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-1">
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  المصرف المسحوب عليه
+                </label>
+                <input
+                  type="text"
+                  value={newFreeNote.bankName}
+                  onChange={e => setNewFreeNote({ ...newFreeNote, bankName: e.target.value })}
+                  placeholder="مثال: مصرف الراجحي / البنك الأهلي"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100 transition-all shadow-2xs"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: الضامن والكفيل والملاحظات */}
+          <div className="bg-slate-50/70 p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 space-y-3 sm:space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
+              <span className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />
+                4. الضمانات والملاحظات القانونية الإضافية
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  الكفيل الغارم المتضامن (إن وجد)
+                </label>
                 <input
                   type="text"
                   value={newFreeNote.guarantor}
                   onChange={e => setNewFreeNote({ ...newFreeNote, guarantor: e.target.value })}
                   placeholder="اسم الكفيل المتضامن"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all shadow-2xs"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsNewNoteModalOpen(false)}
-                  className="btn-3d btn-3d-white px-5 py-2.5 text-slate-700 font-semibold cursor-pointer"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  className="btn-3d btn-3d-emerald px-6 py-2.5 text-white font-bold shadow-sm cursor-pointer"
-                >
-                  حفظ في محفظة الأوراق المالية ←
-                </button>
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  رقم هوية / جوال الكفيل
+                </label>
+                <input
+                  type="text"
+                  value={newFreeNote.guarantorNationalId}
+                  onChange={e => setNewFreeNote({ ...newFreeNote, guarantorNationalId: e.target.value })}
+                  placeholder="رقم الهوية أو الجوال"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm font-mono focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all shadow-2xs"
+                />
               </div>
-            </form>
+
+              <div className="sm:col-span-2 lg:col-span-1">
+                <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+                  ملاحظات أو شروط خاصة
+                </label>
+                <input
+                  type="text"
+                  value={newFreeNote.notes}
+                  onChange={e => setNewFreeNote({ ...newFreeNote, notes: e.target.value })}
+                  placeholder="أي شروط إضافية أو مراجع"
+                  className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all shadow-2xs"
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        </form>
+      </ResponsiveModal>
 
       {/* KPI DRILL-DOWN MODAL */}
       <InstallmentKpiModal
