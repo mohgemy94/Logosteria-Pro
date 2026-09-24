@@ -1,13 +1,16 @@
 /**
  * Universal File Saver & Mobile/PWA/Android APK Share Engine
  * 
- * Solves mobile & Android APK download issues:
- * 1. Android WebViews/APKs block silent `<a download>` on blob: URLs without custom native download listeners.
- * 2. Asynchronous operations cause user gesture expiration on mobile browsers.
- * 3. Utilizes the native Web Share API (navigator.share with File) on Mobile/PWA/Android,
- *    allowing direct saving to "Files" (حفظ في الملفات), Google Drive, WhatsApp, Books, or Native PDF viewers.
- * 4. Supports Capacitor Filesystem & Share plugins if running in native APK environment.
+ * Specifically engineered for Android WebViews & Capacitor Native APKs:
+ * 1. Android APK Native: Directly writes file via Capacitor Filesystem plugin
+ *    and launches Android's native Share Sheet (Save to Downloads, Drive, WhatsApp, etc.).
+ * 2. Mobile / PWA: Uses Web Share API (navigator.share with File).
+ * 3. Desktop: Uses clean standard `<a download>` trigger.
  */
+
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
 
 export interface SaveResult {
   success: boolean;
@@ -16,6 +19,14 @@ export interface SaveResult {
   error?: string;
   blob?: Blob;
   filename?: string;
+}
+
+export function isCapacitorNative(): boolean {
+  try {
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
 }
 
 export function isMobileDevice(): boolean {
@@ -43,6 +54,7 @@ export function isStandalonePwa(): boolean {
 
 export function isAndroidApkOrWebView(): boolean {
   if (typeof window === 'undefined') return false;
+  if (isCapacitorNative()) return true;
   const ua = navigator.userAgent || '';
   const isAndroid = /Android/i.test(ua);
   const isWebView = /wv|Version\/[\d.]+/i.test(ua) || (window as any).Capacitor !== undefined || (window as any).cordova !== undefined;
@@ -55,7 +67,7 @@ export function canWebShareFiles(): boolean {
 }
 
 /**
- * Convert Blob to Base64 String
+ * Convert Blob to Base64 String (clean, without data URL prefix)
  */
 export function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -71,37 +83,69 @@ export function blobToBase64(blob: Blob): Promise<string> {
 }
 
 /**
- * Direct synchronous share trigger for mobile button clicks (preserves active user gesture)
+ * Check and request Filesystem permissions if needed
+ */
+async function ensureFilesystemPermission(): Promise<void> {
+  try {
+    const status = await Filesystem.checkPermissions();
+    if (status.publicStorage === 'prompt' || status.publicStorage === 'prompt-with-rationale') {
+      await Filesystem.requestPermissions();
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Direct share trigger for mobile button clicks
  */
 export async function shareBlobDirectly(
   blob: Blob,
   filename: string,
   mimeType = 'application/pdf'
 ): Promise<boolean> {
-  if (typeof navigator === 'undefined') return false;
-
-  // 1. Try Capacitor Native Share if in APK
-  try {
-    const cap = (window as any).Capacitor;
-    if (cap?.Plugins?.Filesystem && cap?.Plugins?.Share) {
+  // 1. Capacitor Native Plugins (Android / iOS APK)
+  if (isCapacitorNative()) {
+    try {
+      await ensureFilesystemPermission();
       const base64Data = await blobToBase64(blob);
-      const writeRes = await cap.Plugins.Filesystem.writeFile({
+
+      // Write to Cache directory (accessible by FileProvider for sharing)
+      const cacheFile = await Filesystem.writeFile({
         path: filename,
         data: base64Data,
-        directory: 'CACHE',
+        directory: Directory.Cache,
         recursive: true
       });
-      await cap.Plugins.Share.share({
+
+      // Also write to Documents directory so it's permanently stored on the device
+      try {
+        await Filesystem.writeFile({
+          path: filename,
+          data: base64Data,
+          directory: Directory.Documents,
+          recursive: true
+        });
+      } catch (docErr) {
+        console.warn('Could not write to Documents directory:', docErr);
+      }
+
+      await Share.share({
         title: filename,
-        url: writeRes.uri
+        text: `مستند مالي معتمد: ${filename}`,
+        url: cacheFile.uri,
+        dialogTitle: 'حفظ أو مشاركة ملف PDF'
       });
       return true;
+    } catch (err: any) {
+      if (err?.message?.includes('canceled') || err?.name === 'AbortError') {
+        return true;
+      }
+      console.warn('Capacitor share error:', err);
     }
-  } catch (err) {
-    console.warn('Capacitor direct share error:', err);
   }
 
-  // 2. Try Web Share API
+  // 2. Web Share API on mobile browsers / PWAs
   if (canWebShareFiles()) {
     try {
       const file = new File([blob], filename, { type: mimeType });
@@ -114,7 +158,7 @@ export async function shareBlobDirectly(
         return true;
       }
     } catch (err: any) {
-      if (err?.name === 'AbortError') return true; // user closed sheet
+      if (err?.name === 'AbortError') return true;
       console.warn('Web Share direct error:', err);
     }
   }
@@ -134,32 +178,50 @@ export async function saveOrShareBlob(
   const mobile = isMobileDevice();
   const isApk = isAndroidApkOrWebView();
 
-  // 1. Try Capacitor Native Filesystem Write if running in Capacitor APK
-  try {
-    const cap = (window as any).Capacitor;
-    if (cap?.Plugins?.Filesystem) {
+  // 1. Capacitor Native APK Environment
+  if (isCapacitorNative()) {
+    try {
+      await ensureFilesystemPermission();
       const base64Data = await blobToBase64(blob);
-      const writeResult = await cap.Plugins.Filesystem.writeFile({
+
+      // Write to Cache directory (allows immediate native sharing)
+      const writeResult = await Filesystem.writeFile({
         path: filename,
         data: base64Data,
-        directory: 'DOCUMENTS',
+        directory: Directory.Cache,
         recursive: true
       });
-      
-      // If Share plugin exists, invoke it
-      if (cap.Plugins?.Share) {
-        try {
-          await cap.Plugins.Share.share({
-            title: filename,
-            url: writeResult.uri
-          });
-        } catch {}
+
+      // Write copy to Documents directory for permanent local storage
+      try {
+        await Filesystem.writeFile({
+          path: filename,
+          data: base64Data,
+          directory: Directory.Documents,
+          recursive: true
+        });
+      } catch (e) {
+        console.warn('Could not write to Documents directory:', e);
       }
 
-      return { success: true, method: 'capacitor' };
+      // Automatically launch Android native Share / Save sheet
+      try {
+        await Share.share({
+          title: filename,
+          text: `مستند مالي معتمد: ${filename}`,
+          url: writeResult.uri,
+          dialogTitle: 'حفظ أو مشاركة ملف PDF'
+        });
+        return { success: true, method: 'capacitor', blob, filename };
+      } catch (shareErr: any) {
+        if (shareErr?.message?.includes('canceled') || shareErr?.name === 'AbortError') {
+          return { success: true, method: 'capacitor', cancelled: true, blob, filename };
+        }
+        return { success: true, method: 'capacitor', blob, filename };
+      }
+    } catch (capErr) {
+      console.warn('Capacitor native save failed, falling back:', capErr);
     }
-  } catch (capErr) {
-    console.warn('Capacitor Filesystem error, falling back:', capErr);
   }
 
   // 2. Mobile & PWA: Attempt Native Web Share Sheet
@@ -171,11 +233,11 @@ export async function saveOrShareBlob(
           files: [file],
           title: filename,
         });
-        return { success: true, method: 'share' };
+        return { success: true, method: 'share', blob, filename };
       }
     } catch (shareErr: any) {
       if (shareErr?.name === 'AbortError') {
-        return { success: true, method: 'share', cancelled: true };
+        return { success: true, method: 'share', cancelled: true, blob, filename };
       }
       console.warn('Web Share failed or gesture expired:', shareErr);
     }
@@ -195,7 +257,6 @@ export async function saveOrShareBlob(
 
     setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
 
-    // If on Android APK/WebView, standard anchor might be ignored by OS, so return metadata
     return { 
       success: true, 
       method: isApk ? 'action_sheet' : 'download',
