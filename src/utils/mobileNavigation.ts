@@ -14,6 +14,8 @@
  * and close open modals before exiting.
  */
 
+import { App } from '@capacitor/app';
+
 export interface HistoryState {
   view: string | null;
   hasModal?: boolean;
@@ -62,16 +64,13 @@ class MobileNavigationController {
         document.addEventListener('backbutton', this.handleHardwareBackButton as any, false);
       }
 
-      // 4. Capacitor App backButton plugin
+      // 4. Capacitor App native backButton plugin
       try {
-        const cap = (window as any).Capacitor;
-        if (cap?.Plugins?.App?.addListener) {
-          cap.Plugins.App.addListener('backButton', () => {
-            this.handleNativeHardwareBack();
-          });
-        }
-      } catch {
-        // ignore
+        App.addListener('backButton', () => {
+          this.handleNativeHardwareBack();
+        });
+      } catch (err) {
+        console.warn('Capacitor App listener:', err);
       }
 
       // 5. Physical Keyboard / Android TV remote / Back keys
@@ -317,11 +316,8 @@ class MobileNavigationController {
     const now = Date.now();
     if (now - this.lastBackPressTime < 2000) {
       try {
-        const cap = (window as any).Capacitor;
-        if (cap?.Plugins?.App?.exitApp) {
-          cap.Plugins.App.exitApp();
-          return true;
-        }
+        App.exitApp();
+        return true;
       } catch {
         // ignore
       }
