@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect, type FormEvent } from 'react';
 import { 
-  Plus, Search, Edit3, Trash2, Save, X, FileText, Users, 
+  Plus, Layers, Search, Edit3, Trash2, Save, X, FileText, Users, 
   ArrowUpRight, ArrowDownLeft, Receipt,
   Mail, MessageSquare, ShieldAlert,
-  Copy, Check, FileCheck, Phone, LayoutGrid, Table as TableIcon
+  Copy, Check, FileCheck, Phone, LayoutGrid, Table as TableIcon,
+  FileSpreadsheet, BookOpen, Scale
 } from 'lucide-react';
 import { Partner } from '../types/accounting';
 import AddCustomerForm from './AddCustomerForm';
@@ -19,13 +20,17 @@ import {
   getPartnerAccountStatement,
   syncPartnerRecord
 } from '../utils/partnerLedger';
+import { navigateToAccountMovements } from '../utils/accountMovementsStore';
 import ExportButtonGroup from './ExportButtonGroup';
 import { useSystemCurrency } from '../utils/currency';
+import { getSystemSettings } from '../utils/settings';
 import { COUNTRIES_LIST } from '../utils/countries';
+import { useIsInWindow } from './DesktopWindowManager';
 
 export type CustomerFilterTab = 'ALL' | 'DEBTORS' | 'CREDITORS' | 'ZERO';
 
-export default function Customers() {
+export default function Customers({ isInWindow: explicitIsInWindow }: { isInWindow?: boolean } = {}) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { symbol: currencySymbol } = useSystemCurrency();
   const [customers, setCustomers] = useState<Partner[]>(() => loadCustomers());
   const [isAdding, setIsAdding] = useState(false);
@@ -50,6 +55,35 @@ export default function Customers() {
     };
   }, []);
 
+  const masterData = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('alpha_master_database_settings_v1');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return {};
+  }, []);
+
+  const regionsList: string[] = useMemo(() => {
+    if (Array.isArray(masterData?.regions)) {
+      return masterData.regions.map((r: any) => r.name || r.title || '').filter(Boolean);
+    }
+    return ['المنطقة الوسطى', 'المنطقة الغربية', 'المنطقة الشرقية', 'المنطقة الجنوبية', 'المنطقة الشمالية'];
+  }, [masterData]);
+
+  const citiesList: string[] = useMemo(() => {
+    if (Array.isArray(masterData?.cities)) {
+      return masterData.cities.map((c: any) => c.name || c.title || '').filter(Boolean);
+    }
+    return ['الرياض', 'جدة', 'الدمام', 'مكة المكرمة', 'المدينة المنورة', 'الخبر', 'القصيم', 'أبها', 'تبوك'];
+  }, [masterData]);
+
+  const customerGradesList: string[] = useMemo(() => {
+    if (Array.isArray(masterData?.customerGrades)) {
+      return masterData.customerGrades.map((g: any) => g.name || g.title || '').filter(Boolean);
+    }
+    return ['تاجر جملة (درجة A)', 'موزع معتمد (درجة B)', 'عميل تجزئة / مستهلك (درجة C)'];
+  }, [masterData]);
+
   const generateCustomerCode = () => {
     let maxNum = 0;
     for (const c of customers) {
@@ -71,6 +105,9 @@ export default function Customers() {
     phone: string; 
     address?: string | undefined;
     email?: string | undefined;
+    region?: string | undefined;
+    city?: string | undefined;
+    customerGrade?: string | undefined;
     creditLimit?: number | undefined;
     paymentTermsDays?: number | undefined;
     openingBalance?: number;
@@ -91,10 +128,16 @@ export default function Customers() {
     e.preventDefault();
     if (!editingCustomer || !editingCustomer.name.trim()) return;
 
-    const updated = customers.map(c => c.id === editingCustomer.id ? editingCustomer : c);
+    const sanitized = {
+      ...editingCustomer,
+      openingBalance: Number(editingCustomer.openingBalance) || 0,
+      creditLimit: editingCustomer.creditLimit !== undefined && editingCustomer.creditLimit !== ('' as any) ? (Number(editingCustomer.creditLimit) || 0) : undefined
+    };
+
+    const updated = customers.map(c => c.id === editingCustomer.id ? sanitized : c);
     setCustomers(updated);
     saveCustomersList(updated);
-    syncPartnerRecord(editingCustomer, 'customers', 'UPDATE');
+    syncPartnerRecord(sanitized, 'customers', 'UPDATE');
     setEditingCustomer(null);
   };
 
@@ -187,11 +230,11 @@ export default function Customers() {
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase().trim();
       return (
-        c.name.toLowerCase().includes(q) || 
+        (c.name || '').toLowerCase().includes(q) || 
         (c.phone && c.phone.includes(q)) ||
         (c.email && c.email.toLowerCase().includes(q)) ||
         (c.taxNumber && c.taxNumber.includes(q)) ||
-        (c.code && c.code.toLowerCase().includes(q)) ||
+        (c.code && String(c.code).toLowerCase().includes(q)) ||
         (c.address && c.address.toLowerCase().includes(q))
       );
     });
@@ -302,19 +345,54 @@ export default function Customers() {
   return (
     <div className="flex flex-col flex-1">
       {/* Top Header */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 sm:gap-4 mb-4 sm:mb-6 print:hidden">
-        <div>
-          <div className="flex items-center gap-2 mb-1 text-slate-500">
-            <span className="text-[11px] sm:text-xs uppercase font-bold tracking-tight">العملاء والمبيعات</span>
-            <span className="text-xs">/</span>
-            <span className="text-[11px] sm:text-xs uppercase font-bold tracking-tight">العملاء والحسابات المربوطة</span>
+      <div className={`flex flex-col lg:flex-row lg:items-end justify-between gap-3 sm:gap-4 ${isInWindow ? 'mb-3' : 'mb-4 sm:mb-6'} print:hidden`}>
+        {!isInWindow && (
+          <div>
+            <div className="flex items-center gap-2 mb-1 text-slate-500">
+              <span className="text-[11px] sm:text-xs uppercase font-bold tracking-tight">العملاء والمبيعات</span>
+              <span className="text-xs">/</span>
+              <span className="text-[11px] sm:text-xs uppercase font-bold tracking-tight">العملاء والحسابات المربوطة</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800">إدارة حسابات العملاء</h2>
+            <p className="text-slate-500 mt-1 text-xs sm:text-sm max-w-2xl">
+              متابعة أرصدة العملاء، تحصيل الدفعات الفورية، وإدارة الحدود الائتمانية وكشوف الحسابات.
+            </p>
           </div>
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800">إدارة حسابات العملاء</h2>
-          <p className="text-slate-500 mt-1 text-xs sm:text-sm max-w-2xl">
-            متابعة أرصدة العملاء، تحصيل الدفعات الفورية، وإدارة الحدود الائتمانية وكشوف الحسابات.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
+        )}
+        <div className={`flex flex-wrap items-center gap-2 sm:gap-3 ${isInWindow ? 'w-full' : 'w-full lg:w-auto'}`}>
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('alpha-navigate', { detail: { view: 'customerStatement' } }));
+            }}
+            className="btn-3d btn-3d-emerald h-10 px-3.5 text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+            title="الانتقال إلى شاشة كشف حساب عميل وتفصيلي (Continuous Detailed Ledger)"
+          >
+            <BookOpen size={15} className="text-white" />
+            <span className="hidden sm:inline">كشف حساب عميل</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('alpha-navigate', { detail: { view: 'partnerStatement' } }));
+            }}
+            className="btn-3d btn-3d-slate h-10 px-3.5 text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+            title="فتح شاشة كشف الحساب التفصيلي مع فلترة التواريخ وأنواع الحركات"
+          >
+            <FileSpreadsheet size={15} className="text-amber-400" />
+            <span className="hidden sm:inline">كشف حساب تفصيلي</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('alpha-navigate', { detail: { view: 'chartTree' } }));
+            }}
+            className="btn-3d btn-3d-white h-10 px-3 text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs text-emerald-800 border-emerald-300"
+            title="عرض حساب مراقبة العملاء (1201) في شجرة الحسابات المالية"
+          >
+            <Layers size={15} className="text-emerald-600" />
+            <span className="hidden md:inline">شجرة الحسابات (1201)</span>
+          </button>
           <PrintDropdown />
           <ExportButtonGroup
             title="دليل وسجل حسابات العملاء"
@@ -714,12 +792,57 @@ export default function Customers() {
               </div>
 
               <div>
+                <label className="block text-slate-600 font-bold mb-1">المنطقة:</label>
+                <input
+                  list="edit-customer-regions-list"
+                  type="text"
+                  value={editingCustomer.region || ''}
+                  onChange={(e) => setEditingCustomer({...editingCustomer, region: e.target.value})}
+                  placeholder="اختر أو اكتب المنطقة..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+                />
+                <datalist id="edit-customer-regions-list">
+                  {regionsList.map((r, i) => <option key={i} value={r} />)}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">المدينة:</label>
+                <input
+                  list="edit-customer-cities-list"
+                  type="text"
+                  value={editingCustomer.city || ''}
+                  onChange={(e) => setEditingCustomer({...editingCustomer, city: e.target.value})}
+                  placeholder="اختر أو اكتب المدينة..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+                />
+                <datalist id="edit-customer-cities-list">
+                  {citiesList.map((c, i) => <option key={i} value={c} />)}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">تصنيف ودرجة العميل:</label>
+                <input
+                  list="edit-customer-grades-list"
+                  type="text"
+                  value={editingCustomer.customerGrade || ''}
+                  onChange={(e) => setEditingCustomer({...editingCustomer, customerGrade: e.target.value})}
+                  placeholder="تاجر جملة / موزع / مستهلك..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-semibold"
+                />
+                <datalist id="edit-customer-grades-list">
+                  {customerGradesList.map((g, i) => <option key={i} value={g} />)}
+                </datalist>
+              </div>
+
+              <div>
                 <label className="block text-slate-600 font-bold mb-1">العنوان / المقر:</label>
                 <input
                   type="text"
                   value={editingCustomer.address || ''}
                   onChange={(e) => setEditingCustomer({...editingCustomer, address: e.target.value})}
-                  placeholder="المدينة - الحي - الشارع"
+                  placeholder="الحي - الشارع"
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -730,10 +853,11 @@ export default function Customers() {
                   type="number"
                   step="0.01"
                   min="0"
-                  value={editingCustomer.creditLimit !== undefined ? editingCustomer.creditLimit : ''}
+                  value={editingCustomer.creditLimit ?? ''}
+                  onFocus={e => e.target.select()}
                   onChange={(e) => setEditingCustomer({
                     ...editingCustomer, 
-                    creditLimit: e.target.value ? Number(e.target.value) : undefined
+                    creditLimit: e.target.value === '' ? undefined : Number(e.target.value)
                   })}
                   placeholder="مثال: 50000"
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
@@ -765,8 +889,17 @@ export default function Customers() {
               <input
                 type="number"
                 step="0.01"
-                value={editingCustomer.openingBalance || 0}
-                onChange={(e) => setEditingCustomer({...editingCustomer, openingBalance: Number(e.target.value) || 0})}
+                value={editingCustomer.openingBalance ?? ''}
+                onFocus={e => e.target.select()}
+                onChange={(e) => setEditingCustomer({
+                  ...editingCustomer, 
+                  openingBalance: e.target.value === '' ? ('' as any) : Number(e.target.value)
+                })}
+                onBlur={() => {
+                  if ((editingCustomer.openingBalance as any) === '') {
+                    setEditingCustomer({ ...editingCustomer, openingBalance: 0 });
+                  }
+                }}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
               />
               <span className="text-[10px] text-slate-400 mt-0.5 block">
@@ -779,8 +912,8 @@ export default function Customers() {
 
       {/* Print Header */}
       <div className="hidden print:block text-center mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">لوجوستريا للمحاسبة</h1>
-        <p className="text-sm text-slate-500">الفرع الرئيسي - الرياض</p>
+        <h1 className="text-2xl font-bold text-slate-900">{getSystemSettings().company?.nameAr || 'شركة لوجوستريا'}</h1>
+        <p className="text-sm text-slate-500">{getSystemSettings().company?.branchName ? `${getSystemSettings().company.branchName} - ` : ''}{getSystemSettings().company?.address || getSystemSettings().company?.city || 'المملكة العربية السعودية'}</p>
         <h2 className="text-xl font-bold mt-4 border-b pb-2 inline-block">كشف بيانات وأرصدة العملاء</h2>
         <div className="mt-4 text-sm flex justify-between px-10 text-slate-600">
           <span>تاريخ الطباعة: {new Date().toLocaleDateString('ar-SA')}</span>
@@ -880,6 +1013,23 @@ export default function Customers() {
                   )}
                 </div>
 
+                {/* شارة الربط بشجرة الحسابات */}
+                <div className="flex items-center justify-between px-2.5 py-1 bg-indigo-50/80 border border-indigo-100 rounded-lg text-[11px] text-indigo-900 mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-indigo-700">الحساب بالشجرة:</span>
+                    <span className="font-mono font-bold">{c.accountId || '1201'}</span>
+                    <span className="text-slate-500 text-[10px] truncate">- ذمم العملاء والمدينين (AR)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigateToAccountMovements(c.accountId || '1201')}
+                    className="text-[10px] text-indigo-600 hover:text-indigo-900 font-bold hover:underline"
+                    title="كشف حساب الأستاذ العام"
+                  >
+                    دفتر الأستاذ ←
+                  </button>
+                </div>
+
                 {/* Balance & Operations Highlight */}
                 <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/80 mb-3 flex items-center justify-between">
                   <div>
@@ -921,6 +1071,24 @@ export default function Customers() {
                   >
                     <FileText size={13} />
                     <span>كشف</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPartnerForContinuousStatement(c)}
+                    className="btn-3d btn-3d-indigo py-2 px-1 text-xs font-black flex items-center justify-center gap-1 col-span-1"
+                    title="كشف حساب تفصيلي متصل"
+                  >
+                    <BookOpen size={13} />
+                    <span>متصل</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigateToAccountMovements(c.id)}
+                    className="btn-3d btn-3d-slate py-2 px-1 text-xs font-black flex items-center justify-center gap-1 col-span-1"
+                    title="فتح كشف حركة الحساب (3 أعمدة: مدين - دائن - بيان الحركة)"
+                  >
+                    <Scale size={13} className="text-amber-400" />
+                    <span>حركة</span>
                   </button>
                   <button
                     type="button"
@@ -1131,6 +1299,28 @@ export default function Customers() {
                         >
                           <FileText size={12} />
                           <span>كشف الحساب</span>
+                        </button>
+
+                        {/* Continuous Detailed Statement Button */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPartnerForContinuousStatement(c)}
+                          className="btn-3d btn-3d-indigo px-2.5 py-1 text-xs font-black flex items-center gap-1 hover:scale-105 active:scale-95 transition-all"
+                          title="كشف حساب عميل وتفصيلي متصل (Continuous Detailed Ledger)"
+                        >
+                          <BookOpen size={12} />
+                          <span>كشف متصل</span>
+                        </button>
+
+                        {/* Account Movements (3 Columns) Button */}
+                        <button
+                          type="button"
+                          onClick={() => navigateToAccountMovements(c.id)}
+                          className="btn-3d btn-3d-slate px-2.5 py-1 text-xs font-black flex items-center gap-1 hover:scale-105 active:scale-95 transition-all"
+                          title="فتح في شاشة حركة الحسابات (3 أعمدة: مدين - دائن - بيان الحركة)"
+                        >
+                          <Scale size={12} className="text-amber-400" />
+                          <span>حركة الحساب</span>
                         </button>
 
                         {/* Balance Confirmation Letter Button */}

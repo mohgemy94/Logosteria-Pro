@@ -51,7 +51,7 @@ export default function OpeningStockBarcodeModal({
       if (selectedWarehouse !== 'ALL' && item.warehouseName !== selectedWarehouse) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const matchesName = item.name.toLowerCase().includes(q);
+        const matchesName = (item.name || '').toLowerCase().includes(q);
         const matchesBarcode = (item.barcode || '').toLowerCase().includes(q);
         const matchesCode = (item.code || '').toLowerCase().includes(q);
         const matchesShelf = (item.shelfLocation || '').toLowerCase().includes(q);

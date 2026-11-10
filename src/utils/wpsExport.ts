@@ -33,7 +33,7 @@ export function exportWpsPayrollCsv(
       `"${rec.employeeCode}"`,
       `"${rec.employeeName.replace(/"/g, '""')}"`,
       `"${rec.nationalId || ''}"`,
-      `"${rec.bankName || 'مصرف الراجحي'}"`,
+      `"${rec.bankName || 'البنك المعتمد'}"`,
       `"${rec.iban || ''}"`,
       rec.basicSalary.toFixed(2),
       rec.housingAllowance.toFixed(2),

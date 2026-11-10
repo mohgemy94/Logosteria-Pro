@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect, type FormEvent } from 'react';
 import { 
-  Plus, Truck, Save, Edit3, Trash2, Search, X, FileText, 
+  Plus, Layers, Truck, Save, Edit3, Trash2, Search, X, FileText, 
   ArrowUpRight, ArrowDownLeft, MessageSquare, 
   ShieldAlert, Check, Copy, Mail, CreditCard, FileCheck,
-  Phone, LayoutGrid, Table as TableIcon
+  Phone, LayoutGrid, Table as TableIcon,
+  FileSpreadsheet, Scale
 } from 'lucide-react';
 import { Partner } from '../types/accounting';
 import PrintDropdown from './PrintDropdown';
@@ -19,11 +20,15 @@ import {
   getPartnerAccountStatement,
   syncPartnerRecord
 } from '../utils/partnerLedger';
+import { navigateToAccountMovements } from '../utils/accountMovementsStore';
 import ExportButtonGroup from './ExportButtonGroup';
 import { useSystemCurrency } from '../utils/currency';
+import { getSystemSettings } from '../utils/settings';
 import { COUNTRIES_LIST } from '../utils/countries';
+import { useIsInWindow } from './DesktopWindowManager';
 
-export default function Vendors() {
+export default function Vendors({ isInWindow: explicitIsInWindow }: { isInWindow?: boolean } = {}) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { symbol: currencySymbol } = useSystemCurrency();
   const [vendors, setVendors] = useState<Partner[]>(() => loadVendors());
   const [isAdding, setIsAdding] = useState(false);
@@ -48,6 +53,28 @@ export default function Vendors() {
     };
   }, []);
 
+  const masterData = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('alpha_master_database_settings_v1');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return {};
+  }, []);
+
+  const regionsList: string[] = useMemo(() => {
+    if (Array.isArray(masterData?.regions)) {
+      return masterData.regions.map((r: any) => r.name || r.title || '').filter(Boolean);
+    }
+    return ['المنطقة الوسطى', 'المنطقة الغربية', 'المنطقة الشرقية', 'المنطقة الجنوبية', 'المنطقة الشمالية'];
+  }, [masterData]);
+
+  const citiesList: string[] = useMemo(() => {
+    if (Array.isArray(masterData?.cities)) {
+      return masterData.cities.map((c: any) => c.name || c.title || '').filter(Boolean);
+    }
+    return ['الرياض', 'جدة', 'الدمام', 'مكة المكرمة', 'المدينة المنورة', 'الخبر', 'القصيم', 'أبها', 'تبوك'];
+  }, [masterData]);
+
   const generateVendorCode = () => {
     let maxNum = 0;
     for (const v of vendors) {
@@ -69,6 +96,8 @@ export default function Vendors() {
     phone: string; 
     address?: string | undefined;
     email?: string | undefined;
+    region?: string | undefined;
+    city?: string | undefined;
     creditLimit?: number | undefined;
     paymentTermsDays?: number | undefined;
     openingBalance?: number;
@@ -83,6 +112,8 @@ export default function Vendors() {
       phone: vendorData.phone || undefined,
       email: vendorData.email || undefined,
       address: vendorData.address || undefined,
+      region: vendorData.region || undefined,
+      city: vendorData.city || undefined,
       creditLimit: vendorData.creditLimit,
       paymentTermsDays: vendorData.paymentTermsDays,
       openingBalance: vendorData.openingBalance || 0,
@@ -99,10 +130,16 @@ export default function Vendors() {
     e.preventDefault();
     if (!editingVendor || !editingVendor.name.trim()) return;
 
-    const updated = vendors.map(v => v.id === editingVendor.id ? editingVendor : v);
+    const sanitized = {
+      ...editingVendor,
+      openingBalance: Number(editingVendor.openingBalance) || 0,
+      creditLimit: editingVendor.creditLimit !== undefined && editingVendor.creditLimit !== ('' as any) ? (Number(editingVendor.creditLimit) || 0) : undefined
+    };
+
+    const updated = vendors.map(v => v.id === editingVendor.id ? sanitized : v);
     setVendors(updated);
     saveVendorsList(updated);
-    syncPartnerRecord(editingVendor, "vendors", "UPDATE");
+    syncPartnerRecord(sanitized, "vendors", "UPDATE");
     setEditingVendor(null);
   };
 
@@ -186,11 +223,11 @@ export default function Vendors() {
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase().trim();
       return (
-        v.name.toLowerCase().includes(q) ||
+        (v.name || '').toLowerCase().includes(q) ||
         (v.phone && v.phone.includes(q)) ||
         (v.email && v.email.toLowerCase().includes(q)) ||
         (v.taxNumber && v.taxNumber.includes(q)) ||
-        (v.code && v.code.toLowerCase().includes(q)) ||
+        (v.code && String(v.code).toLowerCase().includes(q)) ||
         (v.address && v.address.toLowerCase().includes(q))
       );
     });
@@ -301,19 +338,43 @@ export default function Vendors() {
   return (
     <div className="flex flex-col flex-1">
       {/* Top Header */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 sm:gap-4 mb-4 sm:mb-6 print:hidden">
-        <div>
-          <div className="flex items-center gap-2 mb-1 text-slate-500">
-            <span className="text-[11px] sm:text-xs uppercase font-bold tracking-tight">الموردون والمشتريات</span>
-            <span className="text-xs">/</span>
-            <span className="text-[11px] sm:text-xs uppercase font-bold tracking-tight">الموردون والحسابات المربوطة</span>
+      <div className={`flex flex-col lg:flex-row lg:items-end justify-between gap-3 sm:gap-4 ${isInWindow ? 'mb-3' : 'mb-4 sm:mb-6'} print:hidden`}>
+        {!isInWindow && (
+          <div>
+            <div className="flex items-center gap-2 mb-1 text-slate-500">
+              <span className="text-[11px] sm:text-xs uppercase font-bold tracking-tight">الموردون والمشتريات</span>
+              <span className="text-xs">/</span>
+              <span className="text-[11px] sm:text-xs uppercase font-bold tracking-tight">الموردون والحسابات المربوطة</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800">إدارة حسابات الموردين</h2>
+            <p className="text-slate-500 mt-1 text-xs sm:text-sm max-w-2xl">
+              متابعة مستحقات والتزامات الموردين، صرف الدفعات الفورية، وإدارة سقوف الائتمان ومطابقة كشوف الحسابات.
+            </p>
           </div>
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800">إدارة حسابات الموردين</h2>
-          <p className="text-slate-500 mt-1 text-xs sm:text-sm max-w-2xl">
-            متابعة مستحقات والتزامات الموردين، صرف الدفعات الفورية، وإدارة سقوف الائتمان ومطابقة كشوف الحسابات.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
+        )}
+        <div className={`flex flex-wrap items-center gap-2 sm:gap-3 ${isInWindow ? 'w-full' : 'w-full lg:w-auto'}`}>
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('alpha-navigate', { detail: { view: 'partnerStatement' } }));
+            }}
+            className="btn-3d btn-3d-slate h-10 px-3.5 text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+            title="فتح شاشة كشف الحساب التفصيلي مع فلترة التواريخ وأنواع الحركات"
+          >
+            <FileSpreadsheet size={15} className="text-amber-400" />
+            <span className="hidden sm:inline">كشف حساب تفصيلي</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('alpha-navigate', { detail: { view: 'chartTree' } }));
+            }}
+            className="btn-3d btn-3d-white h-10 px-3 text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs text-purple-800 border-purple-300"
+            title="عرض حساب مراقبة الموردين (2101) في شجرة الحسابات المالية"
+          >
+            <Layers size={15} className="text-purple-600" />
+            <span className="hidden md:inline">شجرة الحسابات (2101)</span>
+          </button>
           <PrintDropdown />
           <ExportButtonGroup
             title="دليل وسجل حسابات الموردين"
@@ -717,12 +778,42 @@ export default function Vendors() {
               </div>
 
               <div>
+                <label className="block text-slate-600 font-bold mb-1">المنطقة:</label>
+                <input
+                  list="edit-vendor-regions-list"
+                  type="text"
+                  value={editingVendor.region || ''}
+                  onChange={(e) => setEditingVendor({...editingVendor, region: e.target.value})}
+                  placeholder="اختر أو اكتب المنطقة..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+                />
+                <datalist id="edit-vendor-regions-list">
+                  {regionsList.map((r, i) => <option key={i} value={r} />)}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="block text-slate-600 font-bold mb-1">المدينة:</label>
+                <input
+                  list="edit-vendor-cities-list"
+                  type="text"
+                  value={editingVendor.city || ''}
+                  onChange={(e) => setEditingVendor({...editingVendor, city: e.target.value})}
+                  placeholder="اختر أو اكتب المدينة..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+                />
+                <datalist id="edit-vendor-cities-list">
+                  {citiesList.map((c, i) => <option key={i} value={c} />)}
+                </datalist>
+              </div>
+
+              <div>
                 <label className="block text-slate-600 font-bold mb-1">العنوان / المقر:</label>
                 <input
                   type="text"
                   value={editingVendor.address || ''}
                   onChange={(e) => setEditingVendor({...editingVendor, address: e.target.value})}
-                  placeholder="المدينة - الحي - الشارع"
+                  placeholder="الحي - الشارع"
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -733,10 +824,11 @@ export default function Vendors() {
                   type="number"
                   step="0.01"
                   min="0"
-                  value={editingVendor.creditLimit !== undefined ? editingVendor.creditLimit : ''}
+                  value={editingVendor.creditLimit ?? ''}
+                  onFocus={e => e.target.select()}
                   onChange={(e) => setEditingVendor({
                     ...editingVendor, 
-                    creditLimit: e.target.value ? Number(e.target.value) : undefined
+                    creditLimit: e.target.value === '' ? undefined : Number(e.target.value)
                   })}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
                   placeholder="100000"
@@ -769,8 +861,17 @@ export default function Vendors() {
               <input
                 type="number"
                 step="0.01"
-                value={editingVendor.openingBalance || 0}
-                onChange={(e) => setEditingVendor({...editingVendor, openingBalance: Number(e.target.value) || 0})}
+                value={editingVendor.openingBalance ?? ''}
+                onFocus={e => e.target.select()}
+                onChange={(e) => setEditingVendor({
+                  ...editingVendor, 
+                  openingBalance: e.target.value === '' ? ('' as any) : Number(e.target.value)
+                })}
+                onBlur={() => {
+                  if ((editingVendor.openingBalance as any) === '') {
+                    setEditingVendor({ ...editingVendor, openingBalance: 0 });
+                  }
+                }}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
               />
               <span className="text-[10px] text-slate-400 mt-0.5 block">
@@ -783,8 +884,8 @@ export default function Vendors() {
 
       {/* Print Header */}
       <div className="hidden print:block text-center mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">لوجوستريا للمحاسبة</h1>
-        <p className="text-sm text-slate-500">الفرع الرئيسي - الرياض</p>
+        <h1 className="text-2xl font-bold text-slate-900">{getSystemSettings().company?.nameAr || 'شركة لوجوستريا'}</h1>
+        <p className="text-sm text-slate-500">{getSystemSettings().company?.branchName ? `${getSystemSettings().company.branchName} - ` : ''}{getSystemSettings().company?.address || getSystemSettings().company?.city || 'المملكة العربية السعودية'}</p>
         <h2 className="text-xl font-bold mt-4 border-b pb-2 inline-block">كشف بيانات وأرصدة الموردين</h2>
         <div className="mt-4 text-sm flex justify-between px-10 text-slate-600">
           <span>تاريخ الطباعة: {new Date().toLocaleDateString('ar-SA')}</span>
@@ -901,6 +1002,23 @@ export default function Vendors() {
                 )}
               </div>
 
+              {/* شارة الربط بشجرة الحسابات */}
+              <div className="flex items-center justify-between px-2.5 py-1 bg-purple-50/80 border border-purple-100 rounded-lg text-[11px] text-purple-900 mb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-purple-700">الحساب بالشجرة:</span>
+                  <span className="font-mono font-bold">{v.accountId || '2101'}</span>
+                  <span className="text-slate-500 text-[10px] truncate">- ذمم الموردين والدائنين (AP)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigateToAccountMovements(v.accountId || '2101')}
+                  className="text-[10px] text-purple-600 hover:text-purple-900 font-bold hover:underline"
+                  title="كشف حساب الأستاذ العام"
+                >
+                  دفتر الأستاذ ←
+                </button>
+              </div>
+
               {/* Financial Metrics Box */}
               <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                 <div>
@@ -953,6 +1071,17 @@ export default function Vendors() {
                 >
                   <FileText size={14} />
                   <span>كشف الحساب</span>
+                </button>
+
+                {/* Account Movements (3 Columns) Button */}
+                <button
+                  type="button"
+                  onClick={() => navigateToAccountMovements(v.id)}
+                  className="btn-3d btn-3d-slate h-9 px-2 text-xs font-black flex items-center justify-center gap-1 hover:scale-105 active:scale-95 transition-all"
+                  title="فتح كشف حركة الحساب (3 أعمدة: مدين - دائن - بيان الحركة)"
+                >
+                  <Scale size={14} className="text-amber-400" />
+                  <span>حركة</span>
                 </button>
 
                 {/* Balance Confirmation Letter Button */}
@@ -1169,6 +1298,17 @@ export default function Vendors() {
                         >
                           <FileText size={12} />
                           <span>كشف الحساب</span>
+                        </button>
+
+                        {/* Account Movements (3 Columns) Button */}
+                        <button
+                          type="button"
+                          onClick={() => navigateToAccountMovements(v.id)}
+                          className="btn-3d btn-3d-slate px-2.5 py-1 text-xs font-black flex items-center gap-1 hover:scale-105 active:scale-95 transition-all"
+                          title="فتح في شاشة حركة الحسابات (3 أعمدة: مدين - دائن - بيان الحركة)"
+                        >
+                          <Scale size={12} className="text-amber-400" />
+                          <span>حركة الحساب</span>
                         </button>
 
                         {/* Balance Confirmation Letter Button */}

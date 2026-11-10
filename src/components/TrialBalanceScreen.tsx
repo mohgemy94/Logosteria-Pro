@@ -20,6 +20,15 @@ import {
   Tag,
   Percent,
   HelpCircle,
+  Landmark,
+  FileSpreadsheet,
+  Download,
+  FileCheck,
+  ShieldCheck,
+  FileText,
+  Calendar,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import { AccountType } from '../types/accounting';
 import { 
@@ -29,8 +38,10 @@ import {
   getDiscountsSummary
 } from '../utils/trialBalanceStore';
 import { getSystemSettings } from '../utils/settings';
+import { useIsInWindow } from './DesktopWindowManager';
 import { useLanguage } from '../i18n/LanguageContext';
 import { exportElementToPdf } from '../utils/pdfExport';
+import { exportToXLSX } from '../utils/universalExport';
 import ReportPrintPreviewToolbar from './ReportPrintPreviewToolbar';
 import ExportButtonGroup from './ExportButtonGroup';
 import { 
@@ -41,9 +52,11 @@ import {
 
 interface TrialBalanceScreenProps {
   onNavigate?: (view: string) => void;
+  isInWindow?: boolean;
 }
 
-export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenProps = {}) {
+export default function TrialBalanceScreen({ onNavigate, isInWindow: explicitIsInWindow }: TrialBalanceScreenProps = {}) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { t } = useLanguage();
   const [systemSettings] = useState(() => getSystemSettings());
   const [showPrintPreview, setShowPrintPreview] = useState(false);
@@ -59,7 +72,76 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
 
   // Selected Account for Ledger Detail Modal
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [ledgerStartDate, setLedgerStartDate] = useState<string>('');
+  const [ledgerEndDate, setLedgerEndDate] = useState<string>('');
+  const [ledgerSearch, setLedgerSearch] = useState<string>('');
   
+  // Ledger Movements Modal Zoom & Pan State
+  const [ledgerZoom, setLedgerZoom] = useState<number>(100);
+  const [ledgerPan, setLedgerPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isLedgerDragging, setIsLedgerDragging] = useState<boolean>(false);
+  const ledgerDragRef = useRef<{ startX: number; startY: number; initPanX: number; initPanY: number }>({ startX: 0, startY: 0, initPanX: 0, initPanY: 0 });
+
+  // Reset zoom and pan whenever ledger details modal is opened or closed
+  useEffect(() => {
+    setLedgerZoom(100);
+    setLedgerPan({ x: 0, y: 0 });
+  }, [selectedAccountId]);
+
+  const resetLedgerPan = () => {
+    setLedgerPan({ x: 0, y: 0 });
+  };
+
+  const handleLedgerMouseDown = (e: React.MouseEvent) => {
+    if (ledgerZoom <= 100) return;
+    setIsLedgerDragging(true);
+    ledgerDragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initPanX: ledgerPan.x,
+      initPanY: ledgerPan.y
+    };
+  };
+
+  const handleLedgerMouseMove = (e: React.MouseEvent) => {
+    if (!isLedgerDragging || ledgerZoom <= 100) return;
+    const dx = e.clientX - ledgerDragRef.current.startX;
+    const dy = e.clientY - ledgerDragRef.current.startY;
+    setLedgerPan({
+      x: ledgerDragRef.current.initPanX + dx,
+      y: ledgerDragRef.current.initPanY + dy
+    });
+  };
+
+  const handleLedgerMouseUp = () => {
+    setIsLedgerDragging(false);
+  };
+
+  const handleLedgerTouchStart = (e: React.TouchEvent) => {
+    if (ledgerZoom <= 100 || e.touches.length !== 1) return;
+    setIsLedgerDragging(true);
+    ledgerDragRef.current = {
+      startX: e.touches[0].clientX,
+      startY: e.touches[0].clientY,
+      initPanX: ledgerPan.x,
+      initPanY: ledgerPan.y
+    };
+  };
+
+  const handleLedgerTouchMove = (e: React.TouchEvent) => {
+    if (!isLedgerDragging || ledgerZoom <= 100) return;
+    const dx = e.touches[0].clientX - ledgerDragRef.current.startX;
+    const dy = e.touches[0].clientY - ledgerDragRef.current.startY;
+    setLedgerPan({
+      x: ledgerDragRef.current.initPanX + dx,
+      y: ledgerDragRef.current.initPanY + dy
+    });
+  };
+
+  const handleLedgerTouchEnd = () => {
+    setIsLedgerDragging(false);
+  };
+
   // Educational Accounting Guide Modal for Discounts
   const [showDiscountGuideModal, setShowDiscountGuideModal] = useState<boolean>(false);
   
@@ -169,8 +251,8 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter(r => 
-        r.account.code.toLowerCase().includes(q) ||
-        r.account.name.toLowerCase().includes(q)
+        (r.account.code || '').toLowerCase().includes(q) ||
+        (r.account.name || '').toLowerCase().includes(q)
       );
     }
     
@@ -183,10 +265,173 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
     return rows.find(r => r.account.id === selectedAccountId || r.account.code === selectedAccountId) || null;
   }, [rows, selectedAccountId]);
 
+  // Sync in-modal ledger date filters when an account is selected
+  useEffect(() => {
+    if (selectedAccountId) {
+      setLedgerStartDate(startDate || '');
+      setLedgerEndDate(endDate || '');
+      setLedgerSearch('');
+    }
+  }, [selectedAccountId, startDate, endDate]);
+
   const selectedLedgerItems = useMemo(() => {
     if (!selectedAccountId) return [];
-    return getAccountLedgerMovements(selectedAccountId, startDate || undefined, endDate || undefined);
-  }, [selectedAccountId, startDate, endDate, refreshKey]);
+    const from = ledgerStartDate || startDate || undefined;
+    const to = ledgerEndDate || endDate || undefined;
+    let items = getAccountLedgerMovements(selectedAccountId, from, to);
+    if (ledgerSearch.trim()) {
+      const q = ledgerSearch.toLowerCase().trim();
+      items = items.filter(it => 
+        (it.entryNumber && it.entryNumber.toLowerCase().includes(q)) ||
+        (it.description && it.description.toLowerCase().includes(q)) ||
+        (it.reference && it.reference.toLowerCase().includes(q)) ||
+        (it.sourceLabel && it.sourceLabel.toLowerCase().includes(q))
+      );
+    }
+    return items;
+  }, [selectedAccountId, startDate, endDate, ledgerStartDate, ledgerEndDate, ledgerSearch, refreshKey]);
+
+  // Operational shortcut link per account code
+  const getAccountOperationalLink = (code: string) => {
+    if (code === '1201' || code.startsWith('1201')) {
+      return {
+        view: 'customerStatement',
+        title: 'كشف حساب عميل وتفصيلي (قائمة متصلة ورصيد تراكمي)',
+        shortLabel: 'كشف العميل',
+        icon: <Users size={12} className="text-emerald-600" />,
+        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+      };
+    }
+    if (code === '2101' || code.startsWith('2101')) {
+      return {
+        view: 'partnerBalances',
+        title: 'أرصدة الموردين وأعمار الديون',
+        shortLabel: 'أرصدة الموردين',
+        icon: <Truck size={12} className="text-rose-600" />,
+        badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+      };
+    }
+    if (code === '1301' || code.startsWith('1301')) {
+      return {
+        view: 'warehouseBalances',
+        title: 'أرصدة وتقييم المخازن',
+        shortLabel: 'أرصدة المخزن',
+        icon: <Warehouse size={12} className="text-amber-600" />,
+        badgeClass: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+      };
+    }
+    if (code === '1101') {
+      return {
+        view: 'externalReceipt',
+        title: 'سندات القبض النقدية',
+        shortLabel: 'سندات القبض',
+        icon: <DollarSign size={12} className="text-emerald-600" />,
+        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+      };
+    }
+    if (code === '1102') {
+      return {
+        view: 'externalPayment',
+        title: 'سندات الصرف البنكية',
+        shortLabel: 'سندات الصرف',
+        icon: <DollarSign size={12} className="text-blue-600" />,
+        badgeClass: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+      };
+    }
+    if (code === '1104' || code === '2104') {
+      return {
+        view: 'bankChecks',
+        title: 'حافظة ودورة حياة الشيكات',
+        shortLabel: 'حافظة الشيكات',
+        icon: <Landmark size={12} className="text-purple-600" />,
+        badgeClass: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+      };
+    }
+    if (code === '4101' || code.startsWith('4101')) {
+      return {
+        view: 'sales',
+        title: 'فواتير المبيعات',
+        shortLabel: 'المبيعات',
+        icon: <ShoppingCart size={12} className="text-emerald-600" />,
+        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+      };
+    }
+    if (code === '4103') {
+      return {
+        view: 'sales',
+        title: 'فواتير المبيعات المتضمنة خصم مسموح به',
+        shortLabel: 'شاشة المبيعات',
+        icon: <Percent size={12} className="text-blue-600" />,
+        badgeClass: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+      };
+    }
+    if (code === '4203') {
+      return {
+        view: 'purchases',
+        title: 'فواتير المشتريات المتضمنة خصم مكتسب',
+        shortLabel: 'شاشة المشتريات',
+        icon: <Percent size={12} className="text-emerald-600" />,
+        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+      };
+    }
+    if (code === '5101' || code.startsWith('5101')) {
+      return {
+        view: 'purchases',
+        title: 'فواتير المشتريات',
+        shortLabel: 'المشتريات',
+        icon: <Receipt size={12} className="text-rose-600" />,
+        badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+      };
+    }
+    if (code === '5102' || code.startsWith('5102')) {
+      return {
+        view: 'payroll',
+        title: 'الموظفون ومسير الرواتب',
+        shortLabel: 'الرواتب',
+        icon: <Users size={12} className="text-teal-600" />,
+        badgeClass: 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100'
+      };
+    }
+    if (code === '1302' || code === '1303') {
+      return {
+        view: 'manufacturing',
+        title: 'أوامر التصنيع وقوائم التكاليف',
+        shortLabel: 'التصنيع',
+        icon: <Layers size={12} className="text-cyan-600" />,
+        badgeClass: 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100'
+      };
+    }
+    return null;
+  };
+
+  // Export Ledger to Excel
+  const handleExportLedgerExcel = () => {
+    if (!selectedRow) return;
+    const headers = ['التاريخ', 'رقم القيد / المستند', 'المصدر', 'البيان والشرح', 'مدين', 'دائن', 'الرصيد التراكمي', 'طبيعة الرصيد'];
+    const rowsData = selectedLedgerItems.map(item => [
+      item.date,
+      item.entryNumber,
+      item.sourceLabel || item.sourceModule || 'قيد',
+      item.description,
+      item.debit > 0 ? item.debit : 0,
+      item.credit > 0 ? item.credit : 0,
+      item.runningBalance,
+      item.balanceType === 'DEBIT' ? 'مدين' : item.balanceType === 'CREDIT' ? 'دائن' : 'متوازن'
+    ]);
+    const summaryRows = [
+      ['الإجمالي', '', '', '', selectedRow.debitMovement, selectedRow.creditMovement, Math.abs(selectedRow.netMovement), selectedRow.netMovement >= 0 ? 'مدين' : 'دائن']
+    ];
+    exportToXLSX({
+      filename: `كشف_حركة_حساب_${selectedRow.account.code}_${selectedRow.account.name.replace(/\\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'كشف حركة الحساب',
+      title: `كشف حركة الحساب (دفتر الأستاذ العام) - ${selectedRow.account.code} : ${selectedRow.account.name}`,
+      subtitle: `الفترة: ${ledgerStartDate || startDate || 'من البداية'} إلى ${ledgerEndDate || endDate || 'حتى تاريخه'} | التصنيف: ${getAccountTypeLabel(selectedRow.account.type)}`,
+      filterSummary: `إجمالي المدين: ${selectedRow.debitMovement.toLocaleString()} | إجمالي الدائن: ${selectedRow.creditMovement.toLocaleString()} | الرصيد: ${Math.abs(selectedRow.netMovement).toLocaleString()} (${selectedRow.netMovement >= 0 ? 'مدين' : 'دائن'})`,
+      headers,
+      rows: rowsData,
+      summaryRows
+    });
+  };
 
   // Currency
   const currencySymbol = systemSettings.financial?.currencySymbol || 'ر.س';
@@ -267,10 +512,11 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
         title="ميزان المراجعة"
         targetId="trial-balance-export-area"
       />
-      <div className="flex flex-col flex-1 p-3 sm:p-6 space-y-5 max-w-[1600px] mx-auto w-full">
+      <div className="flex flex-col flex-1 p-2 sm:p-4 space-y-3 max-w-[1600px] mx-auto w-full">
         
       {/* Screen Top Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
+        {!isInWindow && (
         <div>
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs">
@@ -291,6 +537,7 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
             </div>
           </div>
         </div>
+        )}
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2">
@@ -335,34 +582,88 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
         </div>
       </div>
 
-      {/* Quick Cross-Screen Navigation Strip (الربط المباشر مع جميع الشاشات) */}
-      <div className="bg-slate-900 text-white p-3.5 rounded-2xl shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg">
-            <Layers size={16} />
+      {/* Quick Cross-Screen Navigation Strip (الربط المباشر والشامل مع جميع شاشات النظام) */}
+      <div className="bg-slate-900 text-white p-2.5 sm:p-3 rounded-xl shadow-xs flex flex-col items-start gap-3 print:hidden">
+        <div className="flex items-center justify-between w-full flex-wrap gap-2 pb-2 border-b border-slate-800">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg">
+              <Layers size={16} />
+            </div>
+            <div>
+              <span className="text-xs sm:text-sm font-black text-white block">الانتقال والربط السريع للشاشات المصدرية المرتبطة بميزان المراجعة:</span>
+              <span className="text-[10px] text-slate-400">انقر للتحقق من تفاصيل أي حساب في شاشته التشغيلية المطابقة</span>
+            </div>
           </div>
-          <div>
-            <span className="text-xs font-bold text-white block">الانتقال السريع للشاشات المصدرية المرتبطة بالميزان:</span>
-            <span className="text-[10px] text-slate-400">انقر لفتح أي شاشة فرعية والتحقق من أرصدتها التفصيلية</span>
-          </div>
+          <span className="text-[10px] font-mono font-bold bg-blue-500/20 text-blue-300 px-2.5 py-0.5 rounded-full border border-blue-400/30">
+            تكامل مباشر 100%
+          </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-1.5 w-full">
           <button
             type="button"
-            onClick={() => navigateToView('sales')}
-            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
+            onClick={() => navigateToView('accountMovements')}
+            className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ring-1 ring-white/20"
+            title="فتح شاشة حركة الحسابات التفصيلية (3 أعمدة: مدين - دائن - بيان الحركة)"
           >
-            <ShoppingCart size={13} className="text-emerald-400" />
-            <span>المبيعات (4101)</span>
+            <Scale size={14} className="text-amber-300" />
+            <span>حركة الحسابات (Account Movements)</span>
           </button>
 
           <button
             type="button"
-            onClick={() => {
-              setAccountTypeFilter('DISCOUNTS');
-            }}
-            className="px-2.5 py-1.5 bg-indigo-900/80 hover:bg-indigo-800 text-indigo-200 border border-indigo-700/60 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+            onClick={() => navigateToView('sales')}
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="شاشة فواتير المبيعات (حساب 4101)"
+          >
+            <ShoppingCart size={13} className="text-emerald-400" />
+            <span>فواتير المبيعات (4101)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigateToView('purchases')}
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="شاشة فواتير المشتريات (حساب 1301)"
+          >
+            <Receipt size={13} className="text-rose-400" />
+            <span>فواتير المشتريات (1301)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigateToView('customerStatement')}
+            className="px-2.5 py-1.5 bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 border border-emerald-700/50 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="فتح كشف حساب عميل وتفصيلي (قائمة متصلة ورصيد تراكمي)"
+          >
+            <BookOpen size={13} className="text-emerald-400" />
+            <span>كشف حساب عميل (1201)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigateToView('partnerBalances')}
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="شاشة أرصدة العملاء والموردين وأعمار الديون"
+          >
+            <Users size={13} className="text-blue-400" />
+            <span>أرصدة العملاء والموردين (1201/2101)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigateToView('partnerStatement')}
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="كشف حساب تفصيلي للعميل / المورد"
+          >
+            <FileSpreadsheet size={13} className="text-amber-400" />
+            <span>كشف حساب تفصيلي</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAccountTypeFilter('DISCOUNTS')}
+            className="px-2.5 py-1.5 bg-indigo-900/80 hover:bg-indigo-800 text-indigo-200 border border-indigo-700/60 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
             title="تصفية الحسابات على الخصم المسموح به والمكتسب"
           >
             <Percent size={13} className="text-amber-400" />
@@ -371,26 +672,9 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
 
           <button
             type="button"
-            onClick={() => navigateToView('purchases')}
-            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
-          >
-            <Receipt size={13} className="text-rose-400" />
-            <span>المشتريات (1301)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigateToView('partnerBalances')}
-            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
-          >
-            <Users size={13} className="text-blue-400" />
-            <span>العملاء والموردين (1201/2101)</span>
-          </button>
-
-          <button
-            type="button"
             onClick={() => navigateToView('warehouseBalances')}
-            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="أرصدة وتقييم المخزون (1301)"
           >
             <Warehouse size={13} className="text-amber-400" />
             <span>أرصدة المخازن (1301)</span>
@@ -399,7 +683,8 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
           <button
             type="button"
             onClick={() => navigateToView('inventoryCount')}
-            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="الجرد الدوري والتسويات الدفترية"
           >
             <Scale size={13} className="text-purple-400" />
             <span>الجرد والتسويات</span>
@@ -407,149 +692,337 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
 
           <button
             type="button"
-            onClick={() => navigateToView('payroll')}
-            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
+            onClick={() => navigateToView('bankChecks')}
+            className="px-2.5 py-1.5 bg-blue-900/60 hover:bg-blue-800 text-blue-200 border border-blue-700/50 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="حافظة ودورة حياة الشيكات البنكية (1104 / 2104)"
           >
-            <DollarSign size={13} className="text-teal-400" />
-            <span>الرواتب (5102)</span>
+            <Landmark size={13} className="text-blue-300" />
+            <span>حافظة الشيكات (1104/2104)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigateToView('externalReceipt')}
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="سندات القبض والصرف النقدية والبنكية"
+          >
+            <DollarSign size={13} className="text-emerald-400" />
+            <span>السندات المالية (1101/1102)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigateToView('manufacturing')}
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="أوامر التصنيع والإنتاج وقوائم التكاليف (BOM)"
+          >
+            <Layers size={13} className="text-cyan-400" />
+            <span>التصنيع والإنتاج (1302/1303)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigateToView('payroll')}
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="الموظفون ومسير الرواتب (5102 / 2201)"
+          >
+            <Users size={13} className="text-teal-400" />
+            <span>مسير الرواتب (5102)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigateToView('journal')}
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="القيود اليومية العامة (GL)"
+          >
+            <FileText size={13} className="text-indigo-400" />
+            <span>القيود اليومية (GL)</span>
           </button>
 
           <button
             type="button"
             onClick={() => navigateToView('chartTree')}
-            className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+            className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="شجرة ودليل الحسابات المالية"
           >
             <BookOpen size={13} />
             <span>شجرة الحسابات</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => navigateToView('financialReports')}
+            className="px-2.5 py-1.5 bg-purple-700 hover:bg-purple-600 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="القوائم المالية الختامية (قائمة الدخل والميزانية العمومية)"
+          >
+            <FileSpreadsheet size={13} />
+            <span>القوائم المالية الختامية</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigateToView('yearEndClosing')}
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="الإقفال السنوي وترحيل الأرصدة"
+          >
+            <ShieldCheck size={13} className="text-amber-400" />
+            <span>الإقفال السنوي</span>
+          </button>
         </div>
       </div>
 
+      {/* الفرق الجوهري المحاسبي بين ميزان المراجعة وحركة الحسابات */}
+      <div className="bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 text-white p-4 sm:p-5 rounded-2xl border border-blue-500/30 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs print:hidden">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 bg-indigo-500/20 text-indigo-400 rounded-xl shrink-0 mt-0.5 border border-indigo-400/20">
+            <Scale size={20} />
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-black text-amber-300 text-sm">💡 الفرق الجوهري المحاسبي:</span>
+              <span className="font-bold text-slate-200">ميزان المراجعة (Trial Balance) مقابل حركة الحسابات (Account Movements)</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-slate-300">
+              <div className="bg-white/5 p-2 rounded-lg border border-white/10">
+                <span className="font-bold text-blue-300 block mb-0.5">• ميزان المراجعة (إلزامي التوازن):</span>
+                <span>توازنه حتمي قطعي (إجمالي المدين = إجمالي الدائن) لإثبات صحة التسجيل المزدوج لكافة حسابات المنشأة، ويعرض ملخص أرصدة كل حساب في سطر واحد.</span>
+              </div>
+              <div className="bg-white/5 p-2 rounded-lg border border-white/10">
+                <span className="font-bold text-emerald-300 block mb-0.5">• كشف حركة الحسابات (غير مشترط التوازن):</span>
+                <span>وظيفتها إظهار تدفق العمليات (مدين، دائن، بيان الحركة بالتفصيل)، والفرق بين المدين والدائن يمثل <strong>رصيد الحساب الصافي</strong> وليس خللاً في التوازن.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigateToView('accountMovements')}
+          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-xs shrink-0 flex items-center gap-2 transition-all cursor-pointer shadow-md hover:scale-105 active:scale-95"
+          title="الانتقال إلى شاشة حركة الحسابات بالجدول الثلاثي (مدين - دائن - بيان الحركة)"
+        >
+          <Scale size={15} />
+          <span>فتح حركة الحسابات ←</span>
+        </button>
+      </div>
+
       {/* Cross-Module Live Reconciliation Hub (شريط المطابقة الشاملة مع الأنظمة الفرعية) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 print:hidden">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 print:hidden">
         
-        {/* AR Reconciliation */}
+        {/* 1. AR Reconciliation */}
         <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:border-blue-300 transition-all">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-              <Users size={15} className="text-blue-600" />
-              <span>مطابقة ذمم العملاء (1201)</span>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                <Users size={15} className="text-blue-600" />
+                <span>مطابقة ذمم العملاء (1201)</span>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${reconciliation.ar.isReconciled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                {reconciliation.ar.isReconciled ? 'مطابق 100%' : 'فارق'}
+              </span>
             </div>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${reconciliation.ar.isReconciled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-              {reconciliation.ar.isReconciled ? 'مطابق 100%' : 'فارق'}
-            </span>
+            <div className="text-xs space-y-1 font-mono">
+              <div className="flex justify-between text-slate-500">
+                <span>رصيد الميزان (1201):</span>
+                <span className="font-bold text-slate-800">{reconciliation.ar.accountBalance.toLocaleString()} {currencySymbol}</span>
+              </div>
+              <div className="flex justify-between text-slate-500">
+                <span>دفتر أستاذ العملاء:</span>
+                <span className="font-bold text-blue-700">{reconciliation.ar.subLedgerTotal.toLocaleString()} {currencySymbol}</span>
+              </div>
+            </div>
           </div>
-          <div className="text-xs space-y-1 font-mono">
-            <div className="flex justify-between text-slate-500">
-              <span>رصيد الميزان (1201):</span>
-              <span className="font-bold text-slate-800">{reconciliation.ar.accountBalance.toLocaleString()} {currencySymbol}</span>
-            </div>
-            <div className="flex justify-between text-slate-500">
-              <span>دفتر أستاذ العملاء:</span>
-              <span className="font-bold text-blue-700">{reconciliation.ar.subLedgerTotal.toLocaleString()} {currencySymbol}</span>
-            </div>
+          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px] font-bold">
+            <button
+              type="button"
+              onClick={() => navigateToView('customerStatement')}
+              className="text-emerald-700 hover:underline flex items-center gap-1 cursor-pointer"
+              title="كشف حساب عميل وتفصيلي"
+            >
+              <span>كشف العميل</span>
+              <ArrowRight size={11} className="rotate-180" />
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateToView('partnerBalances')}
+              className="text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+              title="أرصدة العملاء والذمم"
+            >
+              <span>أرصدة العملاء</span>
+              <ArrowRight size={11} className="rotate-180" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => navigateToView('partnerBalances')}
-            className="mt-2 text-[11px] font-bold text-blue-600 hover:underline flex items-center justify-between pt-1.5 border-t border-slate-100 cursor-pointer"
-          >
-            <span>فتح شاشة أرصدة العملاء</span>
-            <ArrowRight size={13} className="rotate-180" />
-          </button>
         </div>
 
-        {/* AP Reconciliation */}
+        {/* 2. AP Reconciliation */}
         <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:border-rose-300 transition-all">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-              <Truck size={15} className="text-rose-600" />
-              <span>مطابقة ذمم الموردين (2101)</span>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                <Truck size={15} className="text-rose-600" />
+                <span>مطابقة ذمم الموردين (2101)</span>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${reconciliation.ap.isReconciled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                {reconciliation.ap.isReconciled ? 'مطابق 100%' : 'فارق'}
+              </span>
             </div>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${reconciliation.ap.isReconciled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-              {reconciliation.ap.isReconciled ? 'مطابق 100%' : 'فارق'}
-            </span>
+            <div className="text-xs space-y-1 font-mono">
+              <div className="flex justify-between text-slate-500">
+                <span>رصيد الميزان (2101):</span>
+                <span className="font-bold text-slate-800">{reconciliation.ap.accountBalance.toLocaleString()} {currencySymbol}</span>
+              </div>
+              <div className="flex justify-between text-slate-500">
+                <span>دفتر أستاذ الموردين:</span>
+                <span className="font-bold text-rose-700">{reconciliation.ap.subLedgerTotal.toLocaleString()} {currencySymbol}</span>
+              </div>
+            </div>
           </div>
-          <div className="text-xs space-y-1 font-mono">
-            <div className="flex justify-between text-slate-500">
-              <span>رصيد الميزان (2101):</span>
-              <span className="font-bold text-slate-800">{reconciliation.ap.accountBalance.toLocaleString()} {currencySymbol}</span>
-            </div>
-            <div className="flex justify-between text-slate-500">
-              <span>دفتر أستاذ الموردين:</span>
-              <span className="font-bold text-rose-700">{reconciliation.ap.subLedgerTotal.toLocaleString()} {currencySymbol}</span>
-            </div>
+          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px] font-bold">
+            <button
+              type="button"
+              onClick={() => navigateToView('partnerStatement')}
+              className="text-amber-700 hover:underline flex items-center gap-1 cursor-pointer"
+              title="كشف حساب تفصيلي للمورد"
+            >
+              <span>كشف تفصيلي</span>
+              <ArrowRight size={11} className="rotate-180" />
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateToView('partnerBalances')}
+              className="text-rose-600 hover:underline flex items-center gap-1 cursor-pointer"
+              title="أرصدة الموردين"
+            >
+              <span>أرصدة الموردين</span>
+              <ArrowRight size={11} className="rotate-180" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => navigateToView('partnerBalances')}
-            className="mt-2 text-[11px] font-bold text-rose-600 hover:underline flex items-center justify-between pt-1.5 border-t border-slate-100 cursor-pointer"
-          >
-            <span>فتح شاشة أرصدة الموردين</span>
-            <ArrowRight size={13} className="rotate-180" />
-          </button>
         </div>
 
-        {/* Inventory Reconciliation */}
+        {/* 3. Inventory Reconciliation */}
         <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:border-amber-300 transition-all">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-              <Warehouse size={15} className="text-amber-600" />
-              <span>مطابقة المخزون السلعي (1301)</span>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                <Warehouse size={15} className="text-amber-600" />
+                <span>مطابقة المخزون السلعي (1301)</span>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${reconciliation.inventory.isReconciled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                {reconciliation.inventory.isReconciled ? 'مطابق 100%' : 'تسوية'}
+              </span>
             </div>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${reconciliation.inventory.isReconciled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-              {reconciliation.inventory.isReconciled ? 'مطابق 100%' : 'تسوية'}
-            </span>
+            <div className="text-xs space-y-1 font-mono">
+              <div className="flex justify-between text-slate-500">
+                <span>رصيد الميزان (1301):</span>
+                <span className="font-bold text-slate-800">{reconciliation.inventory.accountBalance.toLocaleString()} {currencySymbol}</span>
+              </div>
+              <div className="flex justify-between text-slate-500">
+                <span>تقييم بضاعة المخزن:</span>
+                <span className="font-bold text-amber-700">{reconciliation.inventory.valuationTotal.toLocaleString()} {currencySymbol}</span>
+              </div>
+            </div>
           </div>
-          <div className="text-xs space-y-1 font-mono">
-            <div className="flex justify-between text-slate-500">
-              <span>رصيد الميزان (1301):</span>
-              <span className="font-bold text-slate-800">{reconciliation.inventory.accountBalance.toLocaleString()} {currencySymbol}</span>
-            </div>
-            <div className="flex justify-between text-slate-500">
-              <span>تقييم بضاعة المخزن:</span>
-              <span className="font-bold text-amber-700">{reconciliation.inventory.valuationTotal.toLocaleString()} {currencySymbol}</span>
-            </div>
+          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px] font-bold">
+            <button
+              type="button"
+              onClick={() => navigateToView('inventoryCount')}
+              className="text-purple-700 hover:underline flex items-center gap-1 cursor-pointer"
+              title="الجرد والتسويات المخزنية"
+            >
+              <span>الجرد والتسويات</span>
+              <ArrowRight size={11} className="rotate-180" />
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateToView('warehouseBalances')}
+              className="text-amber-600 hover:underline flex items-center gap-1 cursor-pointer"
+              title="بطاقات المخزن"
+            >
+              <span>أرصدة المخزن</span>
+              <ArrowRight size={11} className="rotate-180" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => navigateToView('warehouseBalances')}
-            className="mt-2 text-[11px] font-bold text-amber-600 hover:underline flex items-center justify-between pt-1.5 border-t border-slate-100 cursor-pointer"
-          >
-            <span>فتح شاشة بطاقات المخزن</span>
-            <ArrowRight size={13} className="rotate-180" />
-          </button>
         </div>
 
-        {/* Cash and Banks */}
+        {/* 4. Cash and Banks */}
         <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:border-emerald-300 transition-all">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-              <DollarSign size={15} className="text-emerald-600" />
-              <span>النقدية والبنوك (1101/1102)</span>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                <DollarSign size={15} className="text-emerald-600" />
+                <span>النقدية والبنوك (1101/1102)</span>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                أرصدة لحظية
+              </span>
             </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              أرصدة لحظية
-            </span>
+            <div className="text-xs space-y-1 font-mono">
+              <div className="flex justify-between text-slate-500">
+                <span>الصندوق الرئيسي (1101):</span>
+                <span className="font-bold text-emerald-700">{reconciliation.cash.balance.toLocaleString()} {currencySymbol}</span>
+              </div>
+              <div className="flex justify-between text-slate-500">
+                <span>الحساب البنكي (1102):</span>
+                <span className="font-bold text-blue-700">{reconciliation.bank.balance.toLocaleString()} {currencySymbol}</span>
+              </div>
+            </div>
           </div>
-          <div className="text-xs space-y-1 font-mono">
-            <div className="flex justify-between text-slate-500">
-              <span>الصندوق الرئيسي (1101):</span>
-              <span className="font-bold text-emerald-700">{reconciliation.cash.balance.toLocaleString()} {currencySymbol}</span>
+          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px] font-bold">
+            <button
+              type="button"
+              onClick={() => navigateToView('externalReceipt')}
+              className="text-emerald-700 hover:underline flex items-center gap-1 cursor-pointer"
+              title="سندات القبض"
+            >
+              <span>سندات القبض</span>
+              <ArrowRight size={11} className="rotate-180" />
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateToView('externalPayment')}
+              className="text-amber-700 hover:underline flex items-center gap-1 cursor-pointer"
+              title="سندات الصرف"
+            >
+              <span>سندات الصرف</span>
+              <ArrowRight size={11} className="rotate-180" />
+            </button>
+          </div>
+        </div>
+
+        {/* 5. Check Portfolio Reconciliation */}
+        <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between hover:border-purple-300 transition-all">
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                <Landmark size={15} className="text-purple-600" />
+                <span>دورة الشيكات (1104/2104)</span>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                حافظة نشطة
+              </span>
             </div>
-            <div className="flex justify-between text-slate-500">
-              <span>الحساب البنكي (1102):</span>
-              <span className="font-bold text-blue-700">{reconciliation.bank.balance.toLocaleString()} {currencySymbol}</span>
+            <div className="text-xs space-y-1 font-mono">
+              <div className="flex justify-between text-slate-500">
+                <span>شيكات برسم التحصيل:</span>
+                <span className="font-bold text-purple-700">{(reconciliation.checks?.inCollectionBalance ?? 0).toLocaleString()} {currencySymbol}</span>
+              </div>
+              <div className="flex justify-between text-slate-500">
+                <span>شيكات صادرة للموردين:</span>
+                <span className="font-bold text-slate-800">{(reconciliation.checks?.issuedBalance ?? 0).toLocaleString()} {currencySymbol}</span>
+              </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => navigateToView('externalReceipt')}
-            className="mt-2 text-[11px] font-bold text-emerald-600 hover:underline flex items-center justify-between pt-1.5 border-t border-slate-100 cursor-pointer"
-          >
-            <span>فتح السندات النقدية والبنكية</span>
-            <ArrowRight size={13} className="rotate-180" />
-          </button>
+          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px] font-bold">
+            <button
+              type="button"
+              onClick={() => navigateToView('bankChecks')}
+              className="text-purple-700 hover:underline flex items-center gap-1 cursor-pointer w-full justify-between"
+              title="فتح حافظة ودورة الشيكات البنكية"
+            >
+              <span>فتح حافظة الشيكات</span>
+              <ArrowRight size={11} className="rotate-180" />
+            </button>
+          </div>
         </div>
 
       </div>
@@ -1144,20 +1617,27 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
                   </td>
                 </tr>
               ) : (
-                filteredRows.map((row) => (
+                filteredRows.map((row) => {
+                  const opLink = getAccountOperationalLink(row.account.code);
+                  return (
                   <tr 
                     key={row.account.id} 
-                    className="hover:bg-slate-50/80 transition-colors group"
+                    onClick={() => setSelectedAccountId(row.account.id)}
+                    className="hover:bg-blue-50/60 transition-colors group cursor-pointer"
+                    title="انقر لعرض كشف حركة الحساب (دفتر الأستاذ) والتفاصيل"
                   >
                     {/* Account Code */}
-                    <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-700 border-l border-slate-100">
-                      {row.account.code}
+                    <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-700 group-hover:text-blue-700 border-l border-slate-100">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>{row.account.code}</span>
+                        <Eye size={12} className="opacity-0 group-hover:opacity-100 text-blue-500 transition-opacity" />
+                      </div>
                     </td>
 
                     {/* Account Name */}
                     <td className="py-2.5 px-4 font-bold text-slate-900 border-l border-slate-100">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span>{row.account.name}</span>
+                        <span className="group-hover:text-blue-800 transition-colors">{row.account.name}</span>
                         {row.account.code === '4103' && (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
                             خصم مبيعات (مدين)
@@ -1167,6 +1647,22 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
                             خصم مشتريات (دائن)
                           </span>
+                        )}
+                        {/* Direct operational screen shortcut badge */}
+                        {opLink && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigateToView(opLink.view, row.account.code);
+                            }}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer print:hidden ${opLink.badgeClass}`}
+                            title={`انتقال مباشر إلى: ${opLink.title}`}
+                          >
+                            {opLink.icon}
+                            <span>{opLink.shortLabel}</span>
+                            <ArrowRight size={10} className="rotate-180" />
+                          </button>
                         )}
                       </div>
                     </td>
@@ -1216,18 +1712,35 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
 
                     {/* Action Button */}
                     <td className="py-2.5 px-3 text-center print:hidden">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedAccountId(row.account.id)}
-                        className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                        title="عرض كشف وتفاصيل الحركة"
-                      >
-                        <Eye size={15} />
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedAccountId(row.account.id);
+                          }}
+                          className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer"
+                          title="عرض كشف وتفاصيل الحركة (دفتر الأستاذ)"
+                        >
+                          <Eye size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigateToView('accountMovements', row.account.code);
+                          }}
+                          className="p-1.5 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer"
+                          title="فتح في شاشة حركة الحسابات (3 أعمدة: مدين - دائن - بيان الحركة)"
+                        >
+                          <Scale size={15} />
+                        </button>
+                      </div>
                     </td>
 
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
 
@@ -1299,59 +1812,296 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-none sm:max-h-[85vh] flex flex-col sm:overflow-hidden overflow-y-auto my-auto">
             
             {/* Modal Header */}
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between static sm:sticky sm:top-0 z-10">
+            <div className="p-4 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 static sm:sticky sm:top-0 z-10 border-b border-slate-800">
               <div className="flex items-center gap-2.5">
-                <div className="p-1.5 bg-blue-600 rounded-lg">
-                  <BookOpen size={18} />
+                <div className="p-2 bg-blue-600 rounded-xl">
+                  <BookOpen size={20} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm sm:text-base">
-                    كشف حركة الحساب: <span className="text-blue-300 font-mono">{selectedRow.account.code}</span> - {selectedRow.account.name}
-                  </h3>
-                  <p className="text-[11px] text-slate-400">
-                    تصنيف الحساب: {getAccountTypeLabel(selectedRow.account.type)}
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-sm sm:text-base">
+                      كشف حركة الحساب (دفتر الأستاذ العام)
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                      {selectedRow.account.code}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    {selectedRow.account.name} • التصنيف: <span className="font-semibold text-blue-200">{getAccountTypeLabel(selectedRow.account.type)}</span>
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedAccountId(null)}
-                className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors cursor-pointer"
-              >
-                <X size={18} />
-              </button>
+
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sessionStorage.setItem('alpha_target_account_code', selectedRow.account.code);
+                    setSelectedAccountId(null);
+                    navigateToView('accountMovements', selectedRow.account.code);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  title="فتح هذا الحساب في شاشة حركة الحسابات الشاملة بالجدول الثلاثي"
+                >
+                  <Scale size={14} />
+                  <span>فتح في حركة الحسابات</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportLedgerExcel}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  title="تصدير كشف حركة هذا الحساب إلى Excel"
+                >
+                  <FileSpreadsheet size={14} />
+                  <span>تصدير Excel</span>
+                </button>
+
+                {/* أداة التكبير والتصغير المرنة بأي قيمة (Flexible Zoom Control with Slider & Stepper) */}
+                <div className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 shadow-2xs text-white">
+                  <button
+                    type="button"
+                    onClick={() => setLedgerZoom(z => Math.max(z - 15, 30))}
+                    className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                    title="تصغير (-15%)"
+                  >
+                    <ZoomOut size={14} />
+                  </button>
+
+                  <input
+                    type="range"
+                    min="30"
+                    max="220"
+                    step="5"
+                    value={ledgerZoom}
+                    onChange={(e) => setLedgerZoom(Number(e.target.value))}
+                    className="w-20 sm:w-28 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    title={`نسبة التكبير: ${ledgerZoom}% (اسحب للتحكم بأي قيمة)`}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setLedgerZoom(z => Math.min(z + 15, 220))}
+                    className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                    title="تكبير (+15%)"
+                  >
+                    <ZoomIn size={14} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLedgerZoom(100);
+                      resetLedgerPan();
+                    }}
+                    className={`font-mono text-xs font-bold px-2 py-0.5 rounded-lg transition-colors cursor-pointer ${
+                      ledgerZoom === 100 
+                        ? 'bg-slate-700 text-slate-300' 
+                        : 'bg-blue-600 text-white hover:bg-blue-500'
+                    }`}
+                    title="إعادة ضبط المعاينة إلى 100%"
+                  >
+                    {ledgerZoom}%
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-all border border-slate-700 cursor-pointer"
+                  title="طباعة كشف حركة الحساب"
+                >
+                  <Printer size={14} />
+                  <span>طباعة</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedAccountId(null)}
+                  className="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors cursor-pointer border border-slate-700"
+                  title="إغلاق النافذة"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
+
+            {/* Contextual Jump Banners for Key Operational Accounts */}
+            {(selectedRow.account.code === '1201' || selectedRow.account.code.startsWith('1201')) && (
+              <div className="mx-4 mt-3 p-3 bg-gradient-to-r from-emerald-900 to-slate-900 text-white border border-emerald-500/40 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 bg-emerald-500/20 text-emerald-300 rounded-lg">
+                    <Users size={18} />
+                  </div>
+                  <div>
+                    <span className="font-bold block text-sm">كشف حساب عميل وتفصيلي متصل (Continuous Detailed Ledger):</span>
+                    <span className="text-[11px] text-emerald-200">عرض فواتير وسندات العميل كقائمة متصلة مع تفاصيل الأصناف والرصيد التراكمي اللحظي</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAccountId(null);
+                    navigateToView('customerStatement');
+                  }}
+                  className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-lg font-black shadow-xs flex items-center justify-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                >
+                  <span>فتح شاشة كشف حساب عميل</span>
+                  <ArrowRight size={13} className="rotate-180" />
+                </button>
+              </div>
+            )}
+
+            {(selectedRow.account.code === '2101' || selectedRow.account.code.startsWith('2101')) && (
+              <div className="mx-4 mt-3 p-3 bg-gradient-to-r from-rose-900 to-slate-900 text-white border border-rose-500/40 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 bg-rose-500/20 text-rose-300 rounded-lg">
+                    <Truck size={18} />
+                  </div>
+                  <div>
+                    <span className="font-bold block text-sm">أرصدة وذمم الموردين وكشف الحساب التفصيلي:</span>
+                    <span className="text-[11px] text-rose-200">متابعة الفواتير المستحقة، السندات، وتواريخ الاستحقاق لجميع الموردين</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAccountId(null);
+                    navigateToView('partnerBalances');
+                  }}
+                  className="px-3.5 py-1.5 bg-rose-500 hover:bg-rose-400 text-slate-950 rounded-lg font-black shadow-xs flex items-center justify-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                >
+                  <span>أرصدة الموردين</span>
+                  <ArrowRight size={13} className="rotate-180" />
+                </button>
+              </div>
+            )}
+
+            {(selectedRow.account.code === '1301' || selectedRow.account.code.startsWith('1301')) && (
+              <div className="mx-4 mt-3 p-3 bg-gradient-to-r from-amber-950 to-slate-900 text-white border border-amber-500/40 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 bg-amber-500/20 text-amber-300 rounded-lg">
+                    <Warehouse size={18} />
+                  </div>
+                  <div>
+                    <span className="font-bold block text-sm">أرصدة وتقييم المخزون السلعي (المستودعات):</span>
+                    <span className="text-[11px] text-amber-200">بطاقات الأصناف، الجرد الفعلي، متوسط التكلفة، ومطابقة المخزون</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAccountId(null);
+                    navigateToView('warehouseBalances');
+                  }}
+                  className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg font-black shadow-xs flex items-center justify-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                >
+                  <span>فتح بطاقات وأرصدة المخازن</span>
+                  <ArrowRight size={13} className="rotate-180" />
+                </button>
+              </div>
+            )}
 
             {/* Account Summary Strip */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-slate-50 border-b border-slate-200 text-xs">
-              <div className="p-2 bg-white rounded-xl border border-slate-200">
+              <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
                 <span className="text-slate-500 block text-[10px] font-bold">إجمالي حركة المدين</span>
-                <span className="font-mono font-black text-slate-900">
+                <span className="font-mono font-black text-slate-900 text-sm">
                   {selectedRow.debitMovement.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
                 </span>
               </div>
-              <div className="p-2 bg-white rounded-xl border border-slate-200">
+              <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
                 <span className="text-slate-500 block text-[10px] font-bold">إجمالي حركة الدائن</span>
-                <span className="font-mono font-black text-slate-900">
+                <span className="font-mono font-black text-slate-900 text-sm">
                   {selectedRow.creditMovement.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
                 </span>
               </div>
-              <div className="p-2 bg-white rounded-xl border border-slate-200">
+              <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
                 <span className="text-slate-500 block text-[10px] font-bold">صافي الرصيد النهائي</span>
-                <span className={`font-mono font-black ${selectedRow.netMovement >= 0 ? 'text-emerald-700' : 'text-purple-700'}`}>
+                <span className={`font-mono font-black text-sm ${selectedRow.netMovement >= 0 ? 'text-emerald-700' : 'text-purple-700'}`}>
                   {Math.abs(selectedRow.netMovement).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
                 </span>
               </div>
-              <div className="p-2 bg-white rounded-xl border border-slate-200">
-                <span className="text-slate-500 block text-[10px] font-bold">طبيعة الرصيد</span>
+              <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                <span className="text-slate-500 block text-[10px] font-bold">طبيعة الرصيد المحاسبي</span>
                 <span className="font-bold text-slate-800">
                   {selectedRow.netMovement > 0 ? 'مدين (Debit)' : selectedRow.netMovement < 0 ? 'دائن (Credit)' : 'متوازن (Zero)'}
                 </span>
               </div>
             </div>
 
-            {/* Ledger Movements Table */}
-            <div className="flex-1 overflow-y-auto p-4">
+            {/* Filter & Search Bar inside Ledger Modal */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 bg-slate-100/80 border-b border-slate-200 text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 text-slate-600 font-bold">
+                  <Calendar size={14} className="text-blue-600" />
+                  <span>الفترة:</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400 text-[10px]">من</span>
+                  <input 
+                    type="date" 
+                    value={ledgerStartDate} 
+                    onChange={e => setLedgerStartDate(e.target.value)}
+                    className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 font-mono shadow-2xs"
+                  />
+                  <span className="text-slate-400 text-[10px]">إلى</span>
+                  <input 
+                    type="date" 
+                    value={ledgerEndDate} 
+                    onChange={e => setLedgerEndDate(e.target.value)}
+                    className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 font-mono shadow-2xs"
+                  />
+                  {(ledgerStartDate || ledgerEndDate) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLedgerStartDate('');
+                        setLedgerEndDate('');
+                      }}
+                      className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-md text-[11px] font-bold transition-colors cursor-pointer"
+                    >
+                      إلغاء التحديد
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="relative min-w-[220px]">
+                <Search size={13} className="absolute right-2.5 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={ledgerSearch}
+                  onChange={e => setLedgerSearch(e.target.value)}
+                  placeholder="بحث برقم القيد، البيان، المرجع..."
+                  className="w-full bg-white border border-slate-300 rounded-lg pr-8 pl-3 py-1.5 text-xs text-slate-800 shadow-2xs focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Ledger Movements Table with 4-Way Pan & Drag */}
+            <div 
+              className={`flex-1 overflow-y-auto p-4 select-none ${
+                ledgerZoom > 100 
+                  ? (isLedgerDragging ? 'cursor-grabbing' : 'cursor-grab') 
+                  : 'cursor-default'
+              }`}
+              onMouseDown={handleLedgerMouseDown}
+              onMouseMove={handleLedgerMouseMove}
+              onMouseUp={handleLedgerMouseUp}
+              onMouseLeave={handleLedgerMouseUp}
+              onTouchStart={handleLedgerTouchStart}
+              onTouchMove={handleLedgerTouchMove}
+              onTouchEnd={handleLedgerTouchEnd}
+            >
+              <div 
+                className="w-full transition-transform duration-100 origin-top"
+                style={{
+                  transform: `translate3d(${ledgerPan.x}px, ${ledgerPan.y}px, 0px) scale(${ledgerZoom / 100})`,
+                  transformOrigin: 'top center',
+                  marginBottom: ledgerZoom > 100 ? `${(ledgerZoom - 100) * 8}px` : '0px'
+                }}
+              >
               {selectedLedgerItems.length === 0 ? (
                 <div className="py-12 text-center text-slate-400">
                   <p className="font-bold text-sm">لا توجد تفاصيل حركات مسجلة لهذا الحساب خلال الفترة المحددة</p>
@@ -1442,6 +2192,7 @@ export default function TrialBalanceScreen({ onNavigate }: TrialBalanceScreenPro
                   </tbody>
                 </table>
               )}
+              </div>
             </div>
 
             {/* Modal Footer */}

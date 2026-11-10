@@ -480,8 +480,12 @@ export default function OvertimeAttendanceTab({
                   required
                   step={formData.type === 'ABSENCE' ? '0.5' : '1'}
                   min={0.5}
-                  value={formData.hoursOrDays}
-                  onChange={(e) => setFormData({...formData, hoursOrDays: Number(e.target.value)})}
+                  value={formData.hoursOrDays ?? ''}
+                  onFocus={e => e.target.select()}
+                  onChange={(e) => setFormData({...formData, hoursOrDays: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                  onBlur={() => {
+                    if ((formData.hoursOrDays as any) === '') setFormData(prev => ({ ...prev, hoursOrDays: 1 }));
+                  }}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono font-bold"
                 />
               </div>

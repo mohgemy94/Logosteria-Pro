@@ -12,13 +12,15 @@ export function getCurrentAuditUser(): { id: string; username: string; displayNa
     const settings = getSystemSettings();
     if (settings?.users && settings.users.length > 0) {
       const activeUser = settings.users.find(u => u.isActive) || settings.users[0];
-      return {
-        id: activeUser.id,
-        username: activeUser.username,
-        displayName: activeUser.displayName,
-        role: activeUser.role,
-        branch: activeUser.branch || settings.company.branchName || 'الفرع الرئيسي'
-      };
+      if (activeUser) {
+        return {
+          id: activeUser.id,
+          username: activeUser.username,
+          displayName: activeUser.displayName,
+          role: activeUser.role,
+          branch: activeUser.branch || settings.company?.branchName || 'الفرع الرئيسي'
+        };
+      }
     }
   } catch (err) {
     console.warn('Failed resolving current audit user:', err);
@@ -34,195 +36,26 @@ export function getCurrentAuditUser(): { id: string; username: string; displayNa
 }
 
 /**
- * Generate initial realistic seed logs to demonstrate audit trail capabilities immediately
- */
-function getInitialSeedLogs(): AuditLogEntry[] {
-  const now = new Date();
-  const getPastIso = (minutesAgo: number) => {
-    const d = new Date(now.getTime() - minutesAgo * 60 * 1000);
-    return d.toISOString();
-  };
-
-  return [
-    {
-      id: 'aud-seed-1',
-      timestamp: getPastIso(12),
-      action: 'CREATE',
-      module: 'SALES',
-      documentType: 'فاتورة مبيعات ضريبية',
-      documentNumber: 'INV-2026-0089',
-      documentId: 'inv-89',
-      user: {
-        id: 'usr-1',
-        username: 'admin',
-        displayName: 'المدير العام (System Administrator)',
-        role: 'ADMIN',
-        branch: 'الفرع الرئيسي - الرياض'
-      },
-      summary: 'إصدار وترحيل فاتورة مبيعات نقدية جديدة برقم INV-2026-0089 بمبلغ 4,830.00 ر.س',
-      summaryEn: 'Created & posted new tax sales invoice INV-2026-0089 with total 4,830.00 SAR',
-      severity: 'INFO',
-      deviceInfo: 'Chrome / Desktop Web',
-      details: {
-        customerName: 'مؤسسة الأفق للتجارة',
-        itemsCount: 4,
-        totalWithVat: 4830.00,
-        vatAmount: 630.00,
-        paymentMethod: 'CASH'
-      }
-    },
-    {
-      id: 'aud-seed-2',
-      timestamp: getPastIso(35),
-      action: 'APPROVE',
-      module: 'TREASURY',
-      documentType: 'سند صرف خارجي',
-      documentNumber: 'PV-2026-0034',
-      documentId: 'pv-34',
-      user: {
-        id: 'usr-1',
-        username: 'admin',
-        displayName: 'المدير العام (System Administrator)',
-        role: 'ADMIN',
-        branch: 'الفرع الرئيسي - الرياض'
-      },
-      summary: 'اعتماد سند صرف خارجي لسداد مستحقات شركة التوريدات المتحدة بمبلغ 12,500.00 ر.س',
-      summaryEn: 'Approved payment voucher PV-2026-0034 for United Supplies Co. (12,500.00 SAR)',
-      severity: 'INFO',
-      deviceInfo: 'Chrome / Desktop Web',
-      details: {
-        vendorName: 'شركة التوريدات المتحدة',
-        amount: 12500.00,
-        approvalStage: 'FINAL_APPROVAL'
-      }
-    },
-    {
-      id: 'aud-seed-3',
-      timestamp: getPastIso(75),
-      action: 'UPDATE',
-      module: 'ITEMS',
-      documentType: 'بطاقة صنف',
-      documentNumber: 'ITM-1002',
-      documentId: 'itm-1002',
-      user: {
-        id: 'usr-2',
-        username: 'accountant1',
-        displayName: 'محاسب أول - الإدارة المالية',
-        role: 'ACCOUNTANT',
-        branch: 'الفرع الرئيسي - الرياض'
-      },
-      summary: 'تعديل سعر البيع والحد الأدنى للمخزون لصنف "طابعة ليزر متعددة المهام"',
-      summaryEn: 'Updated sale price and reorder limit for item "Multifunction Laser Printer"',
-      severity: 'WARN',
-      deviceInfo: 'Edge / Windows',
-      changes: [
-        {
-          field: 'price',
-          fieldLabel: 'سعر البيع',
-          oldValue: '1,450.00 ر.س',
-          newValue: '1,620.00 ر.س'
-        },
-        {
-          field: 'minStock',
-          fieldLabel: 'الحد الأدنى للطلب',
-          oldValue: 3,
-          newValue: 5
-        }
-      ]
-    },
-    {
-      id: 'aud-seed-4',
-      timestamp: getPastIso(160),
-      action: 'POST',
-      module: 'JOURNAL',
-      documentType: 'قيد يومية عامة',
-      documentNumber: 'JE-2026-0145',
-      documentId: 'je-145',
-      user: {
-        id: 'usr-2',
-        username: 'accountant1',
-        displayName: 'محاسب أول - الإدارة المالية',
-        role: 'ACCOUNTANT',
-        branch: 'الفرع الرئيسي - الرياض'
-      },
-      summary: 'ترحيل قيد إثبات استحقاق إيجار الفرع والمعارض بمبلغ 25,000.00 ر.س',
-      summaryEn: 'Posted journal entry JE-2026-0145 for branch rent accrual (25,000.00 SAR)',
-      severity: 'INFO',
-      deviceInfo: 'Edge / Windows',
-      details: {
-        totalDebit: 25000.00,
-        totalCredit: 25000.00,
-        isBalanced: true
-      }
-    },
-    {
-      id: 'aud-seed-5',
-      timestamp: getPastIso(320),
-      action: 'SETTINGS_CHANGE',
-      module: 'SETTINGS',
-      documentType: 'إعدادات النظام المالية',
-      user: {
-        id: 'usr-1',
-        username: 'admin',
-        displayName: 'المدير العام (System Administrator)',
-        role: 'ADMIN',
-        branch: 'الفرع الرئيسي - الرياض'
-      },
-      summary: 'تحديث حد الائتمان وسياسة منع البيع بالسالب للأصناف',
-      summaryEn: 'Updated credit limit enforcement and negative stock prevention policy',
-      severity: 'WARN',
-      deviceInfo: 'Chrome / Desktop Web',
-      changes: [
-        {
-          field: 'preventNegativeStock',
-          fieldLabel: 'منع البيع بالسالب',
-          oldValue: false,
-          newValue: true
-        },
-        {
-          field: 'lowStockThreshold',
-          fieldLabel: 'تنبيه الركود والحد الأدنى',
-          oldValue: 3,
-          newValue: 5
-        }
-      ]
-    },
-    {
-      id: 'aud-seed-6',
-      timestamp: getPastIso(500),
-      action: 'EXPORT',
-      module: 'SALES',
-      documentType: 'تقرير مبيعات مجمع',
-      user: {
-        id: 'usr-1',
-        username: 'admin',
-        displayName: 'المدير العام (System Administrator)',
-        role: 'ADMIN',
-        branch: 'الفرع الرئيسي - الرياض'
-      },
-      summary: 'تصدير تقرير إقرارات ضريبة القيمة المضافة والمبيعات إلى ملف Excel (XLSX)',
-      summaryEn: 'Exported VAT declarations and sales report to Excel file',
-      severity: 'INFO',
-      deviceInfo: 'Chrome / Desktop Web'
-    }
-  ];
-}
-
-/**
- * Load all audit logs from localStorage, fallback to seed records
+ * Load all audit logs from localStorage, filtering out any legacy demo seed records
  */
 export function loadAuditLogs(): AuditLogEntry[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY_AUDIT_LOGS);
     if (!raw) {
-      const initial = getInitialSeedLogs();
-      localStorage.setItem(STORAGE_KEY_AUDIT_LOGS, JSON.stringify(initial));
-      return initial;
+      return [];
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      return parsed;
+      const cleaned = parsed.filter((item: any) => {
+        if (!item || typeof item !== 'object') return false;
+        if (String(item.id || '').startsWith('aud-seed-')) return false;
+        return true;
+      });
+      if (cleaned.length !== parsed.length) {
+        localStorage.setItem(STORAGE_KEY_AUDIT_LOGS, JSON.stringify(cleaned));
+      }
+      return cleaned;
     }
     return [];
   } catch (err) {
@@ -266,16 +99,16 @@ export function recordAuditLog(entry: {
     timestamp: new Date().toISOString(),
     action: entry.action,
     module: entry.module,
-    documentType: entry.documentType,
-    documentNumber: entry.documentNumber,
-    documentId: entry.documentId,
+    ...(entry.documentType !== undefined ? { documentType: entry.documentType } : {}),
+    ...(entry.documentNumber !== undefined ? { documentNumber: entry.documentNumber } : {}),
+    ...(entry.documentId !== undefined ? { documentId: entry.documentId } : {}),
     user: activeUser,
     summary: entry.summary,
-    summaryEn: entry.summaryEn,
+    ...(entry.summaryEn !== undefined ? { summaryEn: entry.summaryEn } : {}),
     severity,
     deviceInfo: typeof navigator !== 'undefined' ? (navigator.userAgent.includes('Mobile') ? 'Mobile Browser' : 'Desktop Browser') : 'System',
-    details: entry.details,
-    changes: entry.changes
+    ...(entry.details !== undefined ? { details: entry.details } : {}),
+    ...(entry.changes !== undefined ? { changes: entry.changes } : {})
   };
 
   try {
@@ -319,13 +152,12 @@ export function filterAuditLogs(logs: AuditLogEntry[], options: AuditLogFilterOp
     }
 
     // Date range filter
-    if (options.startDate) {
-      const logDate = log.timestamp.split('T')[0];
-      if (logDate < options.startDate) return false;
+    const logDate = (log.timestamp || '').split('T')[0] || '';
+    if (options.startDate && logDate < options.startDate) {
+      return false;
     }
-    if (options.endDate) {
-      const logDate = log.timestamp.split('T')[0];
-      if (logDate > options.endDate) return false;
+    if (options.endDate && logDate > options.endDate) {
+      return false;
     }
 
     // Specific Document Number
@@ -341,9 +173,9 @@ export function filterAuditLogs(logs: AuditLogEntry[], options: AuditLogFilterOp
       const query = options.searchQuery.trim().toLowerCase();
       const matchDocNum = log.documentNumber?.toLowerCase().includes(query);
       const matchDocType = log.documentType?.toLowerCase().includes(query);
-      const matchSummary = log.summary.toLowerCase().includes(query);
+      const matchSummary = (log.summary || '').toLowerCase().includes(query);
       const matchSummaryEn = log.summaryEn?.toLowerCase().includes(query);
-      const matchUser = log.user.displayName.toLowerCase().includes(query) || log.user.username.toLowerCase().includes(query);
+      const matchUser = (log.user?.displayName || '').toLowerCase().includes(query) || (log.user?.username || '').toLowerCase().includes(query);
       
       if (!matchDocNum && !matchDocType && !matchSummary && !matchSummaryEn && !matchUser) {
         return false;

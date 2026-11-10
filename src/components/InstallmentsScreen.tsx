@@ -32,17 +32,27 @@ import { getSystemSettings } from '../utils/settings';
 import { useSystemCurrency } from '../utils/currency';
 import { Partner } from '../types/accounting';
 import { loadCustomers } from '../utils/partnerLedger';
+import { loadChartOfAccounts, saveJournalEntry } from '../utils/trialBalanceStore';
+import { isCashOrBankAccount } from '../utils/accountingIntegration';
+import { JournalEntry, JournalEntryStatus } from '../types/accounting';
 import InstallmentKpiModal, { InstallmentKpiModalType } from './InstallmentKpiModal';
 import ExportButtonGroup from './ExportButtonGroup';
 import ResponsiveModal from './ResponsiveModal';
+import { useIsInWindow } from './DesktopWindowManager';
 
-export default function InstallmentsScreen() {
+export default function InstallmentsScreen({ isInWindow: explicitIsInWindow }: { isInWindow?: boolean } = {}) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { symbol: currencySymbol, fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
   const [activeTab, setActiveTab] = useState<'contracts' | 'schedule' | 'promissory' | 'calculator'>('contracts');
   const [contracts, setContracts] = useState<InstallmentContract[]>(() => getStoredInstallments());
   const [promissoryNotes, setPromissoryNotes] = useState<PromissoryNote[]>(() => getStoredPromissoryNotes());
   const [systemSettings] = useState(() => getSystemSettings());
   const [customers, setCustomers] = useState<Partner[]>(() => loadCustomers());
+
+  const [treasuryAccounts] = useState(() => {
+    const all = loadChartOfAccounts();
+    return all.filter(a => isCashOrBankAccount(a, all));
+  });
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,10 +82,10 @@ export default function InstallmentsScreen() {
     guarantorNationalId: '',
     guarantorAddress: '',
     itemDescription: '',
-    cashPrice: 15000,
-    downPayment: 3000,
-    profitRate: 10,
-    monthsCount: 6,
+    cashPrice: 0 as number | string,
+    downPayment: 0 as number | string,
+    profitRate: 0 as number | string,
+    monthsCount: 12 as number | string,
     startDate: new Date().toISOString().slice(0, 10),
     installmentFrequency: 'MONTHLY' as const,
     notes: '',
@@ -98,21 +108,21 @@ export default function InstallmentsScreen() {
     draweeNationalId: '',
     draweePhone: '',
     draweeAddress: '',
-    amount: 5000,
+    amount: 0,
     issueDate: new Date().toISOString().slice(0, 10),
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
     guarantor: '',
     guarantorNationalId: '',
-    placeOfPayment: 'الرياض - المقر الرئيسي',
-    bankName: 'مصرف الراجحي',
+    placeOfPayment: '',
+    bankName: '',
     notes: ''
   });
 
   // Calculator State
-  const [calcPrice, setCalcPrice] = useState(25000);
-  const [calcDown, setCalcDown] = useState(5000);
-  const [calcRate, setCalcRate] = useState(12);
-  const [calcMonths, setCalcMonths] = useState(12);
+  const [calcPrice, setCalcPrice] = useState<number | string>(25000);
+  const [calcDown, setCalcDown] = useState<number | string>(5000);
+  const [calcRate, setCalcRate] = useState<number | string>(12);
+  const [calcMonths, setCalcMonths] = useState<number | string>(12);
 
   // Sync with custom events
   useEffect(() => {
@@ -146,13 +156,13 @@ export default function InstallmentsScreen() {
     let overdueAmount = 0;
     let totalProfitSum = 0;
 
-    contracts.forEach(c => {
+    (contracts || []).forEach(c => {
       totalFinancedSum += c.totalFinanced;
       totalPaidSum += c.totalPaid;
       totalRemainingSum += c.totalRemaining;
       totalProfitSum += c.profitAmount;
 
-      c.schedule.forEach(s => {
+      (c.schedule || []).forEach(s => {
         if (s.status === 'OVERDUE' || (s.status === 'PENDING' && new Date(s.dueDate) < new Date())) {
           overdueCount++;
           overdueAmount += s.remainingAmount;
@@ -180,11 +190,12 @@ export default function InstallmentsScreen() {
 
   // Filtered Contracts
   const filteredContracts = useMemo(() => {
+    const q = (searchQuery || '').toLowerCase();
     return contracts.filter(c => {
       const matchSearch =
-        c.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.contractNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.itemDescription.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (c.customerName || '').toLowerCase().includes(q) ||
+        (c.contractNumber || '').toLowerCase().includes(q) ||
+        (c.itemDescription || '').toLowerCase().includes(q) ||
         (c.customerPhone && c.customerPhone.includes(searchQuery));
       
       const matchStatus = statusFilter === 'ALL' || c.status === statusFilter;
@@ -194,13 +205,14 @@ export default function InstallmentsScreen() {
 
   // All schedules flattened
   const allSchedules = useMemo(() => {
+    const q = (searchQuery || '').toLowerCase();
     const list: { contract: InstallmentContract; item: InstallmentScheduleItem }[] = [];
-    contracts.forEach(contract => {
-      contract.schedule.forEach(item => {
+    (contracts || []).forEach(contract => {
+      (contract.schedule || []).forEach(item => {
         const isMatchSearch =
-          contract.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          contract.contractNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (item.promissoryNoteId && item.promissoryNoteId.toLowerCase().includes(searchQuery.toLowerCase()));
+          (contract.customerName || '').toLowerCase().includes(q) ||
+          (contract.contractNumber || '').toLowerCase().includes(q) ||
+          (item.promissoryNoteId && item.promissoryNoteId.toLowerCase().includes(q));
 
         if (!isMatchSearch) return;
 
@@ -224,11 +236,12 @@ export default function InstallmentsScreen() {
 
   // Filtered Promissory Notes
   const filteredNotes = useMemo(() => {
+    const q = (searchQuery || '').toLowerCase();
     return promissoryNotes.filter(n => {
       const matchSearch =
-        n.noteNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        n.drawee.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (n.contractNumber && n.contractNumber.toLowerCase().includes(searchQuery.toLowerCase()));
+        (n.noteNumber || '').toLowerCase().includes(q) ||
+        (n.drawee || '').toLowerCase().includes(q) ||
+        (n.contractNumber && n.contractNumber.toLowerCase().includes(q));
       
       const matchStatus = statusFilter === 'ALL' || n.status === statusFilter;
       return matchSearch && matchStatus;
@@ -367,8 +380,27 @@ export default function InstallmentsScreen() {
       setPromissoryNotes(updatedNotes);
     }
 
+    // Post Accounting Journal Entry for Contract Activation
+    try {
+      const entry: JournalEntry = {
+        id: `je-cnt-${Date.now()}`,
+        entryNumber: `JV-CNT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        date: newContract.startDate,
+        status: JournalEntryStatus.Posted,
+        description: `إثبات وحجز عقد مبيعات بالتقسيط للعميل (${newContract.customerName}) بموجب عقد رقم (${contractNumber})`,
+        reference: contractNumber,
+        items: [
+          { id: `ji-${Date.now()}-1`, accountId: 'acc-1201', debit: totalFinanced, credit: 0 },
+          { id: `ji-${Date.now()}-2`, accountId: 'acc-4101', debit: 0, credit: totalFinanced }
+        ]
+      };
+      saveJournalEntry(entry);
+    } catch (err) {
+      console.error('Error posting contract journal entry:', err);
+    }
+
     setIsNewContractModalOpen(false);
-    alert(`تم حفظ عقد التقسيط ${contractNumber} بنجاح وتوليد ${scheduleItems.length} قسط وكمبيالة!`);
+    alert(`تم حفظ عقد التقسيط ${contractNumber} وترحيل القيد المحاسبي بنجاح وتوليد ${scheduleItems.length} قسط وكمبيالة!`);
   };
 
   // Open Payment Modal
@@ -447,14 +479,37 @@ export default function InstallmentsScreen() {
           return {
             ...n,
             status: 'COLLECTED' as const,
-            collectionDate: new Date().toISOString().slice(0, 10),
-            notes: `${n.notes || ''} - تم التحصيل بموجب إيصال ${paymentData.receiptVoucherNumber}`
+            collectedDate: new Date().toISOString().slice(0, 10)
           };
         }
         return n;
       });
       saveStoredPromissoryNotes(updatedNotes);
       setPromissoryNotes(updatedNotes);
+    }
+
+    // Post Accounting Journal Entry for Installment Collection
+    try {
+      const selectedTreasuryId = (paymentData as any).paymentAccountId || treasuryAccounts[0]?.id || 'acc-1101';
+      const targetTreasury = treasuryAccounts.find(a => a.id === selectedTreasuryId || a.code === selectedTreasuryId);
+      const targetTreasuryId = targetTreasury ? targetTreasury.id : selectedTreasuryId;
+      const targetTreasuryName = targetTreasury ? `${targetTreasury.name} (${targetTreasury.code})` : 'الصندوق / البنك';
+
+      const entry: JournalEntry = {
+        id: `je-instpay-${Date.now()}`,
+        entryNumber: `JV-INSPAY-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        date: new Date().toISOString().slice(0, 10),
+        status: JournalEntryStatus.Posted,
+        description: `تحصيل قسط عقد تقسيط (#${contract.contractNumber}) - القسط رقم (${item.installmentNumber}) للعميل (${contract.customerName}) في ${targetTreasuryName}`,
+        reference: paymentData.receiptVoucherNumber || contract.contractNumber,
+        items: [
+          { id: `ji-${Date.now()}-1`, accountId: targetTreasuryId, debit: payAmount, credit: 0 },
+          { id: `ji-${Date.now()}-2`, accountId: 'acc-1201', debit: 0, credit: payAmount }
+        ]
+      };
+      saveJournalEntry(entry);
+    } catch (err) {
+      console.error('Error posting installment collection journal entry:', err);
     }
 
     saveStoredInstallments(updatedContracts);
@@ -531,41 +586,70 @@ export default function InstallmentsScreen() {
   return (
     <div className="flex flex-col flex-1 space-y-5" dir="rtl">
       {/* Header & Action Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl shadow-xs border border-slate-200 print:hidden">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">نظام التمويل والائتمان المالي</span>
+      {!isInWindow ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl shadow-xs border border-slate-200 print:hidden">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">نظام التمويل والائتمان المالي</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2.5">
+              <CreditCard className="text-emerald-600" size={28} />
+              إدارة التقسيط والكمبيالات والسندات لأمر
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 mt-1">
+              متابعة عقود البيع بالتقسيط، جداول استهلاك الأقساط، محفظة الكمبيالات والسندات الإذنية، وسندات القبض.
+            </p>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2.5">
-            <CreditCard className="text-emerald-600" size={28} />
-            إدارة التقسيط والكمبيالات والسندات لأمر
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            متابعة عقود البيع بالتقسيط، جداول استهلاك الأقساط، محفظة الكمبيالات والسندات الإذنية، وسندات القبض.
-          </p>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => setIsNewContractModalOpen(true)}
-            className="btn-3d btn-3d-emerald text-xs sm:text-sm px-4 py-2.5 shadow-sm cursor-pointer"
-          >
-            <Plus size={16} />
-            <span>إنشاء عقد تقسيط جديد</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setIsNewContractModalOpen(true)}
+              className="btn-3d btn-3d-emerald text-xs sm:text-sm px-4 py-2.5 shadow-sm cursor-pointer"
+            >
+              <Plus size={16} />
+              <span>إنشاء عقد تقسيط جديد</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setIsNewNoteModalOpen(true)}
-            className="btn-3d btn-3d-slate text-xs sm:text-sm px-4 py-2.5 shadow-sm cursor-pointer"
-          >
-            <FileCheck size={16} />
-            <span>تحرير كمبيالة / سند لأمر</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setIsNewNoteModalOpen(true)}
+              className="btn-3d btn-3d-slate text-xs sm:text-sm px-4 py-2.5 shadow-sm cursor-pointer"
+            >
+              <FileCheck size={16} />
+              <span>تحرير كمبيالة / سند لأمر</span>
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between gap-2.5 bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200 shadow-2xs print:hidden">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-bold text-slate-700">عمليات التمويل والعقود:</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsNewContractModalOpen(true)}
+              className="btn-3d btn-3d-emerald text-xs px-3 py-1.5 shadow-2xs cursor-pointer flex items-center gap-1.5"
+            >
+              <Plus size={14} />
+              <span>إنشاء عقد تقسيط جديد</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsNewNoteModalOpen(true)}
+              className="btn-3d btn-3d-slate text-xs px-3 py-1.5 shadow-2xs cursor-pointer flex items-center gap-1.5"
+            >
+              <FileCheck size={14} />
+              <span>تحرير كمبيالة / سند لأمر</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* KPI METRICS OVERVIEW CARDS (Interactive with Drill-down Modals) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 print:hidden">
@@ -1227,8 +1311,9 @@ export default function InstallmentsScreen() {
               <input
                 type="number"
                 value={calcPrice}
-                onChange={e => setCalcPrice(Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
+                onFocus={e => e.target.select()}
+                onChange={e => setCalcPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:border-emerald-500 font-mono"
               />
             </div>
 
@@ -1237,8 +1322,9 @@ export default function InstallmentsScreen() {
               <input
                 type="number"
                 value={calcDown}
-                onChange={e => setCalcDown(Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
+                onFocus={e => e.target.select()}
+                onChange={e => setCalcDown(e.target.value === '' ? '' : Number(e.target.value))}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:border-emerald-500 font-mono"
               />
             </div>
 
@@ -1248,8 +1334,9 @@ export default function InstallmentsScreen() {
                 <input
                   type="number"
                   value={calcRate}
-                  onChange={e => setCalcRate(Number(e.target.value))}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
+                  onFocus={e => e.target.select()}
+                  onChange={e => setCalcRate(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:border-emerald-500 font-mono"
                 />
               </div>
               <div>
@@ -1257,8 +1344,9 @@ export default function InstallmentsScreen() {
                 <input
                   type="number"
                   value={calcMonths}
-                  onChange={e => setCalcMonths(Number(e.target.value))}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
+                  onFocus={e => e.target.select()}
+                  onChange={e => setCalcMonths(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:border-emerald-500 font-mono"
                 />
               </div>
             </div>
@@ -1268,10 +1356,10 @@ export default function InstallmentsScreen() {
               onClick={() => {
                 setNewContract(prev => ({
                   ...prev,
-                  cashPrice: calcPrice,
-                  downPayment: calcDown,
-                  profitRate: calcRate,
-                  monthsCount: calcMonths
+                  cashPrice: Number(calcPrice) || 0,
+                  downPayment: Number(calcDown) || 0,
+                  profitRate: Number(calcRate) || 0,
+                  monthsCount: Number(calcMonths) || 12
                 }));
                 setIsNewContractModalOpen(true);
               }}
@@ -1284,10 +1372,14 @@ export default function InstallmentsScreen() {
           {/* Calculator Results */}
           <div className="lg:col-span-2 bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col justify-between">
             {(() => {
-              const netPrincipal = Math.max(0, calcPrice - calcDown);
-              const profit = Math.round(netPrincipal * (calcRate / 100) * (calcMonths / 12));
+              const numPrice = Number(calcPrice) || 0;
+              const numDown = Number(calcDown) || 0;
+              const numRate = Number(calcRate) || 0;
+              const numMonths = Number(calcMonths) || 0;
+              const netPrincipal = Math.max(0, numPrice - numDown);
+              const profit = Math.round(netPrincipal * (numRate / 100) * (numMonths / 12));
               const totalAmount = netPrincipal + profit;
-              const monthly = calcMonths > 0 ? Math.round((totalAmount / calcMonths) * 100) / 100 : 0;
+              const monthly = numMonths > 0 ? Math.round((totalAmount / numMonths) * 100) / 100 : 0;
 
               return (
                 <div className="space-y-6">
@@ -1512,7 +1604,8 @@ export default function InstallmentsScreen() {
                     step="any"
                     required
                     value={newContract.cashPrice}
-                    onChange={e => setNewContract({ ...newContract, cashPrice: Number(e.target.value) })}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setNewContract({ ...newContract, cashPrice: e.target.value === '' ? '' : Number(e.target.value) })}
                     className="w-full pl-10 pr-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-sm sm:text-base font-bold text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
                   />
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 font-mono pointer-events-none">
@@ -1531,7 +1624,8 @@ export default function InstallmentsScreen() {
                     min="0"
                     step="any"
                     value={newContract.downPayment}
-                    onChange={e => setNewContract({ ...newContract, downPayment: Number(e.target.value) })}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setNewContract({ ...newContract, downPayment: e.target.value === '' ? '' : Number(e.target.value) })}
                     className="w-full pl-10 pr-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-sm sm:text-base font-bold text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
                   />
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 font-mono pointer-events-none">
@@ -1550,7 +1644,8 @@ export default function InstallmentsScreen() {
                     min="0"
                     step="any"
                     value={newContract.profitRate}
-                    onChange={e => setNewContract({ ...newContract, profitRate: Number(e.target.value) })}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setNewContract({ ...newContract, profitRate: e.target.value === '' ? '' : Number(e.target.value) })}
                     className="w-full pl-8 pr-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-sm sm:text-base font-bold text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
                   />
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 font-mono pointer-events-none">
@@ -1568,7 +1663,8 @@ export default function InstallmentsScreen() {
                   min="1"
                   required
                   value={newContract.monthsCount}
-                  onChange={e => setNewContract({ ...newContract, monthsCount: Math.max(1, Number(e.target.value)) })}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setNewContract({ ...newContract, monthsCount: e.target.value === '' ? '' : Math.max(1, Number(e.target.value)) })}
                   className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-sm sm:text-base font-bold text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
                 />
               </div>
@@ -1796,8 +1892,9 @@ export default function InstallmentsScreen() {
                   type="number"
                   required
                   value={paymentData.amount}
-                  onChange={e => setPaymentData({ ...paymentData, amount: Number(e.target.value) })}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-base text-slate-900 focus:outline-none focus:border-emerald-500"
+                  onFocus={e => e.target.select()}
+                  onChange={e => setPaymentData({ ...paymentData, amount: e.target.value === '' ? ('' as any) : Number(e.target.value) })}
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-base text-slate-900 focus:outline-none focus:border-emerald-500 font-mono"
                 />
               </div>
 
@@ -2197,7 +2294,8 @@ export default function InstallmentsScreen() {
                     step="any"
                     required
                     value={newFreeNote.amount}
-                    onChange={e => setNewFreeNote({ ...newFreeNote, amount: Number(e.target.value) })}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setNewFreeNote({ ...newFreeNote, amount: e.target.value === '' ? ('' as any) : Number(e.target.value) })}
                     className="w-full pl-12 pr-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-sm sm:text-base font-bold text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all shadow-2xs"
                     placeholder="0.00"
                   />

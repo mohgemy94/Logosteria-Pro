@@ -119,7 +119,7 @@ export default function ResponsiveModal({
   return createPortal(
     <div
       id={id ? `${id}-overlay` : undefined}
-      className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs transition-opacity duration-200 animate-fadeIn ${overlayClassName}`}
+      className={`fixed inset-0 z-[99900] flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/75 backdrop-blur-xs transition-opacity duration-200 animate-fadeIn ${overlayClassName}`}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();

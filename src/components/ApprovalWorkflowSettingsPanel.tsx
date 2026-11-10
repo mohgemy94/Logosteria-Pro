@@ -232,8 +232,12 @@ export default function ApprovalWorkflowSettingsPanel({
                 type="number"
                 min="0"
                 step="500"
-                value={workflow.minAmountThreshold}
-                onChange={(e) => onChange('minAmountThreshold', Math.max(0, Number(e.target.value) || 0))}
+                value={workflow.minAmountThreshold ?? ''}
+                onFocus={e => e.target.select()}
+                onChange={(e) => onChange('minAmountThreshold', e.target.value === '' ? ('' as any) : Math.max(0, Number(e.target.value)))}
+                onBlur={() => {
+                  if ((workflow.minAmountThreshold as any) === '') onChange('minAmountThreshold', 0);
+                }}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg font-mono font-bold text-sm text-slate-800 focus:ring-2 focus:ring-violet-500"
               />
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">
@@ -264,8 +268,12 @@ export default function ApprovalWorkflowSettingsPanel({
                 min="0"
                 step="5000"
                 disabled={!workflow.requireGeneralManagerForVeryLarge}
-                value={workflow.veryLargeThreshold}
-                onChange={(e) => onChange('veryLargeThreshold', Math.max(0, Number(e.target.value) || 0))}
+                value={workflow.veryLargeThreshold ?? ''}
+                onFocus={e => e.target.select()}
+                onChange={(e) => onChange('veryLargeThreshold', e.target.value === '' ? ('' as any) : Math.max(0, Number(e.target.value)))}
+                onBlur={() => {
+                  if ((workflow.veryLargeThreshold as any) === '') onChange('veryLargeThreshold', 0);
+                }}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg font-mono font-bold text-sm text-slate-800 focus:ring-2 focus:ring-violet-500 disabled:opacity-50"
               />
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">

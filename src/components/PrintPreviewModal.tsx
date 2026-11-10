@@ -19,7 +19,9 @@ import {
   Scan,
   Share2,
   Image as ImageIcon,
-  MessageSquare
+  MessageSquare,
+  Smartphone,
+  SlidersHorizontal
 } from 'lucide-react';
 import { CertifiedInvoiceDocument } from './CertifiedInvoiceDocument';
 import { exportElementToPdf, printElementDirectly } from '../utils/pdfExport';
@@ -72,6 +74,7 @@ export interface PrintPreviewData {
   subtotal?: number | undefined;
   taxTotal?: number | undefined;
   discountTotal?: number | undefined;
+  servicesTotal?: number | undefined;
   grandTotal?: number | undefined;
   paidAmount?: number | undefined;
   remainingAmount?: number | undefined;
@@ -102,6 +105,39 @@ export interface PrintPreviewData {
   closingBalance?: number | undefined;
   totalDebit?: number | undefined;
   totalCredit?: number | undefined;
+  priorBalance?: number | undefined;
+  priorBalanceType?: 'DEBIT' | 'CREDIT' | 'ZERO' | undefined;
+  totalDebitPeriod?: number | undefined;
+  totalCreditPeriod?: number | undefined;
+  totalQuantityPeriod?: number | undefined;
+  finalBalance?: number | undefined;
+  finalBalanceType?: 'DEBIT' | 'CREDIT' | 'ZERO' | undefined;
+  statementDocBlocks?: Array<{
+    id: string;
+    docType?: string | undefined;
+    docTypeLabel: string;
+    docNumber: string;
+    date: string;
+    status?: 'POSTED' | 'DRAFT' | string | undefined;
+    lines: Array<{
+      id?: string | undefined;
+      typeLabel: string;
+      docNumber: string;
+      date: string;
+      description: string;
+      quantity: number | null;
+      unitPrice: number | null;
+      total: number;
+      debit?: number | null | undefined;
+      credit?: number | null | undefined;
+    }>;
+    totalQuantity: number;
+    docTotal: number;
+    totalDebit: number;
+    totalCredit: number;
+    runningBalance?: number | undefined;
+    runningBalanceType?: 'DEBIT' | 'CREDIT' | 'ZERO' | undefined;
+  }> | undefined;
   transactions?: Array<{
     id: string;
     date: string;
@@ -142,6 +178,8 @@ interface PrintPreviewModalProps {
   data: PrintPreviewData;
   initialFormat?: PrintPaperFormat;
   initialLanguage?: 'ar' | 'en';
+  autoPrint?: boolean;
+  autoExportPdf?: boolean;
 }
 
 export default function PrintPreviewModal({
@@ -149,7 +187,9 @@ export default function PrintPreviewModal({
   onClose,
   data,
   initialFormat,
-  initialLanguage = 'ar'
+  initialLanguage = 'ar',
+  autoPrint = false,
+  autoExportPdf = false
 }: PrintPreviewModalProps) {
   // Initialize with saved format or passed initial format
   const savedInit = getSavedPrintPaperFormat();
@@ -162,17 +202,32 @@ export default function PrintPreviewModal({
   const [tempHeightCm, setTempHeightCm] = useState<string>(savedInit.customSize.heightCm.toString());
 
   const [zoom, setZoom] = useState<number>(100);
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const dragStartRef = useRef<{ startX: number; startY: number; initPanX: number; initPanY: number }>({ startX: 0, startY: 0, initPanX: 0, initPanY: 0 });
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [isExportSuccess, setIsExportSuccess] = useState<boolean>(false);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
   const [mobilePdfReady, setMobilePdfReady] = useState<{ blob: Blob; filename: string; imgData?: string } | null>(null);
+  const [showMobileSettings, setShowMobileSettings] = useState(false);
+  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1024);
 
   const printAreaRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth < 1024);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Sync when opened
   useEffect(() => {
     if (isOpen) {
+      setZoom(100);
+      setPan({ x: 0, y: 0 });
       document.body.classList.add('print-preview-active');
       const saved = getSavedPrintPaperFormat();
       if (!initialFormat) {
@@ -183,12 +238,41 @@ export default function PrintPreviewModal({
       setTempHeightCm(saved.customSize.heightCm.toString());
       setColorMode(getSavedPrintColorMode());
     } else {
+      setZoom(100);
+      setPan({ x: 0, y: 0 });
       document.body.classList.remove('print-preview-active');
     }
     return () => {
+      setZoom(100);
+      setPan({ x: 0, y: 0 });
       document.body.classList.remove('print-preview-active');
     };
   }, [isOpen, initialFormat]);
+
+  // Automatic Print or Export PDF on open if requested
+  useEffect(() => {
+    if (isOpen && autoPrint) {
+      const timer = setTimeout(() => {
+        handlePrint();
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, autoPrint]);
+
+  useEffect(() => {
+    if (isOpen && autoExportPdf) {
+      const timer = setTimeout(() => {
+        handleExportPdf();
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, autoExportPdf]);
+
+  const handleCloseModal = () => {
+    setZoom(100);
+    setPan({ x: 0, y: 0 });
+    onClose();
+  };
 
   // Handle hardware & gesture back button on mobile: closes preview first
   useEffect(() => {
@@ -320,6 +404,63 @@ export default function PrintPreviewModal({
   const handleFitWidth = () => {
     const fit = calculateFitZoom(format, customSize);
     setZoom(fit);
+    setPan({ x: 0, y: 0 });
+  };
+
+  const resetPan = () => {
+    setPan({ x: 0, y: 0 });
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoom <= 100) return;
+    setIsDragging(true);
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initPanX: pan.x,
+      initPanY: pan.y
+    };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || zoom <= 100) return;
+    const dx = e.clientX - dragStartRef.current.startX;
+    const dy = e.clientY - dragStartRef.current.startY;
+    setPan({
+      x: dragStartRef.current.initPanX + dx,
+      y: dragStartRef.current.initPanY + dy
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (zoom <= 100 || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    setIsDragging(true);
+    dragStartRef.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      initPanX: pan.x,
+      initPanY: pan.y
+    };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || zoom <= 100 || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - dragStartRef.current.startX;
+    const dy = touch.clientY - dragStartRef.current.startY;
+    setPan({
+      x: dragStartRef.current.initPanX + dx,
+      y: dragStartRef.current.initPanY + dy
+    });
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
   };
 
   const handleExportPdf = async () => {
@@ -381,10 +522,10 @@ export default function PrintPreviewModal({
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-900/90 backdrop-blur-xs overflow-hidden animate-fadeIn print:static print:inset-auto print:bg-white print:overflow-visible print:p-0 print:m-0 print:z-auto print-preview-modal-root">
+    <div className="fixed inset-0 z-[99999] flex flex-col bg-slate-900/90 backdrop-blur-xs overflow-hidden animate-fadeIn print:static print:inset-auto print:bg-white print:overflow-visible print:p-0 print:m-0 print:z-auto print-preview-modal-root">
       {/* Toast Feedback */}
       {feedbackToast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-60 bg-emerald-900/95 text-emerald-100 text-xs px-4 py-2 rounded-xl shadow-2xl flex items-center gap-2 border border-emerald-500/40 pointer-events-none animate-fadeIn print:hidden">
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[100002] bg-emerald-900/95 text-emerald-100 text-xs px-4 py-2 rounded-xl shadow-2xl flex items-center gap-2 border border-emerald-500/40 pointer-events-none animate-fadeIn print:hidden">
           <Pin size={13} className="text-emerald-400" />
           <span className="font-bold">{feedbackToast}</span>
         </div>
@@ -405,7 +546,7 @@ export default function PrintPreviewModal({
                   {data.title}
                 </h2>
                 <span className="text-[10px] sm:text-xs bg-blue-500/20 text-blue-300 px-1.5 sm:px-2 py-0.5 rounded font-mono font-bold border border-blue-500/30 shrink-0">
-                  #{data.docNumber || '0000'}
+                  {data.docNumber || '0000'}
                 </span>
                 <span className="text-[10px] bg-purple-900/60 text-purple-200 px-1.5 py-0.5 rounded font-bold border border-purple-500/40 flex items-center gap-1 shrink-0" title="مزود بباركود ورمز QR ضوئي لمنع التلاعب">
                   <Scan size={11} className="text-purple-300" />
@@ -418,18 +559,53 @@ export default function PrintPreviewModal({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer lg:hidden shrink-0"
-            title="إغلاق المعاينة"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-1.5 lg:hidden shrink-0">
+            {/* Quick Mobile Settings Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowMobileSettings(!showMobileSettings)}
+              className={`p-1.5 rounded-xl border text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 ${
+                showMobileSettings
+                  ? 'bg-blue-600 border-blue-400 text-white'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+              }`}
+              title="خيارات الورقة والألوان"
+            >
+              <SlidersHorizontal size={14} />
+              <span className="text-[11px] hidden xs:inline">الخيارات</span>
+            </button>
+
+            {/* Quick Mobile Fit Zoom Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                const fit = calculateFitZoom(format, customSize);
+                if (zoom === fit) {
+                  setZoom(100);
+                } else {
+                  setZoom(fit);
+                }
+                resetPan();
+              }}
+              className="p-1.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:text-white text-xs font-mono font-bold cursor-pointer"
+              title="التبديل بين احتواء الشاشة وحجم 100%"
+            >
+              {zoom}%
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCloseModal}
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer shrink-0"
+              title="إغلاق المعاينة"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Row 2: Comprehensive Paper Formats Selector */}
-        <div className="flex flex-wrap items-center justify-between lg:justify-center gap-1.5 sm:gap-2 w-full lg:w-auto">
+        <div className={`${showMobileSettings ? 'flex' : 'hidden lg:flex'} flex-wrap items-center justify-between lg:justify-center gap-1.5 sm:gap-2 w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-800`}>
           {/* Format Select Dropdown */}
           <div className="flex items-center gap-1.5 bg-slate-800/90 p-1 rounded-xl border border-slate-700 text-xs">
             <span className="text-slate-400 font-bold px-1 text-[11px] flex items-center gap-1 shrink-0">
@@ -528,53 +704,62 @@ export default function PrintPreviewModal({
             </button>
           </div>
 
-          {/* Zoom Buttons & Fit to Screen */}
-          <div className="flex items-center gap-1 bg-slate-800/90 p-1 rounded-xl border border-slate-700/60 text-xs">
+          {/* أداة التكبير والتصغير المرنة بأي قيمة (Flexible Zoom Control with Slider & Stepper) */}
+          <div className="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700 rounded-xl px-2.5 py-1 shadow-2xs text-white">
             <button
               type="button"
-              onClick={() => setZoom(prev => Math.max(prev - 10, 25))}
-              className="p-1 sm:p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-700 transition-colors cursor-pointer"
-              title="تصغير"
+              onClick={() => setZoom(z => Math.max(z - 15, 25))}
+              className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              title="تصغير (-15%)"
             >
               <ZoomOut size={14} />
             </button>
-            <span className="font-mono text-[10px] sm:text-[11px] text-slate-300 w-8 sm:w-9 text-center font-bold">
-              {zoom}%
-            </span>
+
+            <input
+              type="range"
+              min="25"
+              max="220"
+              step="5"
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="w-20 sm:w-28 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              title={`نسبة التكبير: ${zoom}% (اسحب للتحكم بأي قيمة)`}
+            />
+
             <button
               type="button"
-              onClick={() => setZoom(prev => Math.min(prev + 10, 160))}
-              className="p-1 sm:p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-700 transition-colors cursor-pointer"
-              title="تكبير"
+              onClick={() => setZoom(z => Math.min(z + 15, 220))}
+              className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              title="تكبير (+15%)"
             >
               <ZoomIn size={14} />
             </button>
+
             <button
               type="button"
-              onClick={handleFitWidth}
-              className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-blue-400 hover:text-blue-300 hover:bg-slate-700/80 rounded transition-colors cursor-pointer"
-              title="احتواء في عرض الشاشة"
+              onClick={() => {
+                const fit = calculateFitZoom(format, customSize);
+                setZoom(Math.min(fit, 100));
+                resetPan();
+              }}
+              className={`font-mono text-xs font-bold px-2 py-0.5 rounded-lg transition-colors cursor-pointer ${
+                zoom === 100 
+                  ? 'bg-slate-700 text-slate-300' 
+                  : 'bg-blue-600/30 text-blue-300 hover:bg-blue-600/50'
+              }`}
+              title="إعادة ضبط المعاينة إلى مقاس الشاشة الطبيعي"
             >
-              <Minimize2 size={12} />
-              <span>احتواء</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setZoom(100)}
-              className="p-1 sm:p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-700 transition-colors cursor-pointer hidden md:block"
-              title="إعادة ضبط 100%"
-            >
-              <Maximize2 size={14} />
+              {zoom}%
             </button>
           </div>
         </div>
 
-        {/* Row 3: Action Buttons: Print / PDF / Close */}
-        <div className="flex items-center gap-2 w-full lg:w-auto">
+        {/* Row 3: Action Buttons: Print / PDF / Close (Desktop) */}
+        <div className="hidden lg:flex items-center gap-2 w-full lg:w-auto">
           <button
             type="button"
             onClick={handlePrint}
-            className="flex-1 lg:flex-none btn-3d btn-3d-emerald px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-black"
+            className="btn-3d btn-3d-emerald px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-black"
           >
             <Printer size={15} />
             <span>طباعة الآن ({activeDef.shortName})</span>
@@ -584,7 +769,7 @@ export default function PrintPreviewModal({
             type="button"
             onClick={handleExportPdf}
             disabled={isExportingPdf}
-            className={`flex-1 lg:flex-none btn-3d ${
+            className={`btn-3d ${
               isExportSuccess 
                 ? 'btn-3d-emerald' 
                 : 'btn-3d-rose'
@@ -611,8 +796,8 @@ export default function PrintPreviewModal({
 
           <button
             type="button"
-            onClick={onClose}
-            className="hidden lg:flex btn-3d btn-3d-slate p-2 text-slate-200 hover:text-white shrink-0"
+            onClick={handleCloseModal}
+            className="btn-3d btn-3d-slate p-2 text-slate-200 hover:text-white shrink-0"
             title="إغلاق المعاينة"
           >
             <X size={18} />
@@ -620,15 +805,28 @@ export default function PrintPreviewModal({
         </div>
       </div>
 
-      {/* Main Preview Viewing Canvas Area */}
+      {/* Main Preview Viewing Canvas Area with 4-Way Pan & Drag */}
       <div 
         ref={scrollContainerRef}
-        className="flex-1 overflow-auto p-1.5 sm:p-6 md:p-8 flex justify-center items-start bg-slate-950/70 custom-scrollbar w-full max-w-full -webkit-overflow-scrolling-touch print:overflow-visible print:bg-white print:p-0 print:m-0 print:static print:block"
+        className={`flex-1 overflow-auto p-1.5 sm:p-6 md:p-8 flex justify-center items-start bg-slate-950/70 custom-scrollbar w-full max-w-full -webkit-overflow-scrolling-touch select-none pb-24 lg:pb-8 print:overflow-visible print:bg-white print:p-0 print:m-0 print:static print:block ${
+          zoom > 100 
+            ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') 
+            : 'cursor-default'
+        }`}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         <div 
-          className="relative transition-all duration-150 flex justify-center shrink-0 my-auto print:static print:m-0 print:w-full print:block max-w-full"
+          className="relative transition-transform duration-100 flex justify-center shrink-0 my-auto print:static print:m-0 print:w-full print:block max-w-full"
           style={{ 
             width: isExportingPdf ? `${baseWidth}px` : `${scaledWidth}px`,
+            transform: zoom > 100 ? `translate3d(${pan.x}px, ${pan.y}px, 0px)` : 'none',
+            marginBottom: zoom > 100 ? `${(zoom - 100) * 8}px` : '0px'
           }}
         >
           <div 
@@ -655,7 +853,7 @@ export default function PrintPreviewModal({
 
       {showCustomDialog && (
         <div 
-          className="fixed inset-0 z-60 flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-xs p-0 sm:p-4 animate-fadeIn"
+          className="fixed inset-0 z-[100000] flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-xs p-0 sm:p-4 animate-fadeIn"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowCustomDialog(false);
           }}
@@ -758,7 +956,7 @@ export default function PrintPreviewModal({
       {/* Fully Responsive Universal PDF Save & Share Modal (Mobile, Tablet, Desktop) */}
       {mobilePdfReady && (
         <div 
-          className="fixed inset-0 z-70 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/85 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
+          className="fixed inset-0 z-[100001] flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/85 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
           onClick={() => setMobilePdfReady(null)}
         >
           <div 
@@ -814,7 +1012,7 @@ export default function PrintPreviewModal({
                   <div className="text-xs sm:text-sm font-bold text-white flex items-center justify-center sm:justify-start gap-1.5 flex-wrap">
                     <span>{data.title || 'مستند مالي'}</span>
                     {data.docNumber && (
-                      <span className="text-emerald-400 font-mono">#{data.docNumber}</span>
+                      <span className="text-emerald-400 font-mono">{data.docNumber}</span>
                     )}
                     {data.partnerName && (
                       <span className="text-slate-300 font-normal">({data.partnerName})</span>
@@ -902,12 +1100,28 @@ export default function PrintPreviewModal({
                 {/* 4. WhatsApp Direct */}
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     const docTitle = data.title || 'مستند مالي';
                     const docNo = data.docNumber ? ` رقم ${data.docNumber}` : '';
                     const partner = data.partnerName ? ` - ${data.partnerName}` : '';
-                    const text = `📄 *${docTitle}${docNo}*${partner}\nالمبلغ: ${data.totalAmount?.toLocaleString() || ''} ${data.currency || 'SAR'}\nتم إصداره عبر منظومة لوجوستريا المحاسبية`;
-                    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+                    const totalVal = data.grandTotal ?? data.totalAmount ?? data.amount ?? 0;
+                    const companionText = `📄 *${docTitle}${docNo}*${partner}\nالمبلغ الإجمالي: ${totalVal.toLocaleString()} ${data.currency || 'SAR'}\nتم إصداره وتوثيقه رسمياً.`;
+
+                    if (mobilePdfReady?.blob && typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
+                      try {
+                        const pdfFile = new File([mobilePdfReady.blob], mobilePdfReady.filename, { type: 'application/pdf' });
+                        if (navigator.canShare({ files: [pdfFile] })) {
+                          await navigator.share({
+                            title: `${docTitle}${docNo}`,
+                            text: companionText,
+                            files: [pdfFile]
+                          });
+                          return;
+                        }
+                      } catch {}
+                    }
+
+                    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(companionText)}`;
                     window.open(waUrl, '_blank');
                   }}
                   className="p-3 sm:p-3.5 bg-emerald-950/50 hover:bg-emerald-900/70 border border-emerald-600/40 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold text-emerald-100 transition-all flex items-center gap-2.5 sm:gap-3 text-right cursor-pointer group"
@@ -916,8 +1130,8 @@ export default function PrintPreviewModal({
                     <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-300" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="leading-tight text-white font-black">إرسال الملخص عبر الواتساب</div>
-                    <div className="text-[10px] font-normal text-emerald-300 mt-0.5 truncate">مشاركة نص الفاتورة والمبلغ مباشرة</div>
+                    <div className="leading-tight text-white font-black">إرسال ومشاركة عبر الواتساب (PDF / نص)</div>
+                    <div className="text-[10px] font-normal text-emerald-300 mt-0.5 truncate">مشاركة ملف الـ PDF والنص المالي مباشرة</div>
                   </div>
                 </button>
               </div>
@@ -951,6 +1165,77 @@ export default function PrintPreviewModal({
           </div>
         </div>
       )}
+
+      {/* Mobile Sticky Bottom Action Bar - Convenient 1-Thumb Reach */}
+      <div 
+        className="lg:hidden fixed bottom-0 inset-x-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 p-2.5 flex items-center justify-between gap-2 z-40 shadow-2xl print:hidden"
+        style={{ paddingBottom: 'calc(0.625rem + env(safe-area-inset-bottom, 0px))' }}
+      >
+        <button
+          type="button"
+          onClick={handlePrint}
+          className="flex-1 btn-3d btn-3d-emerald py-2.5 px-3 text-xs font-black flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+        >
+          <Printer size={15} />
+          <span>طباعة ({activeDef.shortName})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleExportPdf}
+          disabled={isExportingPdf}
+          className={`flex-1 btn-3d ${
+            isExportSuccess ? 'btn-3d-emerald' : 'btn-3d-rose'
+          } py-2.5 px-3 text-xs font-black flex items-center justify-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-75`}
+        >
+          {isExportingPdf ? (
+            <>
+              <Loader2 size={14} className="animate-spin shrink-0" />
+              <span>جاري الـ PDF...</span>
+            </>
+          ) : isExportSuccess ? (
+            <>
+              <FileCheck size={14} className="shrink-0" />
+              <span>تم التحميل!</span>
+            </>
+          ) : (
+            <>
+              <Download size={14} className="shrink-0" />
+              <span>حفظ PDF</span>
+            </>
+          )}
+        </button>
+
+        {data.partnerPhone ? (
+          <a
+            href={`https://wa.me/${data.partnerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+              `مرحباً، مرفق لكم ${data.title} رقم ${data.docNumber || ''} بقيمة إجمالية ${data.grandTotal?.toLocaleString() || ''}`
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-3d btn-3d-emerald p-2.5 text-white flex items-center justify-center rounded-xl shrink-0"
+            title="إرسال عبر واتساب"
+          >
+            <MessageSquare size={16} />
+          </a>
+        ) : typeof navigator !== 'undefined' && 'share' in navigator ? (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await navigator.share({
+                  title: data.title,
+                  text: `${data.title} ${data.docNumber || ''}`
+                });
+              } catch (_) {}
+            }}
+            className="btn-3d btn-3d-slate p-2.5 text-slate-300 hover:text-white flex items-center justify-center rounded-xl shrink-0"
+            title="مشاركة"
+          >
+            <Share2 size={16} />
+          </button>
+        ) : null}
+      </div>
     </div>,
     document.body
   );

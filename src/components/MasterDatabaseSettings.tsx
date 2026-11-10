@@ -3,191 +3,181 @@ import {
   Building, Briefcase, Globe, Users, Package, 
   MapPin, Map, Star, BookOpen, PieChart, UserPlus, X, Plus, Edit2, Trash2, Search
 } from 'lucide-react';
+import { loadChartOfAccounts, saveChartOfAccounts } from '../utils/trialBalanceStore';
+import { loadCostCenters, saveCostCenters, CostCenter } from '../utils/costCenterStore';
+import { getDynamicWarehousesList, CUSTOM_WAREHOUSES_STORAGE_KEY, dispatchStockUpdatedEvent } from '../utils/itemsStore';
+import { loadCustomers, loadVendors, saveCustomers, saveVendors } from '../utils/partnerLedger';
+import { AccountType, BalanceType } from '../types/accounting';
 
-const INITIAL_MOCK_DATA = {
-  departments: [
-    { code: 'D01', name: 'الإدارة المالية' },
-    { code: 'D02', name: 'الموارد البشرية' },
-    { code: 'D03', name: 'المبيعات' },
-    { code: 'D04', name: 'تقنية المعلومات' },
-  ],
-  jobs: [
-    { code: 'J01', title: 'مدير مالي' },
-    { code: 'J02', title: 'محاسب عام' },
-    { code: 'J03', title: 'أخصائي مبيعات' },
-    { code: 'J04', title: 'مهندس برمجيات' },
-  ],
-  nationalities: [
-    { code: 'SA', name: 'سعودي' },
-    { code: 'EG', name: 'مصري' },
-    { code: 'JO', name: 'أردني' },
-    { code: 'IN', name: 'هندي' },
-  ],
-  employees: [
-    { code: 'E001', name: 'أحمد محمد', department: 'الإدارة المالية', job: 'مدير مالي' },
-    { code: 'E002', name: 'سارة خالد', department: 'الموارد البشرية', job: 'مسؤول توظيف' },
-    { code: 'E003', name: 'محمود عبدلله', department: 'تقنية المعلومات', job: 'مهندس برمجيات' },
-  ],
-  warehouses: [
-    { code: 'W01', name: 'المستودع الرئيسي - الرياض' },
-    { code: 'W02', name: 'مستودع التبريد - جدة' },
-    { code: 'W03', name: 'مستودع قطع الغيار - الدمام' },
-  ],
-  regions: [
-    { code: 'R01', name: 'المنطقة الوسطى' },
-    { code: 'R02', name: 'المنطقة الغربية' },
-    { code: 'R03', name: 'المنطقة الشرقية' },
-    { code: 'R04', name: 'المنطقة الجنوبية' },
-  ],
-  cities: [
-    { code: 'C01', name: 'الرياض', region: 'المنطقة الوسطى' },
-    { code: 'C02', name: 'جدة', region: 'المنطقة الغربية' },
-    { code: 'C03', name: 'الدمام', region: 'المنطقة الشرقية' },
-    { code: 'C04', name: 'أبها', region: 'المنطقة الجنوبية' },
-  ],
-  customerGrades: [
-    { code: 'G01', name: 'كبار العملاء (VIP)', discount: '15%' },
-    { code: 'G02', name: 'عميل مميز (A)', discount: '10%' },
-    { code: 'G03', name: 'عميل عادي (B)', discount: '5%' },
-    { code: 'G04', name: 'عميل جديد (C)', discount: '0%' },
-  ],
-  subAccounts: [
-    // 1. الأصول المتداولة
-    { code: '1101', name: 'النقدية بالصندوق الرئيسي', type: 'أصول متداولة', nature: 'مدين', parentAccount: '1100 - النقدية وما في حكمها', level: 'مستوى 4', status: 'نشط' },
-    { code: '1102', name: 'النقدية بالصندوق - فرع جدة', type: 'أصول متداولة', nature: 'مدين', parentAccount: '1100 - النقدية وما في حكمها', level: 'مستوى 4', status: 'نشط' },
-    { code: '1103', name: 'حساب البنك الجاري - العمليات المحلية', type: 'أصول متداولة', nature: 'مدين', parentAccount: '1100 - النقدية وما في حكمها', level: 'مستوى 4', status: 'نشط' },
-    { code: '1104', name: 'العهد النقدية المستديمة للموظفين', type: 'أصول متداولة', nature: 'مدين', parentAccount: '1100 - النقدية وما في حكمها', level: 'مستوى 4', status: 'نشط' },
-    { code: '1201', name: 'ذمم العملاء التجارية - قطاع الشركات', type: 'أصول متداولة', nature: 'مدين', parentAccount: '1200 - العملاء والمدينون', level: 'مستوى 4', status: 'نشط' },
-    { code: '1202', name: 'ذمم العملاء - قطاع التجزئة والأفراد', type: 'أصول متداولة', nature: 'مدين', parentAccount: '1200 - العملاء والمدينون', level: 'مستوى 4', status: 'نشط' },
-    { code: '1203', name: 'أوراق القبض (شيكات برسم التحصيل)', type: 'أصول متداولة', nature: 'مدين', parentAccount: '1200 - العملاء والمدينون', level: 'مستوى 4', status: 'نشط' },
-    { code: '1209', name: 'مخصص الديون المشكوك في تحصيلها (ECL)', type: 'أصول متداولة', nature: 'دائن', parentAccount: '1200 - مخصصات الذمم المدينة', level: 'مستوى 4', status: 'نشط' },
-    { code: '1301', name: 'مخزون البضاعة التامة بغرض البيع', type: 'أصول متداولة', nature: 'مدين', parentAccount: '1300 - المخزون السلعي', level: 'مستوى 4', status: 'نشط' },
-    { code: '1302', name: 'بضاعة بالطريق واعتمادات مستندية', type: 'أصول متداولة', nature: 'مدين', parentAccount: '1300 - المخزون السلعي', level: 'مستوى 4', status: 'نشط' },
-    { code: '1401', name: 'مصروفات تشغيلية مدفوعة مقدماً (إيجارات وتأمينات)', type: 'أصول متداولة', nature: 'مدين', parentAccount: '1400 - أرصدة مدينة أخرى', level: 'مستوى 4', status: 'نشط' },
-    { code: '1402', name: 'إيرادات مستحقة القبض غير مفوترة', type: 'أصول متداولة', nature: 'مدين', parentAccount: '1400 - أرصدة مدينة أخرى', level: 'مستوى 4', status: 'نشط' },
-
-    // 2. الأصول غير المتداولة
-    { code: '1501', name: 'الأراضي والمباني الإدارية', type: 'أصول غير متداولة', nature: 'مدين', parentAccount: '1500 - الأصول الثابتة الملموسة', level: 'مستوى 4', status: 'نشط' },
-    { code: '1502', name: 'الآلات ومعدات المستودعات والتشغيل', type: 'أصول غير متداولة', nature: 'مدين', parentAccount: '1500 - الأصول الثابتة الملموسة', level: 'مستوى 4', status: 'نشط' },
-    { code: '1503', name: 'أسطول سيارات النقل والتوزيع', type: 'أصول غير متداولة', nature: 'مدين', parentAccount: '1500 - الأصول الثابتة الملموسة', level: 'مستوى 4', status: 'نشط' },
-    { code: '1504', name: 'أجهزة الحاسب الآلي وتجهيزات تقنية المعلومات', type: 'أصول غير متداولة', nature: 'مدين', parentAccount: '1500 - الأصول الثابتة الملموسة', level: 'مستوى 4', status: 'نشط' },
-    { code: '1509', name: 'مجمع الإهلاك المتراكم للأصول الثابتة', type: 'أصول غير متداولة', nature: 'دائن', parentAccount: '1500 - مجمعات الاستهلاك', level: 'مستوى 4', status: 'نشط' },
-    { code: '1601', name: 'أصول غير ملموسة (برمجيات ورخص سحابية)', type: 'أصول غير متداولة', nature: 'مدين', parentAccount: '1600 - الأصول غير الملموسة', level: 'مستوى 4', status: 'نشط' },
-
-    // 3. الخصوم المتداولة
-    { code: '2101', name: 'ذمم الموردين التجارية المحليين', type: 'خصوم متداولة', nature: 'دائن', parentAccount: '2100 - الموردون والدائنون', level: 'مستوى 4', status: 'نشط' },
-    { code: '2102', name: 'ذمم الموردين الخارجيين - استيراد', type: 'خصوم متداولة', nature: 'دائن', parentAccount: '2100 - الموردون والدائنون', level: 'مستوى 4', status: 'نشط' },
-    { code: '2103', name: 'أوراق الدفع وشيكات مؤجلة الصرف', type: 'خصوم متداولة', nature: 'دائن', parentAccount: '2100 - الموردون والدائنون', level: 'مستوى 4', status: 'نشط' },
-    { code: '2201', name: 'ضريبة القيمة المضافة المستحقة للإقرار (ZATCA)', type: 'خصوم متداولة', nature: 'دائن', parentAccount: '2200 - الالتزامات والضرائب الحكومية', level: 'مستوى 4', status: 'نشط' },
-    { code: '2202', name: 'مستحقات المؤسسة العامة للتأمينات الاجتماعية (GOSI)', type: 'خصوم متداولة', nature: 'دائن', parentAccount: '2200 - الالتزامات والضرائب الحكومية', level: 'مستوى 4', status: 'نشط' },
-    { code: '2301', name: 'رواتب وأجور وبدلات مستحقة الصرف', type: 'خصوم متداولة', nature: 'دائن', parentAccount: '2300 - أرصدة دائنة ومستحقات أخرى', level: 'مستوى 4', status: 'نشط' },
-    { code: '2302', name: 'إيرادات خدمات مقبوضة مقدماً (غير مكتسبة)', type: 'خصوم متداولة', nature: 'دائن', parentAccount: '2300 - أرصدة دائنة ومستحقات أخرى', level: 'مستوى 4', status: 'نشط' },
-
-    // 4. الخصوم غير المتداولة
-    { code: '2501', name: 'مخصص مكافأة نهاية الخدمة للموظفين (IFRS-19)', type: 'خصوم غير متداولة', nature: 'دائن', parentAccount: '2500 - مخصصات والتزامات طويلة الأجل', level: 'مستوى 4', status: 'نشط' },
-    { code: '2601', name: 'تسهيلات وتمويلات بنكية إسلامية طويلة الأجل', type: 'خصوم غير متداولة', nature: 'دائن', parentAccount: '2600 - تمويل وقروض بنكية', level: 'مستوى 4', status: 'نشط' },
-
-    // 5. حقوق الملكية
-    { code: '3101', name: 'رأس المال الأساسي المصرح والمدفوع', type: 'حقوق ملكية', nature: 'دائن', parentAccount: '3100 - رأس المال', level: 'مستوى 4', status: 'نشط' },
-    { code: '3201', name: 'الاحتياطي النظامي الإلزامي (10%)', type: 'حقوق ملكية', nature: 'دائن', parentAccount: '3200 - الاحتياطيات القانونية', level: 'مستوى 4', status: 'نشط' },
-    { code: '3301', name: 'الأرباح (أو الخسائر) المبقاة والمدورة', type: 'حقوق ملكية', nature: 'دائن', parentAccount: '3300 - الأرباح المبقاة', level: 'مستوى 4', status: 'نشط' },
-    { code: '3401', name: 'جاري الشركاء / مسحوبات أصحاب المنشأة', type: 'حقوق ملكية', nature: 'مدين', parentAccount: '3400 - الحسابات الجارية للشركاء', level: 'مستوى 4', status: 'نشط' },
-
-    // 6. الإيرادات
-    { code: '4101', name: 'إيرادات مبيعات البضائع والمنتجات الرئيسية', type: 'إيرادات', nature: 'دائن', parentAccount: '4100 - إيرادات النشاط الرئيسي', level: 'مستوى 4', status: 'نشط' },
-    { code: '4102', name: 'إيرادات تقديم الخدمات الاستشارية والصيانة', type: 'إيرادات', nature: 'دائن', parentAccount: '4100 - إيرادات النشاط الرئيسي', level: 'مستوى 4', status: 'نشط' },
-    { code: '4201', name: 'خصم مسموح به ومردودات ومسموحات المبيعات', type: 'إيرادات', nature: 'مدين', parentAccount: '4200 - تسويات وخصومات المبيعات', level: 'مستوى 4', status: 'نشط' },
-    { code: '4301', name: 'إيرادات أرباح الودائع البنكية والمرابحات', type: 'إيرادات', nature: 'دائن', parentAccount: '4300 - إيرادات أخرى غير تشغيلية', level: 'مستوى 4', status: 'نشط' },
-    { code: '4302', name: 'أرباح فروق تسوية أسعار صرف العملات الأجنبية', type: 'إيرادات', nature: 'دائن', parentAccount: '4300 - إيرادات أخرى غير تشغيلية', level: 'مستوى 4', status: 'نشط' },
-
-    // 7. تكلفة النشاط والمصروفات
-    { code: '5101', name: 'تكلفة البضاعة المباعة (COGS)', type: 'مصروفات', nature: 'مدين', parentAccount: '5100 - تكلفة الإيرادات والإنتاج', level: 'مستوى 4', status: 'نشط' },
-    { code: '5102', name: 'تكاليف الشحن والنقل للمشتريات (Freight In)', type: 'مصروفات', nature: 'مدين', parentAccount: '5100 - تكلفة الإيرادات والإنتاج', level: 'مستوى 4', status: 'نشط' },
-    { code: '5201', name: 'مصروفات الرواتب والأجور والبدلات الشهرية', type: 'مصروفات', nature: 'مدين', parentAccount: '5200 - المصروفات الإدارية والعمومية', level: 'مستوى 4', status: 'نشط' },
-    { code: '5202', name: 'مصروفات إيجارات المكاتب والمستودعات', type: 'مصروفات', nature: 'مدين', parentAccount: '5200 - المصروفات الإدارية والعمومية', level: 'مستوى 4', status: 'نشط' },
-    { code: '5203', name: 'مصروفات الاتصالات والإنترنت والاشتراكات السحابية', type: 'مصروفات', nature: 'مدين', parentAccount: '5200 - المصروفات الإدارية والعمومية', level: 'مستوى 4', status: 'نشط' },
-    { code: '5204', name: 'مصروفات استهلاك الأصول الثابتة وإطفاء البرمجيات', type: 'مصروفات', nature: 'مدين', parentAccount: '5200 - المصروفات الإدارية والعمومية', level: 'مستوى 4', status: 'نشط' },
-    { code: '5301', name: 'مصروفات الحملات التسويقية والإعلانات الرقمية', type: 'مصروفات', nature: 'مدين', parentAccount: '5300 - المصاريف البيعية والتسويقية', level: 'مستوى 4', status: 'نشط' },
-    { code: '5302', name: 'عمولات وكلاء ومناديب المبيعات', type: 'مصروفات', nature: 'مدين', parentAccount: '5300 - المصاريف البيعية والتسويقية', level: 'مستوى 4', status: 'نشط' },
-    { code: '5401', name: 'المصروفات والعمولات البنكية ورسوم بوابات الدفع', type: 'مصروفات', nature: 'مدين', parentAccount: '5400 - أعباء تمويلية وبنكية', level: 'مستوى 4', status: 'نشط' },
-  ],
-  analyticAccounts: [
-    // 1. مراكز تكلفة إدارية وخدمية
-    { code: 'CC-101', name: 'الإدارة التنفيذية العليا', type: 'مركز تكلفة إداري', dimension: 'الإدارات والأقسام', budget: '350,000 ر.س', manager: 'م. خالد المنصور', status: 'نشط' },
-    { code: 'CC-102', name: 'إدارة الموارد البشرية والشؤون الإدارية', type: 'مركز تكلفة إداري', dimension: 'الإدارات والأقسام', budget: '180,000 ر.س', manager: 'أ. سارة الشمري', status: 'نشط' },
-    { code: 'CC-103', name: 'إدارة الشؤون المالية والمحاسبة والمراجعة', type: 'مركز تكلفة إداري', dimension: 'الإدارات والأقسام', budget: '220,000 ر.س', manager: 'أ. أحمد رضوان', status: 'نشط' },
-    { code: 'CC-104', name: 'إدارة تقنية المعلومات والتحول الرقمي', type: 'مركز تكلفة إداري', dimension: 'الإدارات والأقسام', budget: '450,000 ر.س', manager: 'م. فيصل العتيبي', status: 'نشط' },
-    { code: 'CC-105', name: 'قسم الدعم الفني وخدمة العملاء', type: 'مركز تكلفة تشغيلي', dimension: 'الإدارات والأقسام', budget: '160,000 ر.س', manager: 'أ. نورة القحطاني', status: 'نشط' },
-
-    // 2. مراكز ربحية ومنافذ وفروع بيعية
-    { code: 'PC-201', name: 'مركز مبيعات فرع الرياض الرئيسي', type: 'مركز ربحية', dimension: 'الفروع والأقاليم', budget: '2,500,000 ر.س', manager: 'أ. تركي القحطاني', status: 'نشط' },
-    { code: 'PC-202', name: 'مركز مبيعات فرع جدة والمنطقة الغربية', type: 'مركز ربحية', dimension: 'الفروع والأقاليم', budget: '1,800,000 ر.س', manager: 'أ. وائل السالم', status: 'نشط' },
-    { code: 'PC-203', name: 'مركز مبيعات فرع الدمام والمنطقة الشرقية', type: 'مركز ربحية', dimension: 'الفروع والأقاليم', budget: '1,400,000 ر.س', manager: 'أ. حسام الغامدي', status: 'نشط' },
-    { code: 'PC-204', name: 'منصة التجارة الإلكترونية والتوزيع السريع', type: 'مركز ربحية', dimension: 'الفروع والأقاليم', budget: '900,000 ر.س', manager: 'م. ريان الشهري', status: 'نشط' },
-
-    // 3. مشاريع وعقود تعاقدية
-    { code: 'PRJ-301', name: 'مشروع توريد وتجهيز حلول المستشفيات (عقد 44)', type: 'مشروع تعاقدي', dimension: 'المشاريع والعقود', budget: '1,250,000 ر.س', manager: 'م. عماد الفهد', status: 'نشط' },
-    { code: 'PRJ-302', name: 'مشروع رقمنة الأرشيف السحابي الداخلي', type: 'مشروع تعاقدي', dimension: 'المشاريع والعقود', budget: '280,000 ر.س', manager: 'م. فيصل العتيبي', status: 'مكتمل' },
-    { code: 'PRJ-303', name: 'توسعة وتجهيز المستودع اللوجستي المركزي الجديد', type: 'مشروع تعاقدي', dimension: 'المشاريع والعقود', budget: '750,000 ر.س', manager: 'م. وليد الصالح', status: 'قيد الإنشاء' },
-
-    // 4. أصول متتبعة وأسطول تشغيلي
-    { code: 'AST-401', name: 'شاحنة النقل الثقيل المبردة (أ ب ج 5521)', type: 'أصل ثابت متتبع', dimension: 'الأصول والأسطول', budget: '85,000 ر.س', manager: 'مشرف الحركة والنقل', status: 'نشط' },
-    { code: 'AST-402', name: 'مركبة التوزيع السريع للمدن (د هـ و 3312)', type: 'أصل ثابت متتبع', dimension: 'الأصول والأسطول', budget: '60,000 ر.س', manager: 'مشرف الحركة والنقل', status: 'نشط' },
-    { code: 'AST-403', name: 'خط التغليف الآلي ومعدات المستودع المركزي', type: 'أصل ثابت متتبع', dimension: 'الأصول والأسطول', budget: '120,000 ر.س', manager: 'مهندس الصيانة', status: 'نشط' },
-
-    // 5. حملات وفعاليات تسويقية
-    { code: 'MKT-501', name: 'حملة التسويق الرقمي والمؤتمرات السنوية', type: 'فعالية/حملة تسويقية', dimension: 'الإدارات والأقسام', budget: '140,000 ر.س', manager: 'أ. هند العمري', status: 'نشط' },
-  ],
-  entities: [
-    { code: 'EN01', name: 'شركة التوريدات العالمية', type: 'مورد' },
-    { code: 'EN02', name: 'مؤسسة الأفق للتجارة', type: 'عميل' },
-    { code: 'EN03', name: 'خالد عبدالعزيز', type: 'فرد/عميل' },
-  ],
+const EMPTY_MASTER_DATA = {
+  departments: [] as { code: string; name: string; status?: string }[],
+  jobs: [] as { code: string; title: string; status?: string }[],
+  nationalities: [] as { code: string; name: string; status?: string }[],
+  employees: [] as { code: string; name: string; department?: string; job?: string; status?: string }[],
+  warehouses: [] as { code: string; name: string; status?: string }[],
+  regions: [] as { code: string; name: string; status?: string }[],
+  cities: [] as { code: string; name: string; region?: string; status?: string }[],
+  customerGrades: [] as { code: string; name: string; discount?: string; status?: string }[],
+  subAccounts: [] as any[],
+  analyticAccounts: [] as any[],
+  entities: [] as { code: string; name: string; type: string; status?: string }[],
 };
 
-export default function MasterDatabaseSettings() {
-  const [dbData, setDbData] = useState<any>(() => {
-    try {
-      const raw = localStorage.getItem('alpha_master_database_settings_v1');
-      if (raw) return JSON.parse(raw);
-    } catch {}
-    return INITIAL_MOCK_DATA;
+function mapAccountTypeToArabic(type: AccountType, code: string): string {
+  if (type === AccountType.Asset) {
+    return code.startsWith('15') || code.startsWith('16') || code.startsWith('12') && code.length <= 4 ? 'أصول غير متداولة' : 'أصول متداولة';
+  }
+  if (type === AccountType.Liability) {
+    return code.startsWith('25') || code.startsWith('26') ? 'خصوم غير متداولة' : 'خصوم متداولة';
+  }
+  if (type === AccountType.Equity) return 'حقوق ملكية';
+  if (type === AccountType.Revenue) return 'إيرادات';
+  return 'مصروفات';
+}
+
+function mapArabicToAccountType(label: string): AccountType {
+  if (label.includes('أصول')) return AccountType.Asset;
+  if (label.includes('خصوم')) return AccountType.Liability;
+  if (label.includes('ملكية')) return AccountType.Equity;
+  if (label.includes('إيراد')) return AccountType.Revenue;
+  return AccountType.Expense;
+}
+
+function loadLiveMasterDatabase() {
+  let savedCustom: any = {};
+  try {
+    const raw = localStorage.getItem('alpha_master_database_settings_v1');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        savedCustom = parsed;
+      }
+    }
+  } catch {}
+
+  // 1. Employees from real payroll store
+  let realEmployees: any[] = [];
+  try {
+    const rawEmp = localStorage.getItem('alpha_payroll_employees_v1') || localStorage.getItem('alpha_accounting_employees_v1');
+    if (rawEmp) {
+      const parsedEmp = JSON.parse(rawEmp);
+      if (Array.isArray(parsedEmp)) {
+        realEmployees = parsedEmp.map((e: any, idx: number) => ({
+          code: e.code || e.id || `EMP-${idx + 1}`,
+          name: e.name || '',
+          department: e.department || '',
+          job: e.jobTitle || e.job || '',
+          status: e.status === 'INACTIVE' ? 'معلق / موقوف' : 'نشط'
+        }));
+      }
+    }
+  } catch {}
+
+  // 2. Warehouses from real dynamic warehouses store
+  const dynamicWhs = getDynamicWarehousesList();
+  const realWarehouses = dynamicWhs.map((w, idx) => ({
+    code: w.id === 'MAIN_WAREHOUSE' ? 'W01' : (w.id.startsWith('W') ? w.id : `W0${idx + 1}`),
+    id: w.id,
+    name: w.label,
+    status: 'نشط'
+  }));
+
+  // 3. Sub-Accounts from real Chart of Accounts
+  const chart = loadChartOfAccounts();
+  const realSubAccounts = chart.map(acc => {
+    const parent = chart.find(p => p.id === acc.parentId || p.code === acc.parentId);
+    return {
+      id: acc.id,
+      code: acc.code,
+      name: acc.name,
+      type: mapAccountTypeToArabic(acc.type, acc.code),
+      nature: acc.balanceType === BalanceType.Debit ? 'مدين' : 'دائن',
+      parentAccount: parent ? `${parent.code} - ${parent.name}` : (acc.parentId || ''),
+      level: acc.level ? `مستوى ${acc.level}` : 'مستوى 4',
+      status: acc.isActive === false ? 'معلق / موقوف' : 'نشط'
+    };
   });
+
+  // 4. Analytic Accounts from real Cost Centers store
+  const costCenters = loadCostCenters();
+  const realAnalyticAccounts = costCenters.map(cc => ({
+    id: cc.id,
+    code: cc.code,
+    name: cc.name,
+    type: cc.type === 'BRANCH' ? 'مركز ربحية' : cc.type === 'PROJECT' ? 'مشروع تعاقدي' : cc.type === 'FLEET' ? 'أسطول نقليات ولوجستيات' : 'مركز تكلفة إداري',
+    dimension: cc.type === 'BRANCH' ? 'الفروع والأقاليم' : cc.type === 'PROJECT' ? 'المشاريع والعقود' : cc.type === 'FLEET' ? 'النقليات واللوجستيات' : 'الإدارات والأقسام',
+    budget: cc.budget ? `${Number(cc.budget).toLocaleString()} ر.س` : '0 ر.س',
+    manager: cc.manager || '',
+    status: cc.status === 'INACTIVE' ? 'معلق / موقوف' : 'نشط'
+  }));
+
+  // 5. Entities from real Customers & Vendors stores
+  const customers = loadCustomers();
+  const vendors = loadVendors();
+  const realEntities = [
+    ...customers.map(c => ({ id: c.id, code: c.code || c.id, name: c.name, type: 'عميل', status: c.isActive === false ? 'معلق / موقوف' : 'نشط' })),
+    ...vendors.map(v => ({ id: v.id, code: v.code || v.id, name: v.name, type: 'مورد', status: v.isActive === false ? 'معلق / موقوف' : 'نشط' }))
+  ];
+
+  return {
+    departments: Array.isArray(savedCustom.departments) ? savedCustom.departments : EMPTY_MASTER_DATA.departments,
+    jobs: Array.isArray(savedCustom.jobs) ? savedCustom.jobs : EMPTY_MASTER_DATA.jobs,
+    nationalities: Array.isArray(savedCustom.nationalities) ? savedCustom.nationalities : EMPTY_MASTER_DATA.nationalities,
+    regions: Array.isArray(savedCustom.regions) ? savedCustom.regions : EMPTY_MASTER_DATA.regions,
+    cities: Array.isArray(savedCustom.cities) ? savedCustom.cities : EMPTY_MASTER_DATA.cities,
+    customerGrades: Array.isArray(savedCustom.customerGrades) ? savedCustom.customerGrades : EMPTY_MASTER_DATA.customerGrades,
+    employees: realEmployees,
+    warehouses: realWarehouses,
+    subAccounts: realSubAccounts,
+    analyticAccounts: realAnalyticAccounts,
+    entities: realEntities,
+  };
+}
+
+export default function MasterDatabaseSettings() {
+  const [dbData, setDbData] = useState<any>(() => loadLiveMasterDatabase());
 
   useEffect(() => {
     const handleSync = () => {
-      try {
-        const raw = localStorage.getItem('alpha_master_database_settings_v1');
-        if (raw) {
-          setDbData(JSON.parse(raw));
-        } else {
-          setDbData(INITIAL_MOCK_DATA);
-        }
-      } catch {
-        setDbData(INITIAL_MOCK_DATA);
-      }
+      setDbData(loadLiveMasterDatabase());
     };
 
     window.addEventListener('alpha-master-data-updated', handleSync);
+    window.addEventListener('alpha-chart-of-accounts-updated', handleSync);
+    window.addEventListener('alpha-cost-centers-updated', handleSync);
+    window.addEventListener('alpha-items-updated', handleSync);
+    window.addEventListener('alpha-payroll-updated', handleSync);
+    window.addEventListener('alpha-partners-updated', handleSync);
     window.addEventListener('alpha-system-reset-completed', handleSync);
     window.addEventListener('alpha-data-changed', handleSync);
     window.addEventListener('storage', handleSync);
 
     return () => {
       window.removeEventListener('alpha-master-data-updated', handleSync);
+      window.removeEventListener('alpha-chart-of-accounts-updated', handleSync);
+      window.removeEventListener('alpha-cost-centers-updated', handleSync);
+      window.removeEventListener('alpha-items-updated', handleSync);
+      window.removeEventListener('alpha-payroll-updated', handleSync);
+      window.removeEventListener('alpha-partners-updated', handleSync);
       window.removeEventListener('alpha-system-reset-completed', handleSync);
       window.removeEventListener('alpha-data-changed', handleSync);
       window.removeEventListener('storage', handleSync);
     };
   }, []);
 
-  useEffect(() => {
-    if (dbData) {
-      try {
-        localStorage.setItem('alpha_master_database_settings_v1', JSON.stringify(dbData));
-      } catch {}
-    }
-  }, [dbData]);
+  const saveCustomMetadata = (updatedState: any) => {
+    try {
+      const toStore = {
+        departments: updatedState.departments || [],
+        jobs: updatedState.jobs || [],
+        nationalities: updatedState.nationalities || [],
+        regions: updatedState.regions || [],
+        cities: updatedState.cities || [],
+        customerGrades: updatedState.customerGrades || [],
+      };
+      localStorage.setItem('alpha_master_database_settings_v1', JSON.stringify(toStore));
+    } catch {}
+  };
 
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   
@@ -227,10 +217,43 @@ export default function MasterDatabaseSettings() {
 
   const confirmDelete = () => {
     if (!activeCategory || !itemToDelete) return;
-    setDbData((prev: any) => ({
-      ...prev,
-      [activeCategory]: prev[activeCategory].filter((x: any) => x.code !== itemToDelete)
-    }));
+
+    if (activeCategory === 'subAccounts') {
+      const currentChart = loadChartOfAccounts().filter(a => a.code !== itemToDelete);
+      saveChartOfAccounts(currentChart);
+    } else if (activeCategory === 'analyticAccounts') {
+      const currentCC = loadCostCenters().filter(c => c.code !== itemToDelete);
+      saveCostCenters(currentCC);
+    } else if (activeCategory === 'warehouses') {
+      const remaining = dbData.warehouses.filter((x: any) => x.code !== itemToDelete).map((x: any) => ({ id: x.name, name: x.name }));
+      localStorage.setItem(CUSTOM_WAREHOUSES_STORAGE_KEY, JSON.stringify(remaining));
+      dispatchStockUpdatedEvent();
+    } else if (activeCategory === 'employees') {
+      try {
+        const raw = localStorage.getItem('alpha_payroll_employees_v1') || '[]';
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((e: any) => e.code !== itemToDelete && e.id !== itemToDelete);
+          localStorage.setItem('alpha_payroll_employees_v1', JSON.stringify(filtered));
+          localStorage.setItem('alpha_accounting_employees_v1', JSON.stringify(filtered));
+          window.dispatchEvent(new CustomEvent('alpha-payroll-updated'));
+        }
+      } catch {}
+    } else if (activeCategory === 'entities') {
+      const custs = loadCustomers().filter(c => c.code !== itemToDelete && c.id !== itemToDelete);
+      const vends = loadVendors().filter(v => v.code !== itemToDelete && v.id !== itemToDelete);
+      saveCustomers(custs);
+      saveVendors(vends);
+    }
+
+    setDbData((prev: any) => {
+      const updated = {
+        ...prev,
+        [activeCategory]: prev[activeCategory].filter((x: any) => x.code !== itemToDelete)
+      };
+      saveCustomMetadata(updated);
+      return updated;
+    });
     setItemToDelete(null);
   };
 
@@ -239,7 +262,129 @@ export default function MasterDatabaseSettings() {
     if (!activeCategory) return;
     
     const formData = new FormData(e.currentTarget);
-    const data = Object.fromEntries(formData.entries());
+    const data: Record<string, any> = Object.fromEntries(formData.entries());
+
+    if (activeCategory === 'subAccounts') {
+      const chart = loadChartOfAccounts();
+      const accType = mapArabicToAccountType(String(data.type || 'أصول متداولة'));
+      const balType = data.nature === 'دائن' ? BalanceType.Credit : BalanceType.Debit;
+      const existingIdx = chart.findIndex(a => a.code === (editingItem?.code || data.code));
+      if (existingIdx >= 0) {
+        const existingAcc = chart[existingIdx]!;
+        chart[existingIdx] = {
+          ...existingAcc,
+          name: String(data.name || existingAcc.name),
+          type: accType,
+          balanceType: balType,
+          isActive: data.status !== 'معلق / موقوف'
+        };
+      } else {
+        chart.push({
+          id: `acc-${data.code}`,
+          code: String(data.code),
+          name: String(data.name),
+          type: accType,
+          balanceType: balType,
+          isActive: data.status !== 'معلق / موقوف',
+          isPosting: true
+        });
+      }
+      saveChartOfAccounts(chart);
+    } else if (activeCategory === 'analyticAccounts') {
+      const ccs = loadCostCenters();
+      const numericBudget = Number(String(data.budget || '0').replace(/[^0-9.]/g, '')) || 0;
+      const typeStr = String(data.type || '');
+      const ccType: CostCenter['type'] = typeStr.includes('ربحية') || typeStr.includes('فرع') ? 'BRANCH' : typeStr.includes('مشروع') ? 'PROJECT' : typeStr.includes('أسطول') || typeStr.includes('نقليات') ? 'FLEET' : 'DEPARTMENT';
+      const ccStatus: CostCenter['status'] = data.status === 'معلق / موقوف' ? 'INACTIVE' : 'ACTIVE';
+      const existingIdx = ccs.findIndex(c => c.code === (editingItem?.code || data.code));
+      if (existingIdx >= 0) {
+        const existingCC = ccs[existingIdx]!;
+        ccs[existingIdx] = {
+          ...existingCC,
+          name: String(data.name || existingCC.name),
+          type: ccType,
+          manager: String(data.manager || ''),
+          budget: numericBudget,
+          status: ccStatus,
+          updatedAt: new Date().toISOString()
+        };
+      } else {
+        ccs.push({
+          id: `cc-${Date.now()}`,
+          code: String(data.code),
+          name: String(data.name),
+          type: ccType,
+          manager: String(data.manager || ''),
+          budget: numericBudget,
+          status: ccStatus,
+          createdAt: new Date().toISOString().split('T')[0] || ''
+        });
+      }
+      saveCostCenters(ccs);
+    } else if (activeCategory === 'warehouses') {
+      const updatedList = [...dbData.warehouses];
+      if (editingItem) {
+        const idx = updatedList.findIndex(x => x.code === editingItem.code);
+        if (idx >= 0) updatedList[idx] = data;
+      } else {
+        updatedList.push(data);
+      }
+      const customToSave = updatedList.map(w => ({ id: w.name, name: w.name }));
+      localStorage.setItem(CUSTOM_WAREHOUSES_STORAGE_KEY, JSON.stringify(customToSave));
+      dispatchStockUpdatedEvent();
+    } else if (activeCategory === 'employees') {
+      try {
+        const raw = localStorage.getItem('alpha_payroll_employees_v1') || '[]';
+        const parsed = JSON.parse(raw);
+        const list = Array.isArray(parsed) ? [...parsed] : [];
+        const existingIdx = list.findIndex((emp: any) => emp.code === (editingItem?.code || data.code) || emp.id === (editingItem?.code || data.code));
+        if (existingIdx >= 0) {
+          list[existingIdx] = {
+            ...list[existingIdx],
+            name: data.name,
+            department: data.department || '',
+            jobTitle: data.job || ''
+          };
+        } else {
+          list.push({
+            id: `emp-${Date.now()}`,
+            code: data.code,
+            name: data.name,
+            department: data.department || '',
+            jobTitle: data.job || '',
+            basicSalary: 0,
+            housingAllowance: 0,
+            transportAllowance: 0,
+            otherAllowances: 0,
+            deductions: 0,
+            status: 'ACTIVE'
+          });
+        }
+        localStorage.setItem('alpha_payroll_employees_v1', JSON.stringify(list));
+        localStorage.setItem('alpha_accounting_employees_v1', JSON.stringify(list));
+        window.dispatchEvent(new CustomEvent('alpha-payroll-updated'));
+      } catch {}
+    } else if (activeCategory === 'entities') {
+      if (data.type === 'مورد') {
+        const vendors = loadVendors();
+        const idx = vendors.findIndex(v => v.code === (editingItem?.code || data.code));
+        if (idx >= 0) {
+          vendors[idx] = { ...vendors[idx]!, name: String(data.name) };
+        } else {
+          vendors.push({ id: `vend-${Date.now()}`, code: String(data.code), name: String(data.name), type: 'VENDOR', openingBalance: 0, isActive: true });
+        }
+        saveVendors(vendors);
+      } else {
+        const customers = loadCustomers();
+        const idx = customers.findIndex(c => c.code === (editingItem?.code || data.code));
+        if (idx >= 0) {
+          customers[idx] = { ...customers[idx]!, name: String(data.name) };
+        } else {
+          customers.push({ id: `cust-${Date.now()}`, code: String(data.code), name: String(data.name), type: 'CUSTOMER', openingBalance: 0, isActive: true });
+        }
+        saveCustomers(customers);
+      }
+    }
 
     setDbData((prev: any) => {
       const catData = [...prev[activeCategory]];
@@ -249,7 +394,9 @@ export default function MasterDatabaseSettings() {
       } else {
         catData.push(data);
       }
-      return { ...prev, [activeCategory]: catData };
+      const nextState = { ...prev, [activeCategory]: catData };
+      saveCustomMetadata(nextState);
+      return nextState;
     });
     
     setIsFormOpen(false);
@@ -274,7 +421,7 @@ export default function MasterDatabaseSettings() {
               name="code" 
               defaultValue={editingItem?.code} 
               required 
-              readOnly={!!editingItem} // Cannot edit code for existing item
+              readOnly={!!editingItem}
               className={`w-full border rounded-lg p-2.5 outline-none transition-all ${editingItem ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'}`} 
               dir="ltr" 
               placeholder={isSubAccount ? 'مثال: 1105' : isAnalytic ? 'مثال: CC-106' : 'مثال: C01'}
@@ -342,7 +489,6 @@ export default function MasterDatabaseSettings() {
           </div>
         )}
 
-        {/* الحقول المتقدمة للحسابات الفرعية */}
         {isSubAccount && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -373,7 +519,6 @@ export default function MasterDatabaseSettings() {
           </>
         )}
 
-        {/* الحقول المتقدمة للحسابات التحليلية ومراكز التكلفة */}
         {isAnalytic && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -402,7 +547,7 @@ export default function MasterDatabaseSettings() {
                 name="manager" 
                 defaultValue={editingItem?.manager || ''} 
                 className="w-full border rounded-lg p-2.5 outline-none transition-all focus:border-blue-500" 
-                placeholder="مثال: م. أحمد المنصور" 
+                placeholder="أدخل اسم المسؤول..." 
               />
             </div>
           </>
@@ -486,7 +631,7 @@ export default function MasterDatabaseSettings() {
                   <h3 className="text-lg font-bold text-slate-800">
                     {activeCategoryData.title}
                   </h3>
-                  <p className="text-xs text-slate-500 font-medium">إدارة وتعديل السجلات في هذه القاعدة</p>
+                  <p className="text-xs text-slate-500 font-medium">إدارة وتعديل السجلات المرتبطة مباشرة بقواعد بيانات النظام</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -739,4 +884,3 @@ export default function MasterDatabaseSettings() {
     </div>
   );
 }
-

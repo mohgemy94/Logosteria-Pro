@@ -146,22 +146,53 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
   };
 
   const handleTaxChange = (field: keyof SystemSettings['taxAndInvoice'], value: string | number | boolean) => {
-    setSettings(prev => ({
-      ...prev,
-      taxAndInvoice: { ...prev.taxAndInvoice, [field]: value }
-    }));
+    setSettings(prev => {
+      const updatedTax = { ...prev.taxAndInvoice, [field]: value };
+      let updatedDefaults = { ...(prev.invoiceDefaults || DEFAULT_SETTINGS.invoiceDefaults!) };
+
+      // الربط التلقائي بين تفعيل/تعطيل الضريبة والتصنيف الافتراضي للفواتير
+      if (field === 'enableVat') {
+        if (value === false) {
+          updatedDefaults.salesClassification = 'NORMAL';
+          updatedDefaults.purchasesClassification = 'NORMAL';
+        } else if (value === true) {
+          updatedDefaults.salesClassification = 'TAX';
+          updatedDefaults.purchasesClassification = 'TAX';
+        }
+      }
+
+      return {
+        ...prev,
+        taxAndInvoice: updatedTax,
+        invoiceDefaults: updatedDefaults
+      };
+    });
     setHasChanges(true);
     setIsSaved(false);
   };
 
   const handleInvoiceDefaultsChange = (field: string, value: string) => {
-    setSettings(prev => ({
-      ...prev,
-      invoiceDefaults: {
+    setSettings(prev => {
+      const updatedDefaults = {
         ...(prev.invoiceDefaults || DEFAULT_SETTINGS.invoiceDefaults!),
         [field]: value
+      };
+      let updatedTax = { ...prev.taxAndInvoice };
+
+      // الربط التلقائي بين تصنيف الفواتير بالقيم الافتراضية وشاشة الفوترة والضرائب
+      if (field === 'salesClassification' || field === 'purchasesClassification') {
+        if (value === 'TAX') {
+          // عند اختيار فاتورة ضريبية افتراضياً، نفعّل خيار ضريبة القيمة المضافة
+          updatedTax.enableVat = true;
+        }
       }
-    }));
+
+      return {
+        ...prev,
+        taxAndInvoice: updatedTax,
+        invoiceDefaults: updatedDefaults
+      };
+    });
     setHasChanges(true);
     setIsSaved(false);
   };
@@ -267,7 +298,7 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
         detail: {
           summary,
           title: selectedResetType === 'TRANSACTIONS_ONLY' ? 'تم تصفير العمليات والفواتير' : 'تمت استعادة ضبط المصنع بالكامل',
-          message: selectedResetType === 'TRANSACTIONS_ONLY' ? 'تم تصفير القيود والفواتير بنجاح' : 'تمت إعادة ضبط المصنع ومسح كافة السجلات'
+          message: selectedResetType === 'TRANSACTIONS_ONLY' ? 'تم تصفير الفواتير والقيود والأرصدة مع الإبقاء على صفحات العملاء والموردين والأصناف' : 'تمت إعادة ضبط المصنع ومسح كافة السجلات'
         }
       }));
     } catch (err: any) {
@@ -979,7 +1010,7 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
                             تصفير العمليات والفواتير فقط
                           </span>
                           <span className="block text-[11px] text-amber-900/80 font-normal mt-0.5 leading-tight">
-                            (مع الاحتفاظ بكامل دليل الحسابات، الأصناف، والعملاء والموردين)
+                            (مع الإبقاء على صفحات العملاء والموردين والأصناف وتصفير أرصدتها وحركاتها)
                           </span>
                         </div>
                       </button>
@@ -998,7 +1029,7 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
                             استعادة ضبط المصنع الكامل
                           </span>
                           <span className="block text-[11px] text-rose-100/90 font-normal mt-0.5 leading-tight">
-                            (مسح شامل لكافة البيانات وإعادة تهيئة النظام للحالة الأولى)
+                            (مسح كل البيانات بأسماء العملاء والموردين والأصناف وجميع العمليات)
                           </span>
                         </div>
                       </button>
@@ -1069,12 +1100,12 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
 
             <div className="text-center">
               <h4 className="text-base sm:text-lg font-bold text-slate-900">
-                {selectedResetType === 'TRANSACTIONS_ONLY' ? 'تأكيد تصفير العمليات المالية' : 'تأكيد استعادة ضبط المصنع الشامل'}
+                {selectedResetType === 'TRANSACTIONS_ONLY' ? 'تأكيد تصفير العمليات والفواتير' : 'تأكيد استعادة ضبط المصنع الشامل'}
               </h4>
               <p className="text-xs text-slate-600 mt-1 leading-relaxed">
                 {selectedResetType === 'TRANSACTIONS_ONLY'
-                  ? 'سيتم حذف جميع الفواتير والقيود وسندات القبض والصرف، مع الإبقاء على العملاء والموردين والأصناف ودليل الحسابات.'
-                  : 'تحذير شديد: سيتم مسح كافة البيانات المسجلة بالكامل وإعادة النظام لحالته الأولية.'}
+                  ? 'سيتم تصفير وحذف جميع الفواتير والقيود والسندات وكشوفات الحركات وتصفير أرصدة الحسابات لتبدأ من الصفر، مع الإبقاء الكامل على صفحات وسجلات العملاء والموردين والأصناف ودليل الحسابات.'
+                  : 'تحذير شديد: سيتم مسح وحذف كافة البيانات بالكامل بما فيها أسماء وسجلات العملاء والموردين وكافة الأصناف وجميع الفواتير والعمليات وإعادة النظام خالياً تماماً للحالة الأولى.'}
               </p>
             </div>
 
@@ -1135,10 +1166,12 @@ export default function Settings({ onNavigateToDashboard }: SettingsProps = {}) 
           <CheckCircle2 size={20} className="text-emerald-400 shrink-0" />
           <div className="text-xs">
             <p className="font-bold">
-              {resetFeedback.resetType === 'TRANSACTIONS_ONLY' ? 'تم تصفير العمليات والفواتير بنجاح' : 'تمت استعادة ضبط المصنع بنجاح'}
+              {resetFeedback.resetType === 'TRANSACTIONS_ONLY' ? 'تم تصفير العمليات والفواتير والأرصدة بنجاح' : 'تمت استعادة ضبط المصنع بالكامل'}
             </p>
             <p className="text-slate-400 mt-0.5">
-              تم مسح {resetFeedback.clearedInvoicesCount} فاتورة، {resetFeedback.clearedVouchersCount} سنداً، و{resetFeedback.clearedJournalEntriesCount} قيداً.
+              {resetFeedback.resetType === 'TRANSACTIONS_ONLY'
+                ? `تم مسح ${resetFeedback.clearedInvoicesCount} فاتورة، ${resetFeedback.clearedVouchersCount} سنداً، و${resetFeedback.clearedJournalEntriesCount} قيداً (مع تصفير أرصدة العملاء والموردين والاحتفاظ بملفاتهم والأصناف).`
+                : `تم مسح كافة البيانات بنجاح: ${resetFeedback.clearedCustomersCount} عميل، ${resetFeedback.clearedVendorsCount} مورد، ${resetFeedback.clearedItemsCount} صنف، ${resetFeedback.clearedInvoicesCount} فاتورة، و${resetFeedback.clearedVouchersCount} سند.`}
             </p>
           </div>
           <button

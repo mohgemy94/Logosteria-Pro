@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Receipt, Sliders, ShieldAlert, AlertTriangle, Hash, Store, Package } from 'lucide-react';
 import { SystemSettings, CreditAndStockControlSettings } from '../types/accounting';
 import { SequencesStore } from '../utils/sequences';
+import { loadChartOfAccounts } from '../utils/trialBalanceStore';
+import { isCashOrBankAccount } from '../utils/accountingIntegration';
+import { getDynamicWarehousesList } from '../utils/itemsStore';
 
 interface InvoicingControlPanelProps {
   settings: SystemSettings;
@@ -19,6 +22,18 @@ export default function InvoicingControlPanel({
   onControlLimitsChange,
 }: InvoicingControlPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState<'taxes_seq' | 'defaults' | 'credit_stock'>('taxes_seq');
+
+  const cashBankOptions = useMemo(() => {
+    const chart = loadChartOfAccounts();
+    const list = chart.filter(a => isCashOrBankAccount(a, chart));
+    if (list.length > 0) {
+      return list.map(a => ({ id: a.code || a.id, label: `${a.code} - ${a.name}` }));
+    }
+    return [
+      { id: '1101', label: '1101 - النقدية بالصندوق (الصندوق الرئيسي)' },
+      { id: '1102', label: '1102 - النقدية بالبنك (الحساب البنكي الجاري)' },
+    ];
+  }, []);
 
   const controlLimits = settings.controlAndLimits || {
     enforceCreditLimit: true,
@@ -113,8 +128,14 @@ export default function InvoicingControlPanel({
                     type="number"
                     min="0"
                     max="100"
-                    value={settings.taxAndInvoice.defaultVatRate}
-                    onChange={e => onTaxChange('defaultVatRate', parseFloat(e.target.value) || 0)}
+                    value={settings.taxAndInvoice.defaultVatRate ?? ''}
+                    onFocus={e => e.target.select()}
+                    onChange={e => onTaxChange('defaultVatRate', e.target.value === '' ? ('' as any) : parseFloat(e.target.value))}
+                    onBlur={() => {
+                      if ((settings.taxAndInvoice.defaultVatRate as any) === '') {
+                        onTaxChange('defaultVatRate', 15);
+                      }
+                    }}
                     className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg font-bold font-mono"
                   />
                   <span className="text-xs font-bold text-slate-500">%</span>
@@ -132,6 +153,68 @@ export default function InvoicingControlPanel({
                   onChange={e => onTaxChange('enableQrCode', e.target.checked)}
                   className="w-5 h-5 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
                 />
+              </div>
+            </div>
+
+            {/* الربط المباشر بين الضرائب وتصنيف الفواتير بالقيم الافتراضية */}
+            <div className="mt-4 pt-4 border-t border-slate-200">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Sliders size={14} className="text-emerald-700" />
+                  الربط مع تصنيف الفواتير الافتراضي (القيم الافتراضية):
+                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold border ${
+                    settings.taxAndInvoice.enableVat
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : 'bg-amber-50 text-amber-800 border-amber-200'
+                  }`}>
+                    {settings.taxAndInvoice.enableVat 
+                      ? '✓ ضريبة القيمة المضافة مفعّلة (الفواتير ضريبية افتراضياً)' 
+                      : '⚠️ ضريبة القيمة المضافة معطلة (الفواتير عادية بدون ضريبة)'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSubTab('defaults')}
+                    className="text-[11px] text-indigo-700 hover:text-indigo-900 font-bold underline cursor-pointer"
+                  >
+                    عرض كافة القيم الافتراضية للفواتير ←
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-3 bg-blue-50/40 rounded-xl border border-blue-200">
+                  <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                    <span>تصنيف فواتير المبيعات الافتراضي</span>
+                    <span className="text-[10px] text-blue-700 font-bold bg-blue-100/70 px-1.5 py-0.5 rounded">شاشة المبيعات</span>
+                  </label>
+                  <select
+                    value={settings.invoiceDefaults?.salesClassification || (settings.taxAndInvoice.enableVat ? 'TAX' : 'NORMAL')}
+                    onChange={e => onInvoiceDefaultsChange('salesClassification', e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-blue-300 rounded-lg font-bold text-slate-900 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="TAX">فاتورة ضريبية (خاضعة لضريبة القيمة المضافة {settings.taxAndInvoice.defaultVatRate || 15}%)</option>
+                    <option value="NORMAL">فاتورة عادية (غير خاضعة للضريبة / مبسطة)</option>
+                  </select>
+                  <p className="text-[10px] text-slate-500 mt-1">يحدد التصنيف المبدئي للفاتورة عند فتح شاشة المبيعات أو إضافة فاتورة مبيعات جديدة</p>
+                </div>
+
+                <div className="p-3 bg-emerald-50/40 rounded-xl border border-emerald-200">
+                  <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                    <span>تصنيف فواتير المشتريات الافتراضي</span>
+                    <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100/70 px-1.5 py-0.5 rounded">شاشة المشتريات</span>
+                  </label>
+                  <select
+                    value={settings.invoiceDefaults?.purchasesClassification || (settings.taxAndInvoice.enableVat ? 'TAX' : 'NORMAL')}
+                    onChange={e => onInvoiceDefaultsChange('purchasesClassification', e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-emerald-300 rounded-lg font-bold text-slate-900 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="TAX">فاتورة ضريبية (خاضعة لضريبة القيمة المضافة {settings.taxAndInvoice.defaultVatRate || 15}%)</option>
+                    <option value="NORMAL">فاتورة عادية (غير خاضعة للضريبة / بدون ضريبة)</option>
+                  </select>
+                  <p className="text-[10px] text-slate-500 mt-1">يحدد التصنيف المبدئي للفاتورة عند فتح شاشة المشتريات أو إضافة فاتورة مشتريات جديدة</p>
+                </div>
               </div>
             </div>
           </div>
@@ -235,6 +318,23 @@ export default function InvoicingControlPanel({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>نوع الفاتورة الافتراضي</span>
+                  <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                    مرتبط بنظام الفوترة والضرائب
+                  </span>
+                </label>
+                <select
+                  value={settings.invoiceDefaults?.salesClassification || (settings.taxAndInvoice.enableVat ? 'TAX' : 'NORMAL')}
+                  onChange={e => onInvoiceDefaultsChange('salesClassification', e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg font-bold"
+                >
+                  <option value="TAX">فاتورة ضريبية (خاضعة لضريبة القيمة المضافة {settings.taxAndInvoice.defaultVatRate || 15}%)</option>
+                  <option value="NORMAL">فاتورة عادية (غير خاضعة للضريبة / مبسطة)</option>
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">نوع المعاملة الافتراضي</label>
                 <select
                   value={settings.invoiceDefaults?.salesTransactionType || 'CREDIT_SALES'}
@@ -255,26 +355,26 @@ export default function InvoicingControlPanel({
                   onChange={e => onInvoiceDefaultsChange('salesWarehouse', e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg font-bold"
                 >
-                  <option value="MAIN_WAREHOUSE">المستودع الرئيسي (المركزي)</option>
-                  <option value="SHOWROOM">معرض المبيعات</option>
-                  <option value="BRANCH_1">مستودع فرع الرياض</option>
+                  {getDynamicWarehousesList([settings.invoiceDefaults?.salesWarehouse || 'MAIN_WAREHOUSE']).map(w => (
+                    <option key={w.id} value={w.id}>{w.label}</option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">خزنة / حساب التحصيل الافتراضي</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">خزنة / حساب التحصيل الافتراضي (من شجرة الحسابات)</label>
                 <select
-                  value={settings.invoiceDefaults?.salesSafe || 'MAIN_SAFE'}
+                  value={settings.invoiceDefaults?.salesSafe || cashBankOptions[0]?.id || '1101'}
                   onChange={e => onInvoiceDefaultsChange('salesSafe', e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg font-bold"
                 >
-                  <option value="MAIN_SAFE">الصندوق الرئيسي (كاش)</option>
-                  <option value="BANK_AHLI">حساب البنك الأهلي التجاري</option>
-                  <option value="BANK_RAJHI">حساب مصرف الراجحي</option>
+                  {cashBankOptions.map(opt => (
+                    <option key={opt.id} value={opt.id}>{opt.label}</option>
+                  ))}
                 </select>
               </div>
 
-              <div>
+              <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-slate-700 mb-1">نوع الخدمة / التصنيف الافتراضي</label>
                 <input
                   type="text"
@@ -296,6 +396,23 @@ export default function InvoicingControlPanel({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>نوع الفاتورة الافتراضي</span>
+                  <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                    مرتبط بنظام الفوترة والضرائب
+                  </span>
+                </label>
+                <select
+                  value={settings.invoiceDefaults?.purchasesClassification || (settings.taxAndInvoice.enableVat ? 'TAX' : 'NORMAL')}
+                  onChange={e => onInvoiceDefaultsChange('purchasesClassification', e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg font-bold"
+                >
+                  <option value="TAX">فاتورة ضريبية (خاضعة لضريبة القيمة المضافة {settings.taxAndInvoice.defaultVatRate || 15}%)</option>
+                  <option value="NORMAL">فاتورة عادية (غير خاضعة للضريبة / بدون ضريبة)</option>
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">نوع معاملة الشراء الافتراضي</label>
                 <select
                   value={settings.invoiceDefaults?.purchasesTransactionType || 'CREDIT_PURCHASE'}
@@ -315,9 +432,22 @@ export default function InvoicingControlPanel({
                   onChange={e => onInvoiceDefaultsChange('purchasesWarehouse', e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg font-bold"
                 >
-                  <option value="MAIN_WAREHOUSE">المستودع الرئيسي (المركزي)</option>
-                  <option value="SHOWROOM">معرض المبيعات</option>
-                  <option value="BRANCH_1">مستودع فرع الرياض</option>
+                  {getDynamicWarehousesList([settings.invoiceDefaults?.purchasesWarehouse || 'MAIN_WAREHOUSE']).map(w => (
+                    <option key={w.id} value={w.id}>{w.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">خزنة / حساب السداد الافتراضي (من شجرة الحسابات)</label>
+                <select
+                  value={settings.invoiceDefaults?.purchasesSafe || cashBankOptions[0]?.id || '1101'}
+                  onChange={e => onInvoiceDefaultsChange('purchasesSafe', e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg font-bold"
+                >
+                  {cashBankOptions.map(opt => (
+                    <option key={opt.id} value={opt.id}>{opt.label}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -432,8 +562,14 @@ export default function InvoicingControlPanel({
                   <input
                     type="number"
                     min="1"
-                    value={controlLimits.lowStockThreshold}
-                    onChange={e => handleLimitFieldChange('lowStockThreshold', parseInt(e.target.value) || 1)}
+                    value={controlLimits.lowStockThreshold ?? ''}
+                    onFocus={e => e.target.select()}
+                    onChange={e => handleLimitFieldChange('lowStockThreshold', e.target.value === '' ? ('' as any) : parseInt(e.target.value))}
+                    onBlur={() => {
+                      if ((controlLimits.lowStockThreshold as any) === '') {
+                        handleLimitFieldChange('lowStockThreshold', 1);
+                      }
+                    }}
                     className="w-24 px-3 py-1 text-xs bg-white border border-slate-300 rounded font-mono font-bold text-center"
                   />
                 </div>

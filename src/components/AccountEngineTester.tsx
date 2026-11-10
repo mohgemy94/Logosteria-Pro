@@ -52,26 +52,26 @@ export default function AccountEngineTester() {
   const [previewNextCode, setPreviewNextCode] = useState<string | null>(null);
 
   // Journal Entry Form State
-  const [jeDescription, setJeDescription] = useState('قيد تسوية وتحميل مصروفات تشغيلية');
-  const [jeReference, setJeReference] = useState('REF-2026-001');
+  const [jeDescription, setJeDescription] = useState('');
+  const [jeReference, setJeReference] = useState('');
   const [lines, setLines] = useState<JournalLineState[]>([
     {
-      accountId: 'an_520101001', // مصروفات رواتب (يتطلب مركز تكلفة)
-      amountForeign: 15000,
+      accountId: '',
+      amountForeign: 0,
       exchangeRate: 1,
       isDebit: true,
-      costCenterId: 'CC-101', // مركز تكلفة الإدارة
+      costCenterId: '',
       subLedgerId: '',
-      description: 'استحقاق رواتب الإدارة لشهر سبتمبر'
+      description: ''
     },
     {
-      accountId: 'an_110201001', // بنك الراجحي (ميزانية عمومية - يحظر مركز تكلفة)
-      amountForeign: 15000,
+      accountId: '',
+      amountForeign: 0,
       exchangeRate: 1,
       isDebit: false,
       costCenterId: '',
       subLedgerId: '',
-      description: 'صرف تحويل بنكي'
+      description: ''
     }
   ]);
 
@@ -243,7 +243,7 @@ export default function AccountEngineTester() {
     .reduce((acc, l) => acc + (Number(l.amountForeign) || 0) * (Number(l.exchangeRate) || 1), 0);
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.001;
 
-  const parentOptions = accounts.filter(a => a.level === 4);
+  const parentOptions = accounts.filter(a => a.level === 4 || a.level === 3 || !a.isPosting);
 
   return (
     <div className="space-y-6 text-right" dir="rtl">

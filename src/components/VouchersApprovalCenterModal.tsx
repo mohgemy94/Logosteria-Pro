@@ -77,10 +77,10 @@ export default function VouchersApprovalCenterModal({
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
         const matches = 
-          item.voucherNumber.toLowerCase().includes(q) ||
-          item.partyName.toLowerCase().includes(q) ||
-          item.description.toLowerCase().includes(q) ||
-          item.amount.toString().includes(q);
+          (item.voucherNumber || '').toLowerCase().includes(q) ||
+          (item.partyName || '').toLowerCase().includes(q) ||
+          (item.description || '').toLowerCase().includes(q) ||
+          (item.amount !== undefined ? item.amount.toString().includes(q) : false);
         if (!matches) return false;
       }
       return true;

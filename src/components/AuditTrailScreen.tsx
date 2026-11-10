@@ -33,12 +33,15 @@ import {
 import { AuditLogEntry, AuditAction, AuditModule, AuditSeverity } from '../types/auditLog';
 import { useLanguage } from '../i18n/LanguageContext';
 import { getSystemSettings } from '../utils/settings';
+import { useIsInWindow } from './DesktopWindowManager';
 
 interface AuditTrailScreenProps {
   onNavigate?: (view: string) => void;
+  isInWindow?: boolean;
 }
 
-export default function AuditTrailScreen({ onNavigate }: AuditTrailScreenProps) {
+export default function AuditTrailScreen({ onNavigate, isInWindow: explicitIsInWindow }: AuditTrailScreenProps) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { language, isRtl, t } = useLanguage();
   const [logs, setLogs] = useState<AuditLogEntry[]>(() => loadAuditLogs());
   const [searchQuery, setSearchQuery] = useState('');
@@ -230,6 +233,7 @@ export default function AuditTrailScreen({ onNavigate }: AuditTrailScreenProps) 
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-5 sm:p-7 shadow-xl border border-slate-700 relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-8 -mr-8 w-44 h-44 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
+          {!isInWindow && (
           <div className="flex items-start gap-3.5">
             <div className="w-12 h-12 rounded-xl bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300 shrink-0 shadow-inner">
               <ShieldAlert size={26} />
@@ -250,6 +254,7 @@ export default function AuditTrailScreen({ onNavigate }: AuditTrailScreenProps) 
               </p>
             </div>
           </div>
+          )}
 
           <div className="flex items-center gap-2.5 self-end lg:self-auto shrink-0">
             <button

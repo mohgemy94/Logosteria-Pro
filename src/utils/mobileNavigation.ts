@@ -12,6 +12,7 @@
  */
 
 import { App } from '@capacitor/app';
+import { useState, useEffect } from 'react';
 
 export interface HistoryState {
   view: string | null;
@@ -21,6 +22,63 @@ export interface HistoryState {
 }
 
 type ModalCloseHandler = () => void;
+
+export function getViewTitleArabic(viewKey: string | null): string {
+  if (!viewKey || viewKey === 'dashboard') return 'لوحة المؤشرات';
+  switch (viewKey) {
+    case 'companyProfile': return 'بيانات المنشأة';
+    case 'sales': return 'فواتير المبيعات';
+    case 'purchases': return 'فواتير المشتريات';
+    case 'partnerStatement': return 'كشف حساب تفصيلي STMT';
+    case 'customerStatement': return 'كشف حساب الشركاء';
+    case 'accountMovements': return 'حركة الحسابات';
+    case 'customers': return 'إدارة العملاء';
+    case 'vendors': return 'إدارة الموردين';
+    case 'partnerBalances': return 'أرصدة العملاء والموردين';
+    case 'externalReceipt':
+    case 'external': return 'سند قبض خارجي';
+    case 'externalPayment': return 'سند صرف خارجي';
+    case 'internalReceipt':
+    case 'internal': return 'سند قبض داخلي';
+    case 'internalPayment': return 'سند صرف داخلي';
+    case 'journal':
+    case 'journalEntries': return 'القيود اليومية';
+    case 'trialBalance': return 'ميزان المراجعة';
+    case 'chartTree': return 'شجرة ودليل الحسابات';
+    case 'financialReports': return 'التقارير المالية';
+    case 'items': return 'إدارة الأصناف';
+    case 'warehouseBalances': return 'أرصدة المخازن';
+    case 'inventoryCount': return 'الجرد المخزني';
+    case 'bankChecks': return 'الشيكات البنكية';
+    case 'installments': return 'التقسيط والكمبيالات';
+    case 'manufacturing': return 'التصنيع والإنتاج';
+    case 'payroll': return 'الأجور والرواتب';
+    case 'costCenters': return 'مراكز التكلفة';
+    case 'yearEndClosing': return 'الإقفال السنوي';
+    case 'auditTrail': return 'مسارات التدقيق';
+    case 'analytics': return 'الرسوم البيانية BI';
+    case 'settings': return 'إعدادات النظام';
+    case 'reportsHub': return 'مركز تقارير المبيعات';
+    case 'purchasesReportsHub': return 'مركز تقارير المشتريات';
+    case 'totalSalesInvoices': return 'إجمالي فواتير المبيعات';
+    case 'totalPurchaseInvoices': return 'إجمالي فواتير المشتريات';
+    case 'supplierPurchasesSummary': return 'ملخص مشتريات الموردين';
+    case 'mainCategoryPurchases': return 'مشتريات الفئات الرئيسية';
+    case 'subCategoryItemPurchases': return 'مشتريات الفئات الفرعية';
+    case 'inventoryAndPurchasesAnalysis': return 'تحليل المخزون والمشتريات';
+    case 'singleItemPurchaseAnalysis': return 'تحليل شراء صنف';
+    case 'supplierBonusesSummary': return 'بوانص الموردين';
+    case 'detailedSupplierBonuses': return 'سجل بوانص الموردين';
+    case 'itemSalesAnalysis': return 'تحليل مبيعات الأصناف';
+    case 'technicianSales': return 'مبيعات المندوبين والفنيين';
+    case 'dailyItemProfits': return 'أرباح الأصناف اليومية';
+    case 'belowCostSales': return 'مبيعات بأقل من التكلفة';
+    case 'bonusesAndSamples': return 'البوانص والعينات';
+    case 'salesProfitabilitySummary': return 'ربحية المبيعات';
+    case 'customerSalesSummary': return 'ملخص مبيعات العملاء';
+    default: return viewKey;
+  }
+}
 
 class MobileNavigationController {
   private modalHandlers: Map<string, ModalCloseHandler> = new Map();
@@ -55,6 +113,11 @@ class MobileNavigationController {
         // ignore
       }
 
+      // Listen to programmatic sequential step-back events
+      window.addEventListener('alpha-step-back', () => {
+        this.executeStepBack();
+      });
+
       // 1. Capacitor Native backButton listener (primary source for Android APK)
       try {
         App.addListener('backButton', () => {
@@ -74,7 +137,7 @@ class MobileNavigationController {
       }
 
       // 3. Browser popstate fallback (for Mobile Web / PWAs)
-      window.addEventListener('popstate', (e: PopStateEvent) => {
+      window.addEventListener('popstate', (_e: PopStateEvent) => {
         // Only handle if not already handled by native backButton in this cycle
         const now = Date.now();
         if (now - this.lastBackEventTime < 350) {
@@ -131,6 +194,8 @@ class MobileNavigationController {
     // Push new view to the sequential stack
     this.historyStack.push(newView);
 
+    this.notifyStackChange();
+
     // Sync browser URL hash smoothly
     if (typeof window !== 'undefined' && window.history) {
       try {
@@ -147,6 +212,32 @@ class MobileNavigationController {
         // ignore
       }
     }
+  }
+
+  private notifyStackChange() {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('alpha-history-stack-changed', {
+        detail: {
+          stack: [...this.historyStack],
+          currentView: this.getCurrentView(),
+          previousView: this.getPreviousView(),
+          canGoBack: this.canGoBack()
+        }
+      }));
+    }
+  }
+
+  getPreviousView(): string | null {
+    if (this.historyStack.length <= 1) return null;
+    return this.historyStack[this.historyStack.length - 2] ?? null;
+  }
+
+  getHistoryStack(): (string | null)[] {
+    return [...this.historyStack];
+  }
+
+  getStackLength(): number {
+    return this.historyStack.length;
   }
 
   /**
@@ -198,6 +289,7 @@ class MobileNavigationController {
           } catch (err) {
             console.error('Error closing modal on back:', err);
           }
+          this.notifyStackChange();
           return true;
         }
       }
@@ -223,6 +315,8 @@ class MobileNavigationController {
           }
         }
 
+        this.notifyStackChange();
+
         // Notify App component to render previous view
         if (this.onNavigateCallback) {
           this.onNavigateCallback(prevView);
@@ -244,6 +338,7 @@ class MobileNavigationController {
             // ignore
           }
         }
+        this.notifyStackChange();
         if (this.onNavigateCallback) {
           this.onNavigateCallback('companyProfile');
         }
@@ -311,3 +406,42 @@ class MobileNavigationController {
 }
 
 export const mobileNavigationController = new MobileNavigationController();
+
+/**
+ * React hook to effortlessly track sequential history stack and trigger step-by-step back navigation
+ */
+export function useSequentialNavigation() {
+  const [navState, setNavState] = useState(() => ({
+    currentView: mobileNavigationController.getCurrentView(),
+    previousView: mobileNavigationController.getPreviousView(),
+    canGoBack: mobileNavigationController.canGoBack(),
+    stackLength: mobileNavigationController.getStackLength(),
+    previousViewTitle: getViewTitleArabic(mobileNavigationController.getPreviousView()),
+    currentViewTitle: getViewTitleArabic(mobileNavigationController.getCurrentView())
+  }));
+
+  useEffect(() => {
+    const handleStackChange = () => {
+      const cur = mobileNavigationController.getCurrentView();
+      const prev = mobileNavigationController.getPreviousView();
+      setNavState({
+        currentView: cur,
+        previousView: prev,
+        canGoBack: mobileNavigationController.canGoBack(),
+        stackLength: mobileNavigationController.getStackLength(),
+        previousViewTitle: getViewTitleArabic(prev),
+        currentViewTitle: getViewTitleArabic(cur)
+      });
+    };
+
+    window.addEventListener('alpha-history-stack-changed', handleStackChange);
+    return () => window.removeEventListener('alpha-history-stack-changed', handleStackChange);
+  }, []);
+
+  const goBack = () => mobileNavigationController.goBack();
+
+  return {
+    ...navState,
+    goBack
+  };
+}

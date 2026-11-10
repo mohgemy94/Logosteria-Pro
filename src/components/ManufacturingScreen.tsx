@@ -45,8 +45,12 @@ import ExportButtonGroup from './ExportButtonGroup';
 import { loadStoredItems, Item } from '../utils/itemsStore';
 import { loadJournalEntries } from '../utils/trialBalanceStore';
 import { useSystemCurrency } from '../utils/currency';
+import { useIsInWindow } from './DesktopWindowManager';
+import { loadStoredPurchaseInvoices, saveStoredPurchaseInvoices, type StoredPurchaseInvoice } from '../utils/purchasesStore';
+import { loadVendors } from '../utils/partnerLedger';
 
-export default function ManufacturingScreen() {
+export default function ManufacturingScreen({ isInWindow: explicitIsInWindow }: { isInWindow?: boolean } = {}) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { symbol: currencySymbol } = useSystemCurrency();
   const [activeTab, setActiveTab] = useState<'orders' | 'bom' | 'workCenters' | 'costAnalysis' | 'accounting'>('orders');
   const [workOrders, setWorkOrders] = useState<ManufacturingOrder[]>(() => getStoredWorkOrders());
@@ -70,10 +74,10 @@ export default function ManufacturingScreen() {
 
   // Form State: Complete Order Inputs
   const [completeForm, setCompleteForm] = useState({
-    actualQuantityProduced: 0,
-    defectiveQuantity: 0,
-    scrapCost: 0,
-    targetWarehouse: 'المستودع الرئيسي - الرياض',
+    actualQuantityProduced: 0 as number | string,
+    defectiveQuantity: 0 as number | string,
+    scrapCost: 0 as number | string,
+    targetWarehouse: 'المستودع الرئيسي',
     notes: ''
   });
 
@@ -81,23 +85,23 @@ export default function ManufacturingScreen() {
   const [workCenterForm, setWorkCenterForm] = useState({
     code: '',
     name: '',
-    capacityPerHour: 25,
-    costPerHour: 50,
-    supervisor: 'مشرف خط الإنتاج',
+    capacityPerHour: 0 as number | string,
+    costPerHour: 0 as number | string,
+    supervisor: '',
     status: 'ACTIVE' as WorkCenter['status']
   });
 
   // Form State: New Work Order
   const [newOrder, setNewOrder] = useState({
     bomId: '',
-    plannedQuantity: 10,
-    workCenter: 'خط التجميع والتركيب الإلكتروني',
-    supervisor: 'م. طارق العسيري',
+    plannedQuantity: 1 as number | string,
+    workCenter: '',
+    supervisor: '',
     startDate: new Date().toISOString().slice(0, 10),
     targetEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-    priority: 'HIGH' as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
-    sourceWarehouse: 'المستودع الرئيسي - الرياض',
-    targetWarehouse: 'مستودع معرض المبيعات',
+    priority: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
+    sourceWarehouse: 'المستودع الرئيسي',
+    targetWarehouse: 'المستودع الرئيسي',
     autoDeductMaterials: true,
     notes: ''
   });
@@ -107,19 +111,19 @@ export default function ManufacturingScreen() {
     name: '',
     finalProductName: '',
     finalProductId: '',
-    targetOutputQuantity: 10,
+    targetOutputQuantity: 1 as number | string,
     outputUnit: 'قطعة / وحدة',
-    directLaborCost: 500,
-    overheadCost: 300,
-    scrapExpectedPercent: 2,
-    sourceWarehouse: 'المستودع الرئيسي - الرياض',
-    targetWarehouse: 'المستودع الرئيسي - الرياض',
+    directLaborCost: 0 as number | string,
+    overheadCost: 0 as number | string,
+    scrapExpectedPercent: 0 as number | string,
+    sourceWarehouse: 'المستودع الرئيسي',
+    targetWarehouse: 'المستودع الرئيسي',
     version: '1.0',
     isActive: true,
     notes: '',
     materials: [
-      { id: '1', itemId: '', itemCode: '', itemName: 'مادة خام رئيسية', unit: 'كجم', standardQuantity: 10, unitCost: 50, totalCost: 500 }
-    ] as BOMMaterialItem[]
+      { id: '1', itemId: '', itemCode: '', itemName: '', unit: 'قطعة', standardQuantity: 1, unitCost: 0, totalCost: 0 }
+    ] as (BOMMaterialItem | any)[]
   });
 
   // Sync with localStorage & app events
@@ -173,12 +177,13 @@ export default function ManufacturingScreen() {
 
   // Filtered Orders
   const filteredOrders = useMemo(() => {
+    const q = (searchQuery || '').toLowerCase();
     return workOrders.filter(o => {
       const matchSearch =
-        o.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        o.finalProductName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        o.supervisor.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        o.workCenter.toLowerCase().includes(searchQuery.toLowerCase());
+        (o.orderNumber || '').toLowerCase().includes(q) ||
+        (o.finalProductName || '').toLowerCase().includes(q) ||
+        (o.supervisor || '').toLowerCase().includes(q) ||
+        (o.workCenter || '').toLowerCase().includes(q);
 
       const matchStatus = statusFilter === 'ALL' || o.status === statusFilter;
       return matchSearch && matchStatus;
@@ -187,11 +192,12 @@ export default function ManufacturingScreen() {
 
   // Filtered BOMs
   const filteredBOMs = useMemo(() => {
+    const q = (searchQuery || '').toLowerCase();
     return boms.filter(b => {
       return (
-        b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.bomCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.finalProductName.toLowerCase().includes(searchQuery.toLowerCase())
+        (b.name || '').toLowerCase().includes(q) ||
+        (b.bomCode || '').toLowerCase().includes(q) ||
+        (b.finalProductName || '').toLowerCase().includes(q)
       );
     });
   }, [boms, searchQuery]);
@@ -240,12 +246,92 @@ export default function ManufacturingScreen() {
     const totalCost = materialsTotal + labor + overhead;
     const costPerUnit = newOrder.plannedQuantity > 0 ? Math.round((totalCost / newOrder.plannedQuantity) * 100) / 100 : 0;
 
+    // MRP Material Availability Check
+    const missingMaterials: { itemId: string; code: string; name: string; required: number; available: number; deficit: number; unit: string; unitCost: number }[] = [];
+    consumedMaterials.forEach(m => {
+      const invItem = inventoryItems.find(it => it.id === m.itemId || it.code === m.itemId || it.name === m.itemName);
+      const avail = invItem ? invItem.stock : 0;
+      if (avail < m.plannedQuantity) {
+        missingMaterials.push({
+          itemId: invItem?.id || m.itemId,
+          code: invItem?.code || m.itemId,
+          name: m.itemName,
+          required: m.plannedQuantity,
+          available: avail,
+          deficit: Math.max(1, m.plannedQuantity - avail),
+          unit: m.unit,
+          unitCost: Number(m.unitCost) || Number(invItem?.costPrice) || 10
+        });
+      }
+    });
+
+    if (missingMaterials.length > 0) {
+      const details = missingMaterials
+        .map(m => `- ${m.name}: المطلوب (${m.required} ${m.unit}) | المتوفر (${m.available} ${m.unit}) | العجز (${m.deficit} ${m.unit})`)
+        .join('\n');
+      const proceed = confirm(
+        `⚠️ تنبيه MRP (تخطيط احتياجات المواد Raw Materials Check):\nعفواً، لا يتوفر رصيد مخزني كافٍ للمواد الخام التالية لإكمال التصنيع:\n${details}\n\nهل ترغب في مواصلة إنشاء أمر التشغيل كـ (مسودة DRAFT) وتوليد أمر شراء آلي (مسودة مشتريات) بالعجز؟`
+      );
+      if (!proceed) return;
+
+      // Generate Draft Purchase Order for the missing raw materials
+      const vendors = loadVendors();
+      const defaultVendor = vendors[0] || { id: 'V-001', name: 'مورد خامات التصنيع' };
+      const poItems = missingMaterials.map((m, idx) => ({
+        id: `mrp-po-${Date.now()}-${idx}`,
+        itemId: m.itemId,
+        itemCode: m.code,
+        description: m.name,
+        quantity: m.deficit,
+        unitPrice: m.unitCost,
+        taxRate: 15,
+        unit: m.unit || 'قطعة',
+        availableStock: m.available,
+        costPrice: m.unitCost
+      }));
+      const subtotal = poItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+      const taxTotal = Math.round(subtotal * 0.15 * 100) / 100;
+      const grandTotal = Math.round((subtotal + taxTotal) * 100) / 100;
+      const today = new Date().toISOString().split('T')[0];
+
+      const draftPO: StoredPurchaseInvoice = {
+        id: `PO-MRP-${Date.now()}`,
+        invoiceNumber: `PUR-MRP-${Date.now().toString().slice(-4)}`,
+        supplierRef: `تغطية عجز خامات ${orderNumber}`,
+        date: today,
+        dueDate: today,
+        partnerId: defaultVendor.id,
+        partnerName: defaultVendor.name,
+        classification: 'TAX',
+        taxRate: 15,
+        invoiceType: 'CREDIT_PURCHASE',
+        source: 'MAIN_WAREHOUSE',
+        safe: 'MAIN_SAFE',
+        items: poItems,
+        totals: {
+          subtotal,
+          taxTotal,
+          discountTotal: 0,
+          grandTotal,
+          cashPaid: 0,
+          remainingBalance: grandTotal
+        },
+        status: 'DRAFT',
+        notes: `أمر شراء خامات مولد آلياً من نظام التصنيع (MRP) لتغطية عجز أمر التشغيل رقم ${orderNumber} للمنتج (${selectedBOM.finalProductName}).`,
+        createdAt: new Date().toISOString()
+      };
+      const existingPOs = loadStoredPurchaseInvoices();
+      saveStoredPurchaseInvoices([draftPO, ...existingPOs]);
+    }
+
     const defaultStages: ProductionStageItem[] = [
       { id: 'st-1', stageName: 'صرف المواد وتجهيز خط التشغيل', orderIndex: 1, status: 'DONE', technician: newOrder.supervisor, completedAt: newOrder.startDate },
       { id: 'st-2', stageName: 'مرحلة التصنيع والتشغيل الفعلي', orderIndex: 2, status: 'IN_PROGRESS', technician: newOrder.supervisor },
       { id: 'st-3', stageName: 'الفحص المخبري وضبط الجودة (QC)', orderIndex: 3, status: 'PENDING' },
       { id: 'st-4', stageName: 'التغليف والتوريد لمخزن البضاعة التامة', orderIndex: 4, status: 'PENDING' }
     ];
+
+    const initialStatus = missingMaterials.length > 0 ? 'DRAFT' : 'IN_PROGRESS';
 
     let createdOrder: ManufacturingOrder = {
       id: 'mo-' + Date.now(),
@@ -263,7 +349,7 @@ export default function ManufacturingScreen() {
       supervisor: newOrder.supervisor,
       startDate: newOrder.startDate,
       targetEndDate: newOrder.targetEndDate,
-      status: 'IN_PROGRESS',
+      status: initialStatus,
       priority: newOrder.priority,
       directLaborCost: labor,
       machineHoursCost: 150,
@@ -273,15 +359,15 @@ export default function ManufacturingScreen() {
       inventoryTransferred: false,
       materialsDeducted: false,
       finishedGoodsAdded: false,
-      sourceWarehouse: newOrder.sourceWarehouse || selectedBOM.sourceWarehouse || 'المستودع الرئيسي - الرياض',
-      targetWarehouse: newOrder.targetWarehouse || selectedBOM.targetWarehouse || 'مستودع معرض المبيعات',
+      sourceWarehouse: newOrder.sourceWarehouse || selectedBOM.sourceWarehouse || 'المستودع الرئيسي',
+      targetWarehouse: newOrder.targetWarehouse || selectedBOM.targetWarehouse || 'المستودع الرئيسي',
       materialsConsumed: consumedMaterials,
       stages: defaultStages,
       notes: newOrder.notes
     };
 
-    // Auto Deduct raw materials and generate consumption journal if enabled
-    if (newOrder.autoDeductMaterials) {
+    // Auto Deduct raw materials and generate consumption journal if enabled and status is IN_PROGRESS
+    if (newOrder.autoDeductMaterials && initialStatus === 'IN_PROGRESS') {
       deductRawMaterialsForOrder(createdOrder);
       createdOrder.materialsDeducted = true;
       const jvId = createConsumptionJournalEntry(createdOrder);
@@ -292,7 +378,49 @@ export default function ManufacturingScreen() {
     saveStoredWorkOrders(updated);
     setWorkOrders(updated);
     setIsNewOrderModalOpen(false);
-    alert(`تم إنشاء أمر التشغيل والإنتاج ${orderNumber} بنجاح ومزامنة حركة الخامات والقيود المحاسبية!`);
+    if (missingMaterials.length > 0) {
+      alert(`تم حفظ أمر التشغيل ${orderNumber} كـ (مسودة DRAFT) وتوليد مسودة فاتورة مشتريات بالخامات الناقصة في قسم المشتريات!`);
+    } else {
+      alert(`تم إنشاء أمر التشغيل والإنتاج ${orderNumber} بنجاح ومزامنة حركة الخامات والقيود المحاسبية!`);
+    }
+  };
+
+  // Start a DRAFT order once materials are replenished
+  const handleStartDraftOrder = (order: ManufacturingOrder) => {
+    const freshItems = loadStoredItems();
+    setInventoryItems(freshItems);
+
+    const missing: string[] = [];
+    order.materialsConsumed.forEach(m => {
+      const invItem = freshItems.find(it => it.id === m.itemId || it.code === m.itemId || it.name === m.itemName);
+      const avail = invItem ? invItem.stock : 0;
+      if (avail < m.plannedQuantity) {
+        missing.push(`- ${m.itemName}: المطلوب (${m.plannedQuantity}) والمتوفر (${avail})`);
+      }
+    });
+
+    if (missing.length > 0) {
+      alert(`لا يمكن بدء التشغيل وصرف الخامات لعدم اكتمال توريد المواد الخام التالية بالمخزن:\n${missing.join('\n')}\n\nيرجى اعتماد فاتورة المشتريات الخاصة بالنواقص أولاً.`);
+      return;
+    }
+
+    let startedOrder: ManufacturingOrder = {
+      ...order,
+      status: 'IN_PROGRESS'
+    };
+
+    if (!startedOrder.materialsDeducted) {
+      deductRawMaterialsForOrder(startedOrder);
+      startedOrder.materialsDeducted = true;
+      const jvId = createConsumptionJournalEntry(startedOrder);
+      if (jvId) startedOrder.consumptionJournalEntryId = jvId;
+    }
+
+    const updated = workOrders.map(o => (o.id === startedOrder.id ? startedOrder : o));
+    saveStoredWorkOrders(updated);
+    setWorkOrders(updated);
+    setInventoryItems(loadStoredItems());
+    alert(`تم بدء تشغيل أمر الإنتاج ${startedOrder.orderNumber} وصرف الخامات من المخزن وتوليد قيد الصرف بنجاح!`);
   };
 
   // Open Complete Order Modal
@@ -302,7 +430,7 @@ export default function ManufacturingScreen() {
       actualQuantityProduced: order.actualQuantityProduced || order.plannedQuantity,
       defectiveQuantity: order.defectiveQuantity || 0,
       scrapCost: order.scrapCost || 0,
-      targetWarehouse: order.targetWarehouse || 'المستودع الرئيسي - الرياض',
+      targetWarehouse: order.targetWarehouse || 'المستودع الرئيسي',
       notes: order.notes || ''
     });
     setIsCompleteOrderModalOpen(true);
@@ -388,18 +516,18 @@ export default function ManufacturingScreen() {
       name: '',
       finalProductName: '',
       finalProductId: '',
-      targetOutputQuantity: 10,
+      targetOutputQuantity: 1,
       outputUnit: 'قطعة / وحدة',
-      directLaborCost: 500,
-      overheadCost: 300,
-      scrapExpectedPercent: 2,
-      sourceWarehouse: 'المستودع الرئيسي - الرياض',
-      targetWarehouse: 'المستودع الرئيسي - الرياض',
+      directLaborCost: 0,
+      overheadCost: 0,
+      scrapExpectedPercent: 0,
+      sourceWarehouse: 'المستودع الرئيسي',
+      targetWarehouse: 'المستودع الرئيسي',
       version: '1.0',
       isActive: true,
       notes: '',
       materials: [
-        { id: '1', itemId: '', itemCode: '', itemName: '', unit: 'قطعة', standardQuantity: 1, unitCost: 10, totalCost: 10 }
+        { id: '1', itemId: '', itemCode: '', itemName: '', unit: 'قطعة', standardQuantity: 1, unitCost: 0, totalCost: 0 }
       ]
     });
     setIsBOMModalOpen(true);
@@ -417,8 +545,8 @@ export default function ManufacturingScreen() {
       directLaborCost: bom.directLaborCost,
       overheadCost: bom.overheadCost,
       scrapExpectedPercent: bom.scrapExpectedPercent,
-      sourceWarehouse: bom.sourceWarehouse || 'المستودع الرئيسي - الرياض',
-      targetWarehouse: bom.targetWarehouse || 'المستودع الرئيسي - الرياض',
+      sourceWarehouse: bom.sourceWarehouse || 'المستودع الرئيسي',
+      targetWarehouse: bom.targetWarehouse || 'المستودع الرئيسي',
       version: bom.version,
       isActive: bom.isActive,
       notes: bom.notes || '',
@@ -627,7 +755,8 @@ export default function ManufacturingScreen() {
   return (
     <div className="flex flex-col flex-1 space-y-5" dir="rtl">
       {/* Header & Action Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl shadow-xs border border-slate-200 print:hidden">
+      {!isInWindow && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl shadow-xs border border-slate-200 print:hidden">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
@@ -669,6 +798,7 @@ export default function ManufacturingScreen() {
           </button>
         </div>
       </div>
+      )}
 
       {/* KPI METRICS CARDS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 print:hidden">
@@ -968,6 +1098,17 @@ export default function ManufacturingScreen() {
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
+                          {order.status === 'DRAFT' && (
+                            <button
+                              type="button"
+                              onClick={() => handleStartDraftOrder(order)}
+                              className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                              title="بدء التشغيل الفعلي وصرف المواد الخام من المستودع بعد توفرها"
+                            >
+                              <Cpu size={13} />
+                              <span>بدء وصرف خامات</span>
+                            </button>
+                          )}
                           {order.status !== 'COMPLETED' && (
                             <button
                               type="button"
@@ -1453,8 +1594,9 @@ export default function ManufacturingScreen() {
                     required
                     min={1}
                     value={newOrder.plannedQuantity}
-                    onChange={e => setNewOrder({ ...newOrder, plannedQuantity: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none focus:border-blue-500"
+                    onFocus={e => e.target.select()}
+                    onChange={e => setNewOrder({ ...newOrder, plannedQuantity: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none focus:border-blue-500 font-mono"
                   />
                 </div>
                 <div>
@@ -1636,8 +1778,9 @@ export default function ManufacturingScreen() {
                     type="number"
                     min={1}
                     value={bomForm.targetOutputQuantity}
-                    onChange={e => setBOMForm({ ...bomForm, targetOutputQuantity: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none"
+                    onFocus={e => e.target.select()}
+                    onChange={e => setBOMForm({ ...bomForm, targetOutputQuantity: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none font-mono"
                   />
                 </div>
                 <div>
@@ -1654,8 +1797,9 @@ export default function ManufacturingScreen() {
                   <input
                     type="number"
                     value={bomForm.directLaborCost}
-                    onChange={e => setBOMForm({ ...bomForm, directLaborCost: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none text-blue-700"
+                    onFocus={e => e.target.select()}
+                    onChange={e => setBOMForm({ ...bomForm, directLaborCost: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none text-blue-700 font-mono"
                   />
                 </div>
                 <div>
@@ -1663,8 +1807,9 @@ export default function ManufacturingScreen() {
                   <input
                     type="number"
                     value={bomForm.overheadCost}
-                    onChange={e => setBOMForm({ ...bomForm, overheadCost: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none text-purple-700"
+                    onFocus={e => e.target.select()}
+                    onChange={e => setBOMForm({ ...bomForm, overheadCost: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none text-purple-700 font-mono"
                   />
                 </div>
               </div>
@@ -1739,17 +1884,20 @@ export default function ManufacturingScreen() {
                           type="number"
                           step="any"
                           value={mat.standardQuantity}
+                          onFocus={e => e.target.select()}
                           onChange={e => {
-                            const val = Number(e.target.value);
+                            const val = e.target.value === '' ? '' : Number(e.target.value);
+                            const numVal = Number(val) || 0;
+                            const numUnitCost = Number(mat.unitCost) || 0;
                             setBOMForm(prev => ({
                               ...prev,
                               materials: prev.materials.map((m, i) =>
-                                i === idx ? { ...m, standardQuantity: val, totalCost: val * m.unitCost } : m
+                                i === idx ? { ...m, standardQuantity: val, totalCost: numVal * numUnitCost } : m
                               )
                             }));
                           }}
                           placeholder="الكمية"
-                          className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold"
+                          className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold font-mono"
                         />
                       </div>
 
@@ -1759,17 +1907,20 @@ export default function ManufacturingScreen() {
                           type="number"
                           step="any"
                           value={mat.unitCost}
+                          onFocus={e => e.target.select()}
                           onChange={e => {
-                            const val = Number(e.target.value);
+                            const val = e.target.value === '' ? '' : Number(e.target.value);
+                            const numVal = Number(val) || 0;
+                            const numStdQty = Number(mat.standardQuantity) || 0;
                             setBOMForm(prev => ({
                               ...prev,
                               materials: prev.materials.map((m, i) =>
-                                i === idx ? { ...m, unitCost: val, totalCost: m.standardQuantity * val } : m
+                                i === idx ? { ...m, unitCost: val, totalCost: numStdQty * numVal } : m
                               )
                             }));
                           }}
                           placeholder="تكلفة الوحدة"
-                          className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-blue-700"
+                          className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-blue-700 font-mono"
                         />
                       </div>
 
@@ -1875,8 +2026,9 @@ export default function ManufacturingScreen() {
                     min={1}
                     required
                     value={completeForm.actualQuantityProduced}
-                    onChange={e => setCompleteForm({ ...completeForm, actualQuantityProduced: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-emerald-700 focus:outline-none"
+                    onFocus={e => e.target.select()}
+                    onChange={e => setCompleteForm({ ...completeForm, actualQuantityProduced: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-emerald-700 focus:outline-none font-mono"
                   />
                 </div>
                 <div>
@@ -1885,8 +2037,9 @@ export default function ManufacturingScreen() {
                     type="number"
                     min={0}
                     value={completeForm.defectiveQuantity}
-                    onChange={e => setCompleteForm({ ...completeForm, defectiveQuantity: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-red-600 focus:outline-none"
+                    onFocus={e => e.target.select()}
+                    onChange={e => setCompleteForm({ ...completeForm, defectiveQuantity: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-red-600 focus:outline-none font-mono"
                   />
                 </div>
               </div>
@@ -1908,8 +2061,9 @@ export default function ManufacturingScreen() {
                     type="number"
                     min={0}
                     value={completeForm.scrapCost}
-                    onChange={e => setCompleteForm({ ...completeForm, scrapCost: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none text-red-700"
+                    onFocus={e => e.target.select()}
+                    onChange={e => setCompleteForm({ ...completeForm, scrapCost: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none text-red-700 font-mono"
                   />
                 </div>
               </div>
@@ -2179,8 +2333,9 @@ export default function ManufacturingScreen() {
                   <input
                     type="number"
                     value={workCenterForm.capacityPerHour}
-                    onChange={e => setWorkCenterForm({ ...workCenterForm, capacityPerHour: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none"
+                    onFocus={e => e.target.select()}
+                    onChange={e => setWorkCenterForm({ ...workCenterForm, capacityPerHour: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none font-mono"
                   />
                 </div>
                 <div>
@@ -2188,8 +2343,9 @@ export default function ManufacturingScreen() {
                   <input
                     type="number"
                     value={workCenterForm.costPerHour}
-                    onChange={e => setWorkCenterForm({ ...workCenterForm, costPerHour: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none text-blue-700"
+                    onFocus={e => e.target.select()}
+                    onChange={e => setWorkCenterForm({ ...workCenterForm, costPerHour: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none text-blue-700 font-mono"
                   />
                 </div>
               </div>

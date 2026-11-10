@@ -8,223 +8,11 @@ export const STORAGE_KEY_BOM = 'alpha_accounting_bom_v1';
 export const STORAGE_KEY_WORK_ORDERS = 'alpha_accounting_work_orders_v1';
 export const STORAGE_KEY_WORK_CENTERS = 'alpha_accounting_work_centers_v1';
 
-export const INITIAL_WORK_CENTERS: WorkCenter[] = [
-  {
-    id: 'wc-1',
-    code: 'WC-01',
-    name: 'خط التجميع والتركيب الإلكتروني',
-    capacityPerHour: 30,
-    costPerHour: 60,
-    supervisor: 'م. طارق العسيري',
-    status: 'ACTIVE'
-  },
-  {
-    id: 'wc-2',
-    code: 'WC-02',
-    name: 'ورشة النجارة والتصنيع الخشبي',
-    capacityPerHour: 15,
-    costPerHour: 45,
-    supervisor: 'م. فيصل الخالدي',
-    status: 'ACTIVE'
-  },
-  {
-    id: 'wc-3',
-    code: 'WC-03',
-    name: 'خط التعبئة والتغليف الآلي والباركود',
-    capacityPerHour: 80,
-    costPerHour: 35,
-    supervisor: 'أ. سامي المنصور',
-    status: 'ACTIVE'
-  }
-];
+export const INITIAL_WORK_CENTERS: WorkCenter[] = [];
 
-export const INITIAL_BOMS: BillOfMaterials[] = [
-  {
-    id: 'bom-101',
-    bomCode: 'BOM-2026-001',
-    name: 'معيار تصنيع طقم مكتب إداري فاخر متكامل',
-    finalProductId: 'prod-desk-01',
-    finalProductName: 'طقم مكتب تنفيذي فاخر مقاس 180 سم مع ملحقات',
-    targetOutputQuantity: 5,
-    outputUnit: 'طقم / مكتب',
-    directLaborCost: 800,
-    overheadCost: 350,
-    scrapExpectedPercent: 2,
-    totalEstimatedCost: 4750,
-    costPerUnit: 950,
-    isActive: true,
-    version: '1.0',
-    sourceWarehouse: 'المستودع الرئيسي - الرياض',
-    targetWarehouse: 'مستودع معرض المبيعات',
-    notes: 'معيار معتمد لقسم الأثاث المكتبي والتصنيع الداخلي',
-    rawMaterials: [
-      {
-        id: 'mat-1',
-        itemId: '10',
-        itemCode: '10',
-        itemName: 'مكتب خشبي إداري تنفيذي مقاس 180 سم',
-        unit: 'قطعة',
-        standardQuantity: 5,
-        unitCost: 650,
-        totalCost: 3250
-      },
-      {
-        id: 'mat-2',
-        itemId: 'raw-mat-acc-01',
-        itemCode: 'RAW-ACC-01',
-        itemName: 'إكسسوارات ومقابض معدنية ووحدات أدراج',
-        unit: 'مجموعة',
-        standardQuantity: 5,
-        unitCost: 70,
-        totalCost: 350
-      }
-    ]
-  },
-  {
-    id: 'bom-102',
-    bomCode: 'BOM-2026-002',
-    name: 'معيار تعبئة وتغليف عبوات البن العربي الفاخر (حزمة ترويجية)',
-    finalProductId: 'prod-coffee-pack-01',
-    finalProductName: 'باكيدج الضيافة الملكي - قهوة عربي مع هيل 3 كجم',
-    targetOutputQuantity: 20,
-    outputUnit: 'كرتونة مجمعة',
-    directLaborCost: 150,
-    overheadCost: 90,
-    scrapExpectedPercent: 1.5,
-    totalEstimatedCost: 1590,
-    costPerUnit: 79.5,
-    isActive: true,
-    version: '1.1',
-    sourceWarehouse: 'المستودع الرئيسي - الرياض',
-    targetWarehouse: 'المستودع الرئيسي - الرياض',
-    notes: 'تشمل أكياس القهوة والكرتون المطبوع وشريط التغليف المقاوم للرطوبة',
-    rawMaterials: [
-      {
-        id: 'mat-3',
-        itemId: '9',
-        itemCode: '9',
-        itemName: 'بن قهوة عربي محمص فاخر مع هيل 1 كجم',
-        unit: 'كيس',
-        standardQuantity: 30,
-        unitCost: 45,
-        totalCost: 1350
-      }
-    ]
-  }
-];
+export const INITIAL_BOMS: BillOfMaterials[] = [];
 
-export const INITIAL_MANUFACTURING_ORDERS: ManufacturingOrder[] = [
-  {
-    id: 'mo-1001',
-    orderNumber: 'MO-2026-001',
-    bomId: 'bom-101',
-    bomCode: 'BOM-2026-001',
-    bomName: 'معيار تصنيع طقم مكتب إداري فاخر متكامل',
-    finalProductId: 'prod-desk-01',
-    finalProductName: 'طقم مكتب تنفيذي فاخر مقاس 180 سم مع ملحقات',
-    plannedQuantity: 5,
-    actualQuantityProduced: 5,
-    defectiveQuantity: 0,
-    unit: 'طقم / مكتب',
-    workCenter: 'ورشة النجارة والتصنيع الخشبي',
-    supervisor: 'م. فيصل الخالدي',
-    startDate: '2026-09-01',
-    targetEndDate: '2026-09-10',
-    actualEndDate: '2026-09-09',
-    status: 'COMPLETED',
-    priority: 'HIGH',
-    directLaborCost: 800,
-    machineHoursCost: 120,
-    overheadAllocatedCost: 350,
-    totalProductionCost: 4750,
-    actualCostPerUnit: 950,
-    inventoryTransferred: true,
-    materialsDeducted: true,
-    finishedGoodsAdded: true,
-    sourceWarehouse: 'المستودع الرئيسي - الرياض',
-    targetWarehouse: 'مستودع معرض المبيعات',
-    materialsConsumed: [
-      {
-        id: 'cmat-1',
-        itemId: '10',
-        itemName: 'مكتب خشبي إداري تنفيذي مقاس 180 سم',
-        unit: 'قطعة',
-        plannedQuantity: 5,
-        actualQuantity: 5,
-        unitCost: 650,
-        totalCost: 3250,
-        variance: 0
-      },
-      {
-        id: 'cmat-2',
-        itemId: 'raw-mat-acc-01',
-        itemName: 'إكسسوارات ومقابض معدنية ووحدات أدراج',
-        unit: 'مجموعة',
-        plannedQuantity: 5,
-        actualQuantity: 5,
-        unitCost: 70,
-        totalCost: 350,
-        variance: 0
-      }
-    ],
-    stages: [
-      { id: 'st-1', stageName: 'صرف المواد وتجهيز خط التشغيل', orderIndex: 1, status: 'DONE', technician: 'م. فيصل الخالدي', completedAt: '2026-09-01' },
-      { id: 'st-2', stageName: 'مرحلة التصنيع والتشغيل الفعلي', orderIndex: 2, status: 'DONE', technician: 'فريق النجارة والتركيب', completedAt: '2026-09-06' },
-      { id: 'st-3', stageName: 'الفحص المخبري وضبط الجودة (QC)', orderIndex: 3, status: 'DONE', technician: 'م. طارق العسيري', completedAt: '2026-09-08' },
-      { id: 'st-4', stageName: 'التغليف والتوريد لمخزن البضاعة التامة', orderIndex: 4, status: 'DONE', technician: 'أمين المستودع', completedAt: '2026-09-09' }
-    ],
-    notes: 'تم إنهاء الدفعة بنجاح بدون هالك وفحص الجودة 100%'
-  },
-  {
-    id: 'mo-1002',
-    orderNumber: 'MO-2026-002',
-    bomId: 'bom-102',
-    bomCode: 'BOM-2026-002',
-    bomName: 'معيار تعبئة وتغليف عبوات البن العربي الفاخر (حزمة ترويجية)',
-    finalProductId: 'prod-coffee-pack-01',
-    finalProductName: 'باكيدج الضيافة الملكي - قهوة عربي مع هيل 3 كجم',
-    plannedQuantity: 20,
-    actualQuantityProduced: 18,
-    defectiveQuantity: 1,
-    unit: 'كرتونة مجمعة',
-    workCenter: 'خط التعبئة والتغليف الآلي والباركود',
-    supervisor: 'أ. سامي المنصور',
-    startDate: '2026-09-12',
-    targetEndDate: '2026-09-22',
-    status: 'IN_PROGRESS',
-    priority: 'URGENT',
-    directLaborCost: 150,
-    machineHoursCost: 80,
-    overheadAllocatedCost: 90,
-    totalProductionCost: 1590,
-    actualCostPerUnit: 79.5,
-    inventoryTransferred: false,
-    materialsDeducted: true,
-    finishedGoodsAdded: false,
-    sourceWarehouse: 'المستودع الرئيسي - الرياض',
-    targetWarehouse: 'المستودع الرئيسي - الرياض',
-    materialsConsumed: [
-      {
-        id: 'cmat-3',
-        itemId: '9',
-        itemName: 'بن قهوة عربي محمص فاخر مع هيل 1 كجم',
-        unit: 'كيس',
-        plannedQuantity: 30,
-        actualQuantity: 30,
-        unitCost: 45,
-        totalCost: 1350,
-        variance: 0
-      }
-    ],
-    stages: [
-      { id: 'st-1', stageName: 'صرف المواد وتجهيز خط التشغيل', orderIndex: 1, status: 'DONE', technician: 'أ. سامي المنصور', completedAt: '2026-09-12' },
-      { id: 'st-2', stageName: 'مرحلة التصنيع والتشغيل الفعلي', orderIndex: 2, status: 'IN_PROGRESS', technician: 'فريق التعبئة والتغليف' },
-      { id: 'st-3', stageName: 'الفحص المخبري وضبط الجودة', orderIndex: 3, status: 'PENDING' },
-      { id: 'st-4', stageName: 'التغليف والتوريد لمخزن البضاعة التامة', orderIndex: 4, status: 'PENDING' }
-    ],
-    notes: 'دفعة سريعة لطلبيات موسم المعارض'
-  }
-];
+export const INITIAL_MANUFACTURING_ORDERS: ManufacturingOrder[] = [];
 
 export function getStoredBOMs(): BillOfMaterials[] {
   try {
@@ -312,13 +100,13 @@ export function deductRawMaterialsForOrder(order: ManufacturingOrder): boolean {
   const items = loadStoredItems();
   let changed = false;
 
-  order.materialsConsumed.forEach(cMat => {
+  (order.materialsConsumed || []).forEach(cMat => {
     const qtyToDeduct = Number(cMat.actualQuantity) || Number(cMat.plannedQuantity) || 0;
     if (qtyToDeduct <= 0) return;
 
     const idx = items.findIndex(it =>
       (cMat.itemId && it.id === cMat.itemId) ||
-      (it.name.trim().toLowerCase() === cMat.itemName.trim().toLowerCase())
+      ((it.name || '').trim().toLowerCase() === (cMat.itemName || '').trim().toLowerCase())
     );
 
     if (idx !== -1 && items[idx]) {
@@ -345,13 +133,13 @@ export function restoreRawMaterialsForOrder(order: ManufacturingOrder): boolean 
   const items = loadStoredItems();
   let changed = false;
 
-  order.materialsConsumed.forEach(cMat => {
+  (order.materialsConsumed || []).forEach(cMat => {
     const qtyToRestore = Number(cMat.actualQuantity) || Number(cMat.plannedQuantity) || 0;
     if (qtyToRestore <= 0) return;
 
     const idx = items.findIndex(it =>
       (cMat.itemId && it.id === cMat.itemId) ||
-      (it.name.trim().toLowerCase() === cMat.itemName.trim().toLowerCase())
+      ((it.name || '').trim().toLowerCase() === (cMat.itemName || '').trim().toLowerCase())
     );
 
     if (idx !== -1 && items[idx]) {
@@ -387,7 +175,7 @@ export function addFinishedGoodsForOrder(order: ManufacturingOrder): boolean {
 
   const idx = items.findIndex(it =>
     (order.finalProductId && it.id === order.finalProductId) ||
-    (it.name.trim().toLowerCase() === order.finalProductName.trim().toLowerCase())
+    ((it.name || '').trim().toLowerCase() === (order.finalProductName || '').trim().toLowerCase())
   );
 
   if (idx !== -1 && items[idx]) {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { 
   Printer, 
   X, 
@@ -7,7 +7,9 @@ import {
   MessageSquare, 
   Building2, 
   FileCheck, 
-  Scale
+  Scale,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import { PartnerBalanceItem } from './PartnerBalances';
 import { getSystemSettings } from '../utils/settings';
@@ -34,6 +36,76 @@ export default function BalanceConfirmationModal({
   const currencySymbol = customCurrency || defaultCurrency;
   const [systemSettings] = useState(() => getSystemSettings());
   const [copied, setCopied] = useState(false);
+  const [zoom, setZoom] = useState<number>(100);
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef<{ startX: number; startY: number; initialPanX: number; initialPanY: number }>({ startX: 0, startY: 0, initialPanX: 0, initialPanY: 0 });
+
+  // Reset zoom and pan whenever modal is opened or closed
+  useEffect(() => {
+    setZoom(100);
+    setPan({ x: 0, y: 0 });
+  }, [isOpen]);
+
+  const resetPan = () => {
+    setPan({ x: 0, y: 0 });
+  };
+
+  const handleClose = () => {
+    setZoom(100);
+    setPan({ x: 0, y: 0 });
+    onClose();
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoom <= 100) return;
+    setIsDragging(true);
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialPanX: pan.x,
+      initialPanY: pan.y
+    };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || zoom <= 100) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    setPan({
+      x: dragRef.current.initialPanX + dx,
+      y: dragRef.current.initialPanY + dy
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (zoom <= 100 || e.touches.length !== 1) return;
+    setIsDragging(true);
+    dragRef.current = {
+      startX: e.touches[0].clientX,
+      startY: e.touches[0].clientY,
+      initialPanX: pan.x,
+      initialPanY: pan.y
+    };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || zoom <= 100) return;
+    const dx = e.touches[0].clientX - dragRef.current.startX;
+    const dy = e.touches[0].clientY - dragRef.current.startY;
+    setPan({
+      x: dragRef.current.initialPanX + dx,
+      y: dragRef.current.initialPanY + dy
+    });
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+  };
 
   // Register with mobile navigation controller so back button closes modal first
   useEffect(() => {
@@ -162,9 +234,57 @@ ${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 
               <span>طباعة الخطاب</span>
             </button>
 
+            {/* أداة التكبير والتصغير المرنة بأي قيمة (Flexible Zoom Control with Slider & Stepper) */}
+            <div className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 shadow-2xs text-white">
+              <button
+                type="button"
+                onClick={() => setZoom(z => Math.max(z - 15, 30))}
+                className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                title="تصغير (-15%)"
+              >
+                <ZoomOut size={14} />
+              </button>
+
+              <input
+                type="range"
+                min="30"
+                max="220"
+                step="5"
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                className="w-20 sm:w-28 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                title={`نسبة التكبير: ${zoom}% (اسحب للتحكم بأي قيمة)`}
+              />
+
+              <button
+                type="button"
+                onClick={() => setZoom(z => Math.min(z + 15, 220))}
+                className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                title="تكبير (+15%)"
+              >
+                <ZoomIn size={14} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setZoom(100);
+                  resetPan();
+                }}
+                className={`font-mono text-xs font-bold px-2 py-0.5 rounded-lg transition-colors cursor-pointer ${
+                  zoom === 100 
+                    ? 'bg-slate-700 text-slate-300' 
+                    : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                }`}
+                title="إعادة ضبط المعاينة إلى 100%"
+              >
+                {zoom}%
+              </button>
+            </div>
+
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="btn-3d btn-3d-slate p-1.5 rounded-xl text-slate-300 hover:text-white hover:scale-105 active:scale-95 transition-all"
               title="إغلاق النافذة"
             >
@@ -173,8 +293,30 @@ ${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 
           </div>
         </div>
 
-        {/* Printable Letter Body */}
-        <div className="p-4 sm:p-8 md:p-10 overflow-y-auto bg-white text-slate-800 text-xs sm:text-sm leading-relaxed font-sans" id="printable-confirmation-letter">
+        {/* Printable Letter Body with Interactive Pan & Drag */}
+        <div 
+          className={`p-4 sm:p-8 md:p-10 overflow-y-auto bg-slate-100 flex justify-center items-start flex-1 select-none ${
+            zoom > 100 
+              ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') 
+              : 'cursor-default'
+          }`}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          <div 
+            id="printable-confirmation-letter" 
+            className="bg-white text-slate-800 text-xs sm:text-sm leading-relaxed font-sans w-full p-6 sm:p-10 rounded-2xl shadow-xs transition-transform duration-100 origin-top pointer-events-auto"
+            style={{
+              transform: `translate3d(${pan.x}px, ${pan.y}px, 0px) scale(${zoom / 100})`,
+              transformOrigin: 'top center',
+              marginBottom: zoom > 100 ? `${(zoom - 100) * 8}px` : '0px'
+            }}
+          >
           
           {/* Letterhead */}
           <div className="border-b-2 border-slate-900 pb-5 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -267,11 +409,11 @@ ${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 
           </div>
 
           <p className="text-xs text-slate-600 mb-8 leading-relaxed">
-            نرجو التكرم بمراجعة الأرقام الموضحة أعلاه ومطابقتها مع قيودكم وسجلاتكم الدفترية، وتأكيد المصادقة بتوقيع وختم قسيمة الرد المرفقة أدناه وإعادتها إلينا عبر البريد الإلكتروني أو الفاكس خلال (7) أيام عمل من تاريخه. وفي حال وجود أي ملاحظات أو فروقات يرجى إرفاق كشف الحساب المقارن لتسوية الفروقات.
+            نرجو التكرم بمراجعة الأرقام الموضحة أعلاه ومطابقتها مع قيودكم وسجلاتكم الدفترية، وتأكيد المصادقة بإعادتها إلينا عبر البريد الإلكتروني أو الفاكس خلال (7) أيام عمل من تاريخه. وفي حال وجود أي ملاحظات أو فروقات يرجى إرفاق كشف الحساب المقارن لتسوية الفروقات.
           </p>
 
           {/* Signatures for Company */}
-          <div className="grid grid-cols-2 gap-8 pt-4 pb-8 border-b border-dashed border-slate-300 mb-8 text-xs">
+          <div className="grid grid-cols-2 gap-8 pt-4 pb-4 mb-2 text-xs">
             <div>
               <div className="font-bold text-slate-800">إعداد / قسم الحسابات:</div>
               <div className="mt-8 text-slate-500">التوقيع: .......................................</div>
@@ -282,53 +424,7 @@ ${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 
             </div>
           </div>
 
-          {/* ============================================================ */}
-          {/* Acknowledgment Slip (قسيمة الرد والمصادقة للطرف)               */}
-          {/* ============================================================ */}
-          <div className="bg-slate-50/80 p-5 rounded-2xl border-2 border-slate-300">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-3">
-              <h4 className="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
-                <Scale size={16} className="text-indigo-600" />
-                قسيمة رد ومصادقة الرصيد (يُعاد توقيعها وختمها من قِبل {partner.name})
-              </h4>
-              <span className="text-[10px] text-slate-400 font-mono">CONF-RESPONSE</span>
-            </div>
-
-            <div className="space-y-3 text-xs text-slate-700">
-              <div className="flex items-start gap-2">
-                <div className="w-4 h-4 rounded border border-slate-400 mt-0.5 shrink-0 bg-white" />
-                <span>
-                  <strong>نقر بصحة ومطابقة الرصيد:</strong> نؤيد بأن رصيد حسابنا لدى {company.nameAr} حتى تاريخ {todayStr} هو <strong>({partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol})</strong> وهو مطابق تماماً لدفاترنا.
-                </span>
-              </div>
-
-              <div className="flex items-start gap-2">
-                <div className="w-4 h-4 rounded border border-slate-400 mt-0.5 shrink-0 bg-white" />
-                <span>
-                  <strong>الرصيد غير مطابق:</strong> رصيد حسابنا في دفاترنا يظهر بمبلغ (.............................. {currencySymbol})، والفارق قدره (.............................. {currencySymbol})، وتفاصيل أسباب الفروقات مرفقة بهذا الرد.
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 mt-2 border-t border-slate-200">
-                <div>
-                  <span className="text-slate-500 text-[11px] block">اسم المسؤول المفوض:</span>
-                  <div className="mt-4 border-b border-slate-300 pb-1 text-slate-400 font-mono">...................................</div>
-                </div>
-                <div>
-                  <span className="text-slate-500 text-[11px] block">التوقيع والتاريخ:</span>
-                  <div className="mt-4 border-b border-slate-300 pb-1 text-slate-400 font-mono">..... / ..... / 202...</div>
-                </div>
-                <div>
-                  <span className="text-slate-500 text-[11px] block text-center">الختم الرسمي للمنشأة:</span>
-                  <div className="mt-1 h-14 border border-dashed border-slate-300 rounded-lg flex items-center justify-center text-slate-300 text-[10px]">
-                    موضع الختم الرسمي
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
+        </div>
         </div>
 
         {/* Modal Footer (Hidden on Print) */}

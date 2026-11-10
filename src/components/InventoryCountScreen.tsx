@@ -50,12 +50,14 @@ import {
 } from '../utils/inventoryAuditStore';
 import { useSystemCurrency } from '../utils/currency';
 import { getSystemSettings } from '../utils/settings';
+import { useIsInWindow } from './DesktopWindowManager';
 import { loadJournalEntries } from '../utils/trialBalanceStore';
-import { loadStoredItems, type Item } from '../utils/itemsStore';
+import { loadStoredItems, getDynamicWarehousesList, type Item } from '../utils/itemsStore';
 import { JournalEntry } from '../types/accounting';
 
 interface InventoryCountScreenProps {
   onNavigate?: (view: string) => void;
+  isInWindow?: boolean;
 }
 
 const QUICK_VARIANCE_REASONS = [
@@ -67,7 +69,8 @@ const QUICK_VARIANCE_REASONS = [
   'صلاحية منتهية ومستبعدة'
 ];
 
-export default function InventoryCountScreen({ onNavigate }: InventoryCountScreenProps) {
+export default function InventoryCountScreen({ onNavigate, isInWindow: explicitIsInWindow }: InventoryCountScreenProps) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { symbol: currencySymbol } = useSystemCurrency();
   const [systemSettings] = useState(() => getSystemSettings());
 
@@ -182,13 +185,13 @@ export default function InventoryCountScreen({ onNavigate }: InventoryCountScree
   const warehousesList = useMemo(() => {
     const items = loadStoredItems();
     const whs = new Set<string>();
-    whs.add('المستودع الرئيسي - الرياض');
-    whs.add('مستودع فرع جدة');
-    whs.add('المستودع المركزي - الدمام');
-    whs.add('كافة المستودعات والفروع');
+    getDynamicWarehousesList().forEach(w => {
+      if (w.label) whs.add(w.label);
+    });
     items.forEach(i => {
       if (i.warehouseName) whs.add(i.warehouseName);
     });
+    whs.add('كافة المستودعات والفروع');
     return Array.from(whs);
   }, []);
 
@@ -204,7 +207,8 @@ export default function InventoryCountScreen({ onNavigate }: InventoryCountScree
 
   // Handler to start a new audit
   const handleStartNewAudit = () => {
-    const newSession = createDraftAuditSession('المستودع الرئيسي - الرياض');
+    const defaultWh = warehousesList.find(w => w !== 'كافة المستودعات والفروع') || 'المستودع الرئيسي';
+    const newSession = createDraftAuditSession(defaultWh);
     saveInventoryAudit(newSession);
     setAudits(prev => [newSession, ...prev]);
     setActiveAuditId(newSession.id);
@@ -329,7 +333,7 @@ export default function InventoryCountScreen({ onNavigate }: InventoryCountScree
     // Look for match by barcode or itemCode
     const matchedLine = currentAudit.lines.find(l => 
       (l.barcode && l.barcode.toLowerCase() === raw) ||
-      l.itemCode.toLowerCase() === raw
+      (l.itemCode && l.itemCode.toLowerCase() === raw)
     );
 
     if (!matchedLine) {
@@ -438,9 +442,9 @@ export default function InventoryCountScreen({ onNavigate }: InventoryCountScree
           if (parsedQty === null) continue;
 
           const lineIdx = newLines.findIndex(l => 
-            (possibleCode && l.itemCode.toLowerCase() === possibleCode.toLowerCase()) ||
+            (possibleCode && l.itemCode && l.itemCode.toLowerCase() === possibleCode.toLowerCase()) ||
             (possibleBarcode && l.barcode && l.barcode.toLowerCase() === possibleBarcode.toLowerCase()) ||
-            (cols[0] && l.itemCode.toLowerCase() === cols[0].toLowerCase())
+            (cols[0] && l.itemCode && l.itemCode.toLowerCase() === cols[0].toLowerCase())
           );
 
           if (lineIdx >= 0) {
@@ -615,9 +619,9 @@ export default function InventoryCountScreen({ onNavigate }: InventoryCountScree
     if (!catalogSearch.trim()) return unlistedCatalogItems;
     const q = catalogSearch.toLowerCase();
     return unlistedCatalogItems.filter(i => 
-      i.name.toLowerCase().includes(q) || 
-      i.code.toLowerCase().includes(q) || 
-      (i.barcode && i.barcode.toLowerCase().includes(q))
+      (i.name || '').toLowerCase().includes(q) || 
+      (i.code || '').toLowerCase().includes(q) || 
+      (i.barcode && (i.barcode || '').toLowerCase().includes(q))
     );
   }, [unlistedCatalogItems, catalogSearch]);
 
@@ -639,6 +643,7 @@ export default function InventoryCountScreen({ onNavigate }: InventoryCountScree
 
       {/* TOP HEADER & TITLE */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200 pb-5 print:hidden">
+        {!isInWindow && (
         <div>
           <div className="flex items-center gap-2.5">
             <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-sm">
@@ -654,6 +659,7 @@ export default function InventoryCountScreen({ onNavigate }: InventoryCountScree
             </div>
           </div>
         </div>
+        )}
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2">

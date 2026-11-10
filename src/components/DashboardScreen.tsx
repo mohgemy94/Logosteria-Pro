@@ -1246,6 +1246,29 @@ export default function DashboardScreen({ onNavigate, systemSettings }: Dashboar
             <span className="bg-purple-500/30 px-2 py-0.5 rounded text-[10px] text-white">P&L تحليلي</span>
           </div>
         </div>
+
+        {/* Account Movements Card */}
+        <div 
+          onClick={() => onNavigate('accountMovements')}
+          className="bg-gradient-to-br from-emerald-950 via-slate-900 to-teal-950 text-white p-5 rounded-2xl shadow-md border border-emerald-700/60 hover:border-emerald-400 transition-all cursor-pointer group flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">دفتر الأستاذ والرقابة</span>
+              <div className="w-8 h-8 rounded-xl bg-emerald-600/40 text-emerald-300 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Scale size={17} />
+              </div>
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">كشف حركة الحسابات</h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              كشف حركات وقيود الحسابات، العملاء، الموردين، الخزن، والمصروفات بالجدول الثلاثي (بيان الحركة | مدين | دائن) مع احتساب الفارق الصافي والمعاينة والطباعة.
+            </p>
+          </div>
+          <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs text-emerald-300 font-semibold group-hover:text-white">
+            <span>فتح شاشة حركة الحسابات ←</span>
+            <span className="bg-emerald-500/30 px-2 py-0.5 rounded text-[10px] text-white">جدول ثلاثي وتصفية</span>
+          </div>
+        </div>
       </div>
 
       {/* Item Analytics Modal */}

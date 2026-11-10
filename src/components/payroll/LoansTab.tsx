@@ -11,11 +11,9 @@ import {
   DollarSign
 } from 'lucide-react';
 import { Employee, LoanAdvance, LoanInstallment } from '../../types/payroll';
-import { 
-  getStoredLoans, 
-  saveStoredLoans, 
-  generateLoanSchedule 
-} from '../../data/mockPayroll';
+import { loadChartOfAccounts, saveJournalEntry } from '../../utils/trialBalanceStore';
+import { isCashOrBankAccount } from '../../utils/accountingIntegration';
+import { JournalEntry, JournalEntryStatus } from '../../types/accounting';
 
 interface LoansTabProps {
   employees: Employee[];
@@ -30,6 +28,11 @@ export default function LoansTab({ employees, currency, onRefresh }: LoansTabPro
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'PAID'>('ALL');
   const [searchEmp, setSearchEmp] = useState('');
 
+  const [treasuryAccounts] = useState(() => {
+    const all = loadChartOfAccounts();
+    return all.filter(a => isCashOrBankAccount(a, all));
+  });
+
   // New Loan Form State
   const [newLoanData, setNewLoanData] = useState({
     employeeId: '',
@@ -37,7 +40,8 @@ export default function LoansTab({ employees, currency, onRefresh }: LoansTabPro
     installmentsCount: 5,
     startMonth: new Date().toISOString().slice(0, 7), // "YYYY-MM"
     disbursementDate: new Date().toISOString().slice(0, 10),
-    disbursementAccount: 'الصندوق الرئيسي - الخزينة',
+    disbursementAccountId: treasuryAccounts[0]?.id || 'acc-1101',
+    disbursementAccount: treasuryAccounts[0]?.name || 'الصندوق الرئيسي - الخزينة',
     reason: 'سلفة شخصية طارئة',
     notes: ''
   });
@@ -62,6 +66,9 @@ export default function LoansTab({ employees, currency, onRefresh }: LoansTabPro
     );
 
     const monthly = schedule[0]?.amount ?? Math.round(Number(newLoanData.amount) / Number(newLoanData.installmentsCount));
+    const targetTreasury = treasuryAccounts.find(a => a.id === newLoanData.disbursementAccountId || a.code === newLoanData.disbursementAccountId);
+    const targetTreasuryId = targetTreasury ? targetTreasury.id : (newLoanData.disbursementAccountId || 'acc-1101');
+    const targetTreasuryName = targetTreasury ? `${targetTreasury.name} (${targetTreasury.code})` : newLoanData.disbursementAccount;
 
     const newLoan: LoanAdvance = {
       id: loanId,
@@ -78,7 +85,7 @@ export default function LoansTab({ employees, currency, onRefresh }: LoansTabPro
       remainingAmount: Number(newLoanData.amount),
       status: 'ACTIVE',
       reason: newLoanData.reason,
-      disbursementAccount: newLoanData.disbursementAccount,
+      disbursementAccount: targetTreasuryName,
       installments: schedule,
       notes: newLoanData.notes
     };
@@ -86,6 +93,36 @@ export default function LoansTab({ employees, currency, onRefresh }: LoansTabPro
     const updatedLoans = [newLoan, ...loans];
     saveStoredLoans(updatedLoans);
     setLoans(updatedLoans);
+
+    // Post Accounting Journal Entry for Loan Disbursement
+    try {
+      const entry: JournalEntry = {
+        id: `je-loan-${Date.now()}`,
+        entryNumber: `JV-LN-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        date: newLoanData.disbursementDate,
+        status: JournalEntryStatus.Posted,
+        description: `إثبات وصرف سلفة موظف (${emp.name}) بموجب سلفة رقم (${newLoan.loanNumber}) خصماً من ${targetTreasuryName}`,
+        reference: newLoan.loanNumber,
+        items: [
+          {
+            id: `ji-${Date.now()}-1`,
+            accountId: 'acc-1205',
+            debit: Number(newLoanData.amount),
+            credit: 0
+          },
+          {
+            id: `ji-${Date.now()}-2`,
+            accountId: targetTreasuryId,
+            debit: 0,
+            credit: Number(newLoanData.amount)
+          }
+        ]
+      };
+      saveJournalEntry(entry);
+    } catch (err) {
+      console.error('Error posting loan disbursement journal entry:', err);
+    }
+
     setIsAddLoanOpen(false);
     refreshLoans();
 
@@ -96,7 +133,8 @@ export default function LoansTab({ employees, currency, onRefresh }: LoansTabPro
       installmentsCount: 5,
       startMonth: new Date().toISOString().slice(0, 7),
       disbursementDate: new Date().toISOString().slice(0, 10),
-      disbursementAccount: 'الصندوق الرئيسي - الخزينة',
+      disbursementAccountId: treasuryAccounts[0]?.id || 'acc-1101',
+      disbursementAccount: treasuryAccounts[0]?.name || 'الصندوق الرئيسي - الخزينة',
       reason: 'سلفة شخصية طارئة',
       notes: ''
     });
@@ -185,10 +223,11 @@ export default function LoansTab({ employees, currency, onRefresh }: LoansTabPro
   const activeLoansCount = loans.filter(l => l.status === 'ACTIVE').length;
 
   const filteredLoans = loans.filter(l => {
+    const q = (searchEmp || '').toLowerCase();
     const matchStatus = filterStatus === 'ALL' || l.status === filterStatus;
-    const matchSearch = l.employeeName.toLowerCase().includes(searchEmp.toLowerCase()) ||
-                        l.employeeCode.toLowerCase().includes(searchEmp.toLowerCase()) ||
-                        l.loanNumber.toLowerCase().includes(searchEmp.toLowerCase());
+    const matchSearch = (l.employeeName || '').toLowerCase().includes(q) ||
+                        (l.employeeCode || '').toLowerCase().includes(q) ||
+                        (l.loanNumber || '').toLowerCase().includes(q);
     return matchStatus && matchSearch;
   });
 
@@ -465,8 +504,12 @@ export default function LoansTab({ employees, currency, onRefresh }: LoansTabPro
                     type="number"
                     required
                     min={100}
-                    value={newLoanData.amount}
-                    onChange={(e) => setNewLoanData({...newLoanData, amount: Number(e.target.value)})}
+                    value={newLoanData.amount ?? ''}
+                    onFocus={e => e.target.select()}
+                    onChange={(e) => setNewLoanData({...newLoanData, amount: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                    onBlur={() => {
+                      if ((newLoanData.amount as any) === '') setNewLoanData(prev => ({ ...prev, amount: 0 }));
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 font-mono font-bold text-blue-700"
                   />
                 </div>
@@ -477,8 +520,12 @@ export default function LoansTab({ employees, currency, onRefresh }: LoansTabPro
                     required
                     min={1}
                     max={60}
-                    value={newLoanData.installmentsCount}
-                    onChange={(e) => setNewLoanData({...newLoanData, installmentsCount: Number(e.target.value)})}
+                    value={newLoanData.installmentsCount ?? ''}
+                    onFocus={e => e.target.select()}
+                    onChange={(e) => setNewLoanData({...newLoanData, installmentsCount: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                    onBlur={() => {
+                      if ((newLoanData.installmentsCount as any) === '') setNewLoanData(prev => ({ ...prev, installmentsCount: 1 }));
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 font-mono font-bold"
                   />
                 </div>
@@ -516,15 +563,24 @@ export default function LoansTab({ employees, currency, onRefresh }: LoansTabPro
               </div>
 
               <div>
-                <label className="block text-slate-600 font-bold mb-1">الخزينة / الحساب المنصرف منه:</label>
+                <label className="block text-slate-600 font-bold mb-1">الخزينة / البنك المنصرف منه السلفة:</label>
                 <select
-                  value={newLoanData.disbursementAccount}
-                  onChange={(e) => setNewLoanData({...newLoanData, disbursementAccount: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500"
+                  value={newLoanData.disbursementAccountId}
+                  onChange={(e) => {
+                    const selectedAcc = treasuryAccounts.find(a => a.id === e.target.value);
+                    setNewLoanData({
+                      ...newLoanData, 
+                      disbursementAccountId: e.target.value,
+                      disbursementAccount: selectedAcc ? `${selectedAcc.name} (${selectedAcc.code})` : e.target.value
+                    });
+                  }}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 font-bold text-slate-800"
                 >
-                  <option value="الصندوق الرئيسي - الخزينة">الصندوق الرئيسي - الخزينة</option>
-                  <option value="حساب مصرف الراجحي">حساب مصرف الراجحي</option>
-                  <option value="حساب البنك الأهلي التجاري">حساب البنك الأهلي التجاري</option>
+                  {treasuryAccounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} ({acc.code})
+                    </option>
+                  ))}
                 </select>
               </div>
 

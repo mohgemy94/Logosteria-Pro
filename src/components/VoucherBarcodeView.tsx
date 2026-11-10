@@ -24,7 +24,7 @@ export function BarcodeImage({
   value,
   height = 36,
   barWidth = 1.35,
-  includeText = true,
+  includeText = false,
   barColor = '#000000',
   bgColor = '#ffffff',
   fontSize = 9,

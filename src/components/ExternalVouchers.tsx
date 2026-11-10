@@ -1,16 +1,17 @@
 import { useState, useMemo, useEffect, type FormEvent } from 'react';
 import { 
-  Save, ArrowUpRight, ArrowDownLeft, Plus, History, AlertTriangle, 
+  Save, ArrowUpRight, ArrowDownLeft, ArrowRight, Plus, History, AlertTriangle, 
   Edit3, Trash2, X, Eye, FileText, Truck, Users,
   CheckCircle2, RotateCcw, Send,
   ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft,
   Banknote, Landmark, CreditCard, Calendar, Hash,
   Sparkles, Calculator, CheckSquare, Layers, SplitSquareVertical,
-  Building2, Scan, FileSpreadsheet, ShieldCheck, Stamp
+  Building2, Scan, FileSpreadsheet, User, Coins, AlignLeft, ShieldCheck, Stamp, MessageSquare, Printer, FileDown
 } from 'lucide-react';
 import { VoucherType, Partner, Account, AccountType } from '../types/accounting';
 import { getSystemSettings } from '../utils/settings';
 import { loadChartOfAccounts } from '../utils/trialBalanceStore';
+import { isCashOrBankAccount } from '../utils/accountingIntegration';
 import { 
   type CostCenter, 
   loadCostCenters, 
@@ -24,6 +25,7 @@ import VoucherScannerModal from './VoucherScannerModal';
 import VouchersExportModal from './VouchersExportModal';
 import VoucherApprovalStepper from './VoucherApprovalStepper';
 import VouchersApprovalCenterModal from './VouchersApprovalCenterModal';
+import { useIsInWindow } from './DesktopWindowManager';
 import { 
   isApprovalRequired, 
   canVoucherBePosted, 
@@ -53,6 +55,7 @@ import {
   applyVoucherAllocations, 
   VoucherInvoiceAllocation 
 } from '../utils/invoiceAllocation';
+import { navigateToAccountMovements } from '../utils/accountMovementsStore';
 
 export type StoredExternalVoucher = StoredVoucherRecord;
 
@@ -72,9 +75,11 @@ function loadStoredVouchers(storageKey: string): StoredExternalVoucher[] {
 
 export interface ExternalVouchersProps {
   fixedType?: VoucherType;
+  isInWindow?: boolean;
 }
 
-export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = {}) {
+export default function ExternalVouchers({ fixedType, isInWindow: explicitIsInWindow }: ExternalVouchersProps = {}) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { symbol: currencySymbol, fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
   const [type, setType] = useState<VoucherType>(() => fixedType || VoucherType.Receipt);
   const [receiptVouchers, setReceiptVouchers] = useState<StoredExternalVoucher[]>(() => loadStoredVouchers(DB_RECEIPT_VOUCHERS_KEY));
@@ -249,34 +254,27 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
 
   // Filter dynamic Treasury, Safe, and Bank Accounts from Chart of Accounts
   const cashAndBankAccounts = useMemo(() => {
-    const list = chartAccounts.filter(a => {
-      const code = a.code || '';
-      const name = (a.name || '').toLowerCase();
-      return (
-        code.startsWith('110') ||
-        code === '1101' ||
-        code === '1102' ||
-        code === '1103' ||
-        name.includes('صندوق') ||
-        name.includes('خزينة') ||
-        name.includes('بنك') ||
-        name.includes('نقدية')
-      );
-    });
+    const list = chartAccounts.filter(a => isCashOrBankAccount(a, chartAccounts));
     if (list.length > 0) return list;
     return [
       { id: 'acc-1101', code: '1101', name: 'الصندوق الرئيسي (الخزينة النقدية)', type: AccountType.Asset, balanceType: 'DEBIT' as any },
-      { id: 'acc-1102', code: '1102', name: 'البنك الأهلي التجاري (حساب جاري)', type: AccountType.Asset, balanceType: 'DEBIT' as any },
-      { id: 'acc-1103', code: '1103', name: 'مصرف الراجحي (حساب جاري)', type: AccountType.Asset, balanceType: 'DEBIT' as any },
+      { id: 'acc-1102', code: '1102', name: 'النقدية بالبنك (الحساب البنكي الجاري)', type: AccountType.Asset, balanceType: 'DEBIT' as any },
     ];
   }, [chartAccounts]);
 
   // Account display resolver
   const getAccountDisplay = (accId: string) => {
-    if (accId === 'cash') return 'الصندوق الرئيسي';
-    if (accId === 'bank') return 'البنك الأهلي التجاري';
     const found = chartAccounts.find(a => a.id === accId || a.code === accId);
-    return found ? `[${found.code}] ${found.name}` : accId;
+    if (found) return `[${found.code}] ${found.name}`;
+    if (accId === 'cash') {
+      const cashAcc = chartAccounts.find(a => a.code === '1101');
+      return cashAcc ? `[${cashAcc.code}] ${cashAcc.name}` : 'الصندوق الرئيسي';
+    }
+    if (accId === 'bank') {
+      const bankAcc = chartAccounts.find(a => a.code === '1102');
+      return bankAcc ? `[${bankAcc.code}] ${bankAcc.name}` : 'الحساب البنكي';
+    }
+    return accId;
   };
 
   // All combined partners
@@ -431,6 +429,8 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
     setTimeout(() => setAllocationMessage(null), 4000);
   };
 
+  const handleAutoDistributeFifo = handleDistributeFifo;
+
   const handleMatchVoucherToAllocations = () => {
     if (totalAllocatedAmount <= 0) {
       alert('يرجى تحديد مبالغ التخصيص أولاً.');
@@ -515,7 +515,7 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
     setPartnerId('');
   };
 
-  const handleNewVoucher = () => {
+  function handleNewVoucher() {
     setEditingVoucherId(null);
     setVoucherStatus('DRAFT');
     setAllocationsMap({});
@@ -565,6 +565,29 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
     setAllocationMessage(null);
     setShowHistory(false);
   };
+
+  // Check for pending target voucher on mount / when currentSavedList loads
+  useEffect(() => {
+    try {
+      const targetId = sessionStorage.getItem('alpha_target_voucher_id');
+      const targetNum = sessionStorage.getItem('alpha_target_voucher_number');
+      if (targetId || targetNum) {
+        sessionStorage.removeItem('alpha_target_voucher_id');
+        sessionStorage.removeItem('alpha_target_voucher_number');
+        const list = Array.isArray(currentSavedList) ? currentSavedList : [];
+        const cleanNum = targetNum ? targetNum.replace(/^#/, '').trim().toLowerCase() : '';
+        const found = list.find(v => 
+          (targetId && String(v.id) === String(targetId)) ||
+          (cleanNum && v.voucherNumber && String(v.voucherNumber).replace(/^#/, '').trim().toLowerCase() === cleanNum)
+        );
+        if (found) {
+          handleEdit(found);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load pending voucher from sessionStorage:', e);
+    }
+  }, [currentSavedList]);
 
   // Chronologically sorted list of vouchers (oldest to newest) for sequential ERP browsing
   const chronologicallyOrderedVouchers = useMemo(() => {
@@ -621,14 +644,15 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
   const canGoFirst = chronologicallyOrderedVouchers.length > 0 && currentVoucherIndex !== 0;
   const canGoLast = chronologicallyOrderedVouchers.length > 0 && (currentVoucherIndex === -1 || currentVoucherIndex < chronologicallyOrderedVouchers.length - 1);
 
-  const handleDelete = (id: string, vNum: string) => {
+  const handleDelete = (id: string, vNum: string = voucherNumber) => {
     const targetVoucher = currentSavedList.find(v => v.id === id);
+    const displayNum = vNum || targetVoucher?.voucherNumber || id;
     if (targetVoucher && targetVoucher.status === 'POSTED') {
-      alert(`⚠️ لا يمكن حذف السند رقم (#${vNum}) لأنه مرحل ومعتمد بالحسابات!\n\nيجب أولاً الضغط على زر [إلغاء الترحيل] لتحويل السند إلى مسودة، ثم يمكنك حذفه.`);
+      alert(`⚠️ لا يمكن حذف السند رقم (#${displayNum}) لأنه مرحل ومعتمد بالحسابات!\n\nيجب أولاً الضغط على زر [إلغاء الترحيل] لتحويل السند إلى مسودة، ثم يمكنك حذفه.`);
       return;
     }
 
-    if (confirm(`هل أنت متأكد من رغبتك في حذف السند رقم (${vNum}) نهائياً؟`)) {
+    if (confirm(`هل أنت متأكد من رغبتك في حذف السند رقم (${displayNum}) نهائياً؟`)) {
       const updatedList = currentSavedList.filter(v => v.id !== id);
       if (isReceipt) {
         setReceiptVouchers(updatedList);
@@ -643,6 +667,17 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
         console.error(err);
       }
       if (editingVoucherId === id) {
+        handleNewVoucher();
+      }
+    }
+  };
+
+  const handleCurrentVoucherDelete = () => {
+    const target = currentSavedList.find(v => v.id === editingVoucherId || v.voucherNumber === voucherNumber);
+    if (target) {
+      handleDelete(target.id, target.voucherNumber);
+    } else {
+      if (confirm('هل أنت متأكد من رغبتك في مسح وإلغاء البيانات المدخلة للسند الحالي؟')) {
         handleNewVoucher();
       }
     }
@@ -1036,278 +1071,256 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
     };
   }, [currentActiveVoucher, amount, systemSettings, type, voucherNumber, date, partnerId, selectedPartner, accountId, description, voucherStatus]);
 
+  // Direct Print, PDF, WhatsApp handlers
+  const handleDirectPrint = () => {
+    window.print();
+  };
+
+  const handleDirectPdfExport = () => {
+    setCustomPreviewData(null);
+    setShowPrintPreview(true);
+  };
+
+  const handleOpenWhatsApp = () => {
+    const pPhone = selectedPartner?.phone || '';
+    const cleanPhone = pPhone.replace(/[^0-9]/g, '');
+    const vTitle = isReceipt ? 'سند قبض' : 'سند صرف';
+    const textMsg = encodeURIComponent(
+      `السلام عليكم ورحمة الله، مرفق تفاصيل ${vTitle} رقم #${voucherNumber} بقيمة ${Number(amount || 0).toLocaleString()} ريال - طرف الحساب: ${selectedPartner?.name || 'العميل/المورد'}.`
+    );
+    if (cleanPhone) {
+      window.open(`https://wa.me/${cleanPhone}?text=${textMsg}`, '_blank');
+    } else {
+      window.open(`https://api.whatsapp.com/send?text=${textMsg}`, '_blank');
+    }
+  };
+
   return (
     <div className="flex flex-col flex-1">
-      {/* Page Header */}
-      {/* Top Application Bar */}
-      <div className="flex flex-col gap-3 mb-4 print:hidden">
-        {/* Breadcrumb & Title */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div>
-            <div className="flex items-center gap-2 mb-1 text-slate-500 text-xs font-bold">
-              <span>الخزينة والمالية</span>
-              <span>/</span>
-              <span className="text-slate-800 font-extrabold">سندات القبض والصرف</span>
-              <span>/</span>
-              <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold border border-emerald-200">
-                مترابط مع الحسابات
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-800">
-                {isReceipt ? 'سند قبض خارجي (استلام نقدية)' : 'سند صرف خارجي (دفع نقدية)'}
-              </h2>
-              <span className={`text-xs sm:text-sm font-black px-2.5 py-1 rounded-lg font-mono border shadow-2xs ${
-                isReceipt ? 'text-emerald-950 bg-emerald-50 border-emerald-200' : 'text-rose-950 bg-rose-50 border-rose-200'
-              }`}>
-                سند رقم: #{voucherNumber}
-              </span>
-              {editingVoucherId ? (
-                voucherStatus === 'POSTED' ? (
-                  <span className="text-xs bg-emerald-50 text-emerald-950 px-2.5 py-1 rounded-lg font-black border border-emerald-300 flex items-center gap-1 shadow-2xs">
-                    <CheckCircle2 size={13} className="text-emerald-700" /> مرحل بالحسابات
-                  </span>
-                ) : (
-                  <span className="text-xs bg-amber-50 text-amber-950 px-2.5 py-1 rounded-lg font-black border border-amber-300 flex items-center gap-1 shadow-2xs">
-                    <AlertTriangle size={13} className="text-amber-700" /> مسودة (غير مرحل)
-                  </span>
-                )
-              ) : (
-                <span className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg font-bold border border-slate-300">
-                  سند جديد
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Global 3D Responsive Voucher Actions Toolbar */}
-        <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
-          {/* Cluster 1: Sequential Navigation & History */}
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 max-w-full">
-            {/* 3D Navigation Bar */}
-            <div className="nav-3d-segment max-w-full overflow-x-auto no-scrollbar">
+      {/* Compact Unified Toolbar */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs mb-3 print:hidden">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          {/* Stepper Navigation & Status */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center bg-slate-100 border border-slate-300 rounded-lg p-0.5 shadow-2xs">
               <button
                 type="button"
                 onClick={handleNavigateFirst}
                 disabled={!canGoFirst}
-                className="p-1.5 text-slate-600 hover:text-blue-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed min-h-[34px] flex items-center justify-center"
+                className="p-1 text-slate-700 hover:text-blue-900 hover:bg-white disabled:opacity-30 rounded transition-colors cursor-pointer disabled:cursor-not-allowed"
                 title="السند الأول (الأقدم)"
               >
-                <ChevronsRight size={15} />
+                <ChevronsRight size={13} />
               </button>
               <button
                 type="button"
                 onClick={handleNavigatePrevious}
                 disabled={!canGoPrevious}
-                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs min-h-[34px]"
-                title="تراجع للخلف - السند السابق"
+                className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-slate-800 bg-white hover:bg-slate-50 hover:text-blue-900 disabled:opacity-30 rounded transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                title="السند السابق"
               >
-                <ChevronRight size={14} className="text-slate-700" />
-                <span className="hidden sm:inline">تراجع للخلف</span>
-                <span className="sm:hidden">السابق</span>
+                <ChevronRight size={13} className="text-blue-700" />
+                <span className="hidden sm:inline">السابق</span>
               </button>
-
-              <div className="px-2 sm:px-2.5 py-1 text-[11px] font-mono font-black text-slate-800 bg-slate-100 rounded-lg mx-0.5 select-none border border-slate-200 whitespace-nowrap flex items-center">
+              <div className="px-2 py-0.5 text-xs font-mono font-bold text-slate-900 bg-slate-100 rounded mx-0.5 select-none border border-slate-200 shadow-2xs whitespace-nowrap">
                 {currentVoucherIndex >= 0 ? (
                   <span>{currentVoucherIndex + 1} / {chronologicallyOrderedVouchers.length}</span>
                 ) : (
                   <span className="text-emerald-700 font-sans font-bold">سند جديد +</span>
                 )}
               </div>
-
               <button
                 type="button"
                 onClick={handleNavigateNext}
                 disabled={!canGoNext}
-                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 text-xs font-black text-slate-800 bg-white hover:bg-slate-100 disabled:opacity-30 rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs min-h-[34px]"
-                title="تقديم للأمام - السند التالي"
+                className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-slate-800 bg-white hover:bg-slate-50 hover:text-blue-900 disabled:opacity-30 rounded transition-all cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                title="السند التالي"
               >
-                <span className="hidden sm:inline">تقديم للأمام</span>
-                <span className="sm:hidden">التالي</span>
-                <ChevronLeft size={14} className="text-slate-700" />
+                <span className="hidden sm:inline">التالي</span>
+                <ChevronLeft size={13} className="text-blue-700" />
               </button>
               <button
                 type="button"
                 onClick={handleNavigateLast}
                 disabled={!canGoLast}
-                className="p-1.5 text-slate-600 hover:text-blue-900 hover:bg-slate-200/60 disabled:opacity-30 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed min-h-[34px] flex items-center justify-center"
+                className="p-1 text-slate-700 hover:text-blue-900 hover:bg-white disabled:opacity-30 rounded transition-colors cursor-pointer disabled:cursor-not-allowed"
                 title="السند الأخير (الأحدث)"
               >
-                <ChevronsLeft size={15} />
+                <ChevronsLeft size={13} />
               </button>
             </div>
 
-            {/* 3D Voucher History */}
-            <button 
-              type="button" 
-              onClick={() => setShowHistory(!showHistory)} 
-              className={`btn-3d h-9 sm:h-10 px-2 sm:px-3 text-xs font-black min-h-[38px] ${
-                showHistory ? 'btn-3d-active' : 'btn-3d-white'
-              }`}
-            >
-              <History size={14} className={showHistory ? 'text-indigo-200' : 'text-indigo-600'} />
-              <span>سجل السندات ({currentSavedList.length})</span>
-            </button>
+            {/* Voucher Status Pill */}
+            <span className={`px-2 py-1 text-xs font-bold rounded-lg border shadow-2xs ${
+              voucherStatus === 'POSTED'
+                ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                : 'bg-amber-50 text-amber-900 border-amber-300'
+            }`}>
+              {voucherStatus === 'POSTED' ? 'مرحل بالحسابات' : 'مسودة'}
+            </span>
 
-            {editingVoucherId && (
-              <button
-                type="button"
-                onClick={handleNewVoucher}
-                className="btn-3d btn-3d-white h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black text-slate-700 hover:text-slate-900 min-h-[38px]"
-              >
-                <X size={14} /> <span>إلغاء التعديل</span>
-              </button>
+            {/* Voucher Number badge in window mode */}
+            
+
+            {/* Receipt vs Payment Switcher (Shown ONLY when not fixed to a specific voucher type) */}
+            {!fixedType && (
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => handleTypeChange(VoucherType.Receipt)}
+                  className={`px-2 py-0.5 text-xs font-bold rounded transition-all cursor-pointer ${
+                    isReceipt ? 'bg-emerald-600 text-white shadow-2xs' : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  قبض ({receiptVouchers.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTypeChange(VoucherType.Payment)}
+                  className={`px-2 py-0.5 text-xs font-bold rounded transition-all cursor-pointer ${
+                    !isReceipt ? 'bg-rose-600 text-white shadow-2xs' : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  صرف ({paymentVouchers.length})
+                </button>
+              </div>
             )}
           </div>
 
-          {/* Cluster 2: Action Operations & Printing */}
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            {/* 3D New Voucher */}
-            <button 
-              type="button" 
-              onClick={handleNewVoucher} 
-              className="btn-3d btn-3d-blue h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black min-h-[38px]"
+          {/* Action Operations Toolbar */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={handleNewVoucher}
+              className="h-8 px-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 cursor-pointer transition-all"
+              title="سند جديد"
             >
-              <Plus size={15} />
-              <span>سند جديد #{nextCalculatedVoucherNum}</span>
+              <Plus size={14} />
+              <span>جديد</span>
             </button>
 
-            {/* 3D Post / Unpost */}
-            {isCurrentVoucherDraft && (
+            {/* Primary Action (ترحيل) */}
+            {voucherStatus === 'DRAFT' ? (
               <button
                 type="button"
                 onClick={handlePostCurrentVoucher}
-                className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black min-h-[38px]"
-                title="ترحيل السند في الحسابات العامة ودفتر الأستاذ وتحديث الأرصدة"
+                className="h-8 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-black shadow-sm flex items-center gap-1.5 cursor-pointer transition-all"
+                title="ترحيل السند واعتماده فوراً في الحسابات"
               >
-                <Send size={14} />
+                <CheckCircle2 size={15} />
                 <span>ترحيل السند</span>
               </button>
-            )}
-            {isCurrentVoucherPosted && (
+            ) : (
               <button
                 type="button"
                 onClick={handleUnpostCurrentVoucher}
-                className="btn-3d btn-3d-amber h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black min-h-[38px]"
-                title="إلغاء ترحيل هذا السند وإعادته كمسودة مؤقتة وإيقاف أثره المحاسبي"
+                className="h-8 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                title="إلغاء الترحيل وإعادة السند كمسودة"
               >
                 <RotateCcw size={14} />
                 <span>إلغاء الترحيل</span>
               </button>
             )}
 
-            {/* Print & Preview 3D Controls */}
-            <div className="flex items-center gap-1.5 border-r border-slate-300/80 pr-1.5 sm:pr-2 mr-0.5">
+
+            {/* Secondary Action (حفظ كمسودة - Outline style) */}
+            <button
+              type="button"
+              onClick={() => saveVoucherWithStatus('DRAFT')}
+              className="h-8 px-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
+              title="حفظ السند كمسودة مؤقتة"
+            >
+              <Save size={14} className="text-slate-600" />
+              <span>حفظ كمسودة</span>
+            </button>
+
+            {/* Unified Outputs Group (تجميع المخرجات بتصميم هادئ وموحد) */}
+            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-300 text-slate-700 shadow-2xs">
+              {/* Preview Button - Bariz & Clear (معاينة) */}
               <button
                 type="button"
                 onClick={() => {
                   setCustomPreviewData(null);
                   setShowPrintPreview(true);
                 }}
-                className="btn-3d btn-3d-slate h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black min-h-[38px]"
+                className="h-8 px-3 bg-white hover:bg-indigo-50 text-indigo-700 hover:text-indigo-800 border border-indigo-200 rounded-md text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs shrink-0"
                 title="معاينة السند قبل الطباعة"
               >
-                <Eye size={14} />
-                <span className="hidden sm:inline">معاينة السند</span>
-                <span className="sm:hidden">معاينة</span>
+                <Eye size={14} className="text-indigo-600" />
+                <span>معاينة</span>
               </button>
-
-              <PrintDropdown 
-                onPreview={() => {
-                  setCustomPreviewData(null);
-                  setShowPrintPreview(true);
-                }}
-              />
-            </div>
-
-            {/* 3D Approval Center Button */}
-            {systemSettings?.approvalWorkflow?.enabled && (
+              {/* Direct Print */}
               <button
                 type="button"
-                onClick={() => setShowApprovalCenterModal(true)}
-                className="btn-3d btn-3d-indigo h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black flex items-center gap-1.5 shadow-sm relative min-h-[38px]"
-                title="مركز دورة الموافقات والاعتماد الهرمية للسندات الكبيرة"
+                onClick={handleDirectPrint}
+                className="h-8 px-2.5 hover:bg-white text-slate-700 hover:text-slate-900 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                title="طباعة مباشرة"
               >
-                <ShieldCheck size={15} className="text-indigo-200" />
-                <span className="hidden sm:inline">مركز الاعتمادات</span>
-                <span className="sm:hidden">الاعتمادات</span>
-                {pendingApprovalsCount > 0 && (
-                  <span className="bg-amber-400 text-slate-950 font-black text-[10px] px-1.5 py-0.5 rounded-full shadow-xs animate-bounce" title={`${pendingApprovalsCount} سند بانتظار الاعتماد`}>
-                    {pendingApprovalsCount}
-                  </span>
-                )}
+                <Printer size={14} className="text-slate-600" />
+                <span>طباعة</span>
+              </button>
+              {/* Export PDF */}
+              <button
+                type="button"
+                onClick={handleDirectPdfExport}
+                className="h-8 px-2.5 hover:bg-white text-slate-700 hover:text-rose-700 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                title="تصدير PDF"
+              >
+                <FileDown size={14} className="text-rose-600" />
+                <span>PDF</span>
+              </button>
+              {/* WhatsApp */}
+              <button
+                type="button"
+                onClick={() => handleOpenWhatsApp()}
+                className="h-8 px-2.5 hover:bg-white text-slate-700 hover:text-emerald-700 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                title="إرسال عبر واتساب"
+              >
+                <MessageSquare size={14} className="text-emerald-600" />
+                <span>واتساب</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowHistory(!showHistory)}
+              className={`h-8 px-2.5 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-all border ${
+                showHistory ? 'bg-blue-700 text-white border-blue-800 shadow-xs' : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300 shadow-2xs'
+              }`}
+            >
+              <History size={13} />
+              <span>السجل</span>
+              <span className="px-1 py-0.2 rounded-full font-mono text-[10px] font-bold bg-slate-200 text-slate-800">
+                {currentSavedList.length}
+              </span>
+            </button>
+
+            {/* Delete Action Button (في آخر شريط الإجراءات) */}
+            <button
+              type="button"
+              onClick={handleCurrentVoucherDelete}
+              className="h-8 px-3 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 hover:border-rose-700 rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="حذف هذا السند أو مسح البيانات"
+            >
+              <Trash2 size={14} />
+              <span>حذف السند</span>
+            </button>
+
+            {editingVoucherId && (
+              <button
+                type="button"
+                onClick={() => handleDelete(editingVoucherId, voucherNumber)}
+                className="h-8 px-2 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 hover:border-rose-700 rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1 transition-all cursor-pointer"
+                title="حذف السند"
+              >
+                <Trash2 size={13} />
+                <span>حذف</span>
               </button>
             )}
-
-            {/* 3D Optical Scanner Button */}
-            <button
-              type="button"
-              onClick={() => setShowScannerModal(true)}
-              className="btn-3d btn-3d-purple h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black flex items-center gap-1.5 shadow-sm min-h-[38px]"
-              title="فحص السند بالماسح الضوئي وقارئ الباركود للتحقق من صحته ومطابقته لمنع التلاعب"
-            >
-              <Scan size={14} className="text-purple-200 animate-pulse" />
-              <span className="hidden sm:inline">ماسح الباركود & QR</span>
-              <span className="sm:hidden">ماسح</span>
-            </button>
-
-            {/* 3D Export Vouchers Button */}
-            <button
-              type="button"
-              onClick={() => setShowExportModal(true)}
-              className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black flex items-center gap-1.5 shadow-sm min-h-[38px]"
-              title="تصدير كشوفات السندات والعمليات إلى Excel (.xlsx) و CSV و PDF"
-            >
-              <FileSpreadsheet size={15} className="text-emerald-200" />
-              <span className="hidden sm:inline">تصدير (Excel/PDF)</span>
-              <span className="sm:hidden">تصدير</span>
-            </button>
           </div>
         </div>
       </div>
-
-      {/* Tabs - Only shown when not in dedicated fixed mode */}
-      {!fixedType && (
-        <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100/80 rounded-2xl border border-slate-200/80 mb-6 print:hidden">
-          <button
-            type="button"
-            onClick={() => handleTypeChange(VoucherType.Receipt)}
-            className={`flex-1 min-w-[220px] flex items-center justify-center gap-2.5 py-3 px-6 rounded-xl font-bold text-sm transition-all cursor-pointer shadow-xs ${
-              isReceipt
-                ? 'bg-gradient-to-r from-emerald-700 to-teal-700 text-white shadow-emerald-700/20'
-                : 'bg-white/80 text-slate-600 hover:bg-white hover:text-slate-900 border border-transparent'
-            }`}
-          >
-            <ArrowDownLeft size={18} className={isReceipt ? 'text-emerald-200' : 'text-emerald-600'} />
-            <span>سند قبض (استلام نقدية من عميل / مورد)</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-mono font-black ${
-              isReceipt ? 'bg-emerald-800/80 text-emerald-100' : 'bg-slate-100 text-slate-600'
-            }`}>
-              {receiptVouchers.length}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTypeChange(VoucherType.Payment)}
-            className={`flex-1 min-w-[220px] flex items-center justify-center gap-2.5 py-3 px-6 rounded-xl font-bold text-sm transition-all cursor-pointer shadow-xs ${
-              !isReceipt
-                ? 'bg-gradient-to-r from-rose-700 to-amber-700 text-white shadow-rose-700/20'
-                : 'bg-white/80 text-slate-600 hover:bg-white hover:text-slate-900 border border-transparent'
-            }`}
-          >
-            <ArrowUpRight size={18} className={!isReceipt ? 'text-rose-200' : 'text-rose-600'} />
-            <span>سند صرف (دفع نقدية لمورد / عميل)</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-mono font-black ${
-              !isReceipt ? 'bg-rose-800/80 text-rose-100' : 'bg-slate-100 text-slate-600'
-            }`}>
-              {paymentVouchers.length}
-            </span>
-          </button>
-        </div>
-      )}
-
-      {/* Collapsible History Drawer */}
+{/* Collapsible History Drawer */}
       {showHistory && (
         <div className="mb-6 bg-white border border-slate-200 rounded-xl p-4 shadow-sm animate-in fade-in duration-150 print:hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -1480,14 +1493,24 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
 
                           <div className="flex items-center gap-1">
                             {matchedPartner && (
-                              <button
-                                type="button"
-                                onClick={() => setSelectedPartnerForStatement(matchedPartner)}
-                                className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg border border-emerald-200 cursor-pointer"
-                                title="كشف الحساب"
-                              >
-                                <FileText size={14} />
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPartnerForStatement(matchedPartner)}
+                                  className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg border border-emerald-200 cursor-pointer"
+                                  title="كشف الحساب"
+                                >
+                                  <FileText size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => navigateToAccountMovements(matchedPartner.id)}
+                                  className="p-1.5 text-amber-700 hover:bg-amber-50 rounded-lg border border-amber-200 cursor-pointer"
+                                  title="عرض في حركة الحسابات"
+                                >
+                                  <Layers size={14} />
+                                </button>
+                              </>
                             )}
                             <button
                               type="button"
@@ -1748,15 +1771,26 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
                             )}
 
                             {matchedPartner && (
-                              <button
-                                type="button"
-                                onClick={() => setSelectedPartnerForStatement(matchedPartner)}
-                                className="flex items-center gap-0.5 px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded text-[11px] font-semibold transition-colors cursor-pointer"
-                                title="عرض كشف الحساب التفصيلي للطرف"
-                              >
-                                <FileText size={12} />
-                                <span>كشف الحساب</span>
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPartnerForStatement(matchedPartner)}
+                                  className="flex items-center gap-0.5 px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded text-[11px] font-semibold transition-colors cursor-pointer"
+                                  title="عرض كشف الحساب التفصيلي للطرف"
+                                >
+                                  <FileText size={12} />
+                                  <span>كشف الحساب</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => navigateToAccountMovements(matchedPartner.id)}
+                                  className="flex items-center gap-0.5 px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded text-[11px] font-semibold transition-colors cursor-pointer"
+                                  title="عرض في حركة الحسابات"
+                                >
+                                  <Layers size={12} />
+                                  <span>حركة الحساب</span>
+                                </button>
+                              </>
                             )}
                             <button
                               type="button"
@@ -1850,1013 +1884,474 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
       )}
 
       {/* Main Form */}
-      <form onSubmit={handleSave} className="flex flex-col flex-1">
-        <div className="bg-white rounded-xl shadow-xs border border-slate-200 print:border-none print:shadow-none flex flex-col overflow-hidden mb-6">
-          
-          {/* Approval Workflow & Status Stepper (دورة الاعتماد والموافقات الهرمية) */}
-          {systemSettings?.approvalWorkflow?.enabled && (
-            <VoucherApprovalStepper
-              voucher={voucherForStepper}
-              systemSettings={systemSettings}
-              onApprove={handleApproveCurrent}
-              onReject={handleRejectCurrent}
-              onPost={handlePostCurrentVoucher}
-              onUnpost={handleUnpostCurrentVoucher}
-            />
-          )}
-
-          {/* Top Parameters */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 p-3.5 sm:p-5 md:p-6 border-b border-slate-200 bg-slate-100/90 print:bg-transparent print:p-0 print:mb-6">
-            
-            {/* Voucher Number */}
-            <div className="flex flex-col gap-1.5">
+      <form onSubmit={handleSave} className="space-y-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs mb-6 space-y-4">
+          {/* Row 1: [يصرف إلى / المستلم / العميل] | [رقم السند] | [تاريخ السند] */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            {/* 1. Party Selector */}
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-black uppercase text-slate-800 tracking-wide">رقم السند</label>
-                <span className="text-[10px] bg-blue-100 text-blue-900 px-2 py-0.5 rounded-md font-black border border-blue-300">تسلسلي تلقائي فريد</span>
-              </div>
-              <div className="flex items-center gap-1">
+                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                  <User size={14} className="text-blue-600 shrink-0" />
+                  <span>{isReceipt ? 'مستلم من (العميل / الطرف الخارجي)' : 'يصرف إلى (المورد / الطرف الخارجي)'}</span>
+                  <span className="text-red-500 font-bold">*</span>
+                </label>
                 <button
                   type="button"
-                  onClick={handleNavigatePrevious}
-                  disabled={!canGoPrevious}
-                  className="w-10 h-10 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
-                  title="تراجع للخلف (السابق)"
+                  onClick={() => setPartnerFilterCategory(partnerFilterCategory === 'ALL' ? 'AUTO' : 'ALL')}
+                  disabled={isCurrentVoucherPosted}
+                  className="text-[10px] text-indigo-700 hover:underline font-bold cursor-pointer"
                 >
-                  <ChevronRight size={16} />
-                </button>
-                <div className="relative flex-1">
-                  <input 
-                    type="text" 
-                    required 
-                    value={voucherNumber} 
-                    onChange={e => setVoucherNumber(e.target.value)} 
-                    disabled={isCurrentVoucherPosted}
-                    className={`w-full border-2 px-3 py-2 h-10 rounded-xl text-sm sm:text-base focus:outline-none font-mono font-black text-center shadow-2xs ${
-                      isVoucherDuplicate 
-                        ? 'border-red-500 text-red-700 bg-red-50/60' 
-                        : isCurrentVoucherPosted
-                          ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
-                          : 'border-slate-300 focus:border-blue-600 text-slate-900 bg-white'
-                    }`} 
-                  />
-                  {!isCurrentVoucherPosted && (
-                    <button
-                      type="button"
-                      onClick={() => setVoucherNumber(nextCalculatedVoucherNum)}
-                      title="تطبيق الرقم التسلسلي التالي تلقائياً"
-                      className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] text-blue-700 hover:text-blue-900 bg-blue-100 hover:bg-blue-200 px-2 py-0.5 rounded-lg font-black transition-colors cursor-pointer border border-blue-200"
-                    >
-                      تلقائي
-                    </button>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={handleNavigateNext}
-                  disabled={!canGoNext}
-                  className="w-10 h-10 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
-                  title="تقديم للأمام (التالي)"
-                >
-                  <ChevronLeft size={16} />
+                  {partnerFilterCategory === 'ALL' ? 'تلقائي' : 'الكل'}
                 </button>
               </div>
-              {isVoucherDuplicate && (
-                <div className="text-[10px] text-red-600 bg-red-50 border border-red-200 rounded p-1 flex items-center justify-between mt-0.5 animate-pulse">
-                  <span className="flex items-center gap-1 font-bold">
-                    <AlertTriangle size={11} />
-                    رقم السند مكرر بقاعدة البيانات!
+
+              <select
+                required
+                value={partnerId}
+                onChange={e => setPartnerId(e.target.value)}
+                disabled={isCurrentVoucherPosted}
+                className={`w-full py-2 px-3 rounded-xl text-xs font-bold border focus:outline-none transition-all ${
+                  isReceipt ? 'border-emerald-300 text-slate-900 bg-white focus:ring-2 focus:ring-emerald-500/10' : 'border-rose-300 text-slate-900 bg-white focus:ring-2 focus:ring-rose-500/10'
+                } disabled:bg-slate-100 disabled:text-slate-500`}
+              >
+                <option value="">-- اختر الطرف الخارجي --</option>
+                {availablePartners.map(p => (
+                  <option key={`${p.type}-${p.id}`} value={p.id}>
+                    [{p.type === 'CUSTOMER' ? 'عميل' : 'مورد'}] {p.name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Party Remaining Balance Badge */}
+              {selectedPartner && (
+                <div className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-[11px] animate-fadeIn">
+                  <span className="text-slate-600 font-bold truncate">المتبقي للطرف:</span>
+                  <span className={`font-mono font-black ${
+                    (selectedPartner.balance || 0) > 0 ? 'text-rose-700' : (selectedPartner.balance || 0) < 0 ? 'text-emerald-700' : 'text-slate-700'
+                  }`}>
+                    {Math.abs(selectedPartner.balance || 0).toLocaleString()} {currencySymbol}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setVoucherNumber(nextCalculatedVoucherNum)}
-                    className="underline font-bold cursor-pointer"
-                  >
-                    تطبيق #{nextCalculatedVoucherNum}
-                  </button>
                 </div>
               )}
             </div>
 
-            {/* Date */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">تاريخ السند</label>
-              <input 
-                type="date" 
-                required 
-                value={date} 
-                onChange={e => setDate(e.target.value)} 
+            {/* 2. Voucher Number */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <Hash size={14} className="text-indigo-600 shrink-0" />
+                <span>رقم السند</span>
+              </label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  required
+                  value={voucherNumber}
+                  onChange={e => setVoucherNumber(e.target.value)}
+                  disabled={isCurrentVoucherPosted}
+                  className={`w-full py-2 px-3 rounded-xl text-xs font-mono font-bold border ${
+                    isVoucherDuplicate
+                      ? 'border-red-500 text-red-700 bg-red-50'
+                      : 'border-slate-200 bg-slate-50 text-slate-900 focus:bg-white'
+                  }`}
+                />
+                {!isCurrentVoucherPosted && (
+                  <button
+                    type="button"
+                    onClick={() => setVoucherNumber(nextCalculatedVoucherNum)}
+                    className="px-2.5 py-2 text-[11px] font-bold text-blue-800 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 shrink-0 cursor-pointer"
+                  >
+                    تلقائي
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 3. Voucher Date */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <Calendar size={14} className="text-amber-600 shrink-0" />
+                <span>تاريخ السند</span>
+                <span className="text-red-500 font-bold">*</span>
+              </label>
+              <input
+                type="date"
+                required
+                value={date}
+                onChange={e => setDate(e.target.value)}
                 disabled={isCurrentVoucherPosted}
-                className={`border-2 px-3 py-2 h-10 rounded-xl text-sm sm:text-base font-bold shadow-2xs focus:outline-none focus:border-blue-600 ${
-                  isCurrentVoucherPosted ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'border-slate-300 text-slate-800 bg-white'
-                }`} 
+                className="w-full py-2 px-3 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:border-blue-600 outline-none transition-all disabled:bg-slate-100"
+              />
+            </div>
+          </div>
+
+          {/* Row 2: [المبلغ المصروف / المقبوض] | [مركز التكلفة] | [الصندوق / البنك] | [طريقة السداد/الصرف] */}
+          <div className="pt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {/* 1. Amount */}
+            <div>
+              <label className={`flex items-center gap-1.5 text-xs font-bold mb-1.5 ${isReceipt ? 'text-emerald-950' : 'text-rose-950'}`}>
+                <Coins size={14} className={isReceipt ? 'text-emerald-600 shrink-0' : 'text-rose-600 shrink-0'} />
+                <span>{isReceipt ? 'المبلغ المقبوض' : 'المبلغ المصروف'} ({currencySymbol})</span>
+                <span className="text-red-500 font-bold">*</span>
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                required
+                value={amount}
+                disabled={isCurrentVoucherPosted}
+                onFocus={e => e.target.select()}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="0.00"
+                className={`w-full py-2 px-3 rounded-xl text-base font-mono font-black text-left border focus:outline-none transition-all ${
+                  isReceipt ? 'border-emerald-300 bg-emerald-50/40 text-emerald-950 focus:ring-2 focus:ring-emerald-500/10' : 'border-rose-300 bg-rose-50/40 text-rose-950 focus:ring-2 focus:ring-rose-500/10'
+                } disabled:bg-slate-100 disabled:text-slate-500`}
+                dir="ltr"
               />
             </div>
 
-            {/* Partner Selector (Customer / Vendor) */}
-            <div className="flex flex-col gap-1.5 sm:col-span-2 md:col-span-1">
-              <div className="flex items-center justify-between">
-                <label className={`text-xs font-black uppercase tracking-wide ${isReceipt ? 'text-emerald-950' : 'text-rose-950'}`}>
-                  {isReceipt ? 'مستلم من (حساب العميل / المورد)' : 'يصرف إلى (حساب المورد / العميل)'}
-                </label>
-                <div className="flex items-center gap-1 text-[10px]">
-                  <button
-                    type="button"
-                    onClick={() => setPartnerFilterCategory(partnerFilterCategory === 'ALL' ? 'AUTO' : 'ALL')}
-                    disabled={isCurrentVoucherPosted}
-                    className="text-indigo-700 hover:text-indigo-900 font-bold hover:underline cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {partnerFilterCategory === 'ALL' ? 'تصفية تلقائية' : 'عرض كافة الأطراف'}
-                  </button>
-                </div>
-              </div>
-
-              <select 
-                required 
-                value={partnerId} 
-                onChange={e => setPartnerId(e.target.value)} 
+            {/* 2. Cost Center */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <Building2 size={14} className="text-purple-600 shrink-0" />
+                <span>مركز التكلفة</span>
+              </label>
+              <select
+                value={costCenterId}
+                onChange={e => setCostCenterId(e.target.value)}
                 disabled={isCurrentVoucherPosted}
-                className={`border-2 px-3 py-2 h-10 rounded-xl text-sm sm:text-base focus:outline-none font-bold shadow-2xs ${
-                  isCurrentVoucherPosted
-                    ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed'
-                    : isReceipt 
-                      ? 'border-emerald-300 focus:border-emerald-600 bg-white text-slate-900' 
-                      : 'border-rose-300 focus:border-rose-600 bg-white text-slate-900'
-                }`}
+                className="w-full py-2 px-3 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:border-blue-600 outline-none transition-all disabled:bg-slate-100"
               >
-                <option value="">-- اختر حساب الطرف (عميل أو مورد) --</option>
-                {availablePartners.map(p => (
-                  <option key={`${p.type}-${p.id}`} value={p.id}>
-                    [{p.type === 'CUSTOMER' ? 'عميل' : 'مورد'}] {p.name} {p.phone ? `(${p.phone})` : ''}
+                <option value="">-- بدون تحديد (عام) --</option>
+                {costCenters.map(cc => (
+                  <option key={cc.id} value={cc.id}>
+                    [{cc.code}] {cc.name}
                   </option>
                 ))}
               </select>
             </div>
 
-          </div>
+            {/* 3. Safe / Bank */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <Landmark size={14} className="text-cyan-600 shrink-0" />
+                <span>الصندوق / البنك</span>
+                <span className="text-red-500 font-bold">*</span>
+              </label>
+              <select
+                required
+                value={accountId}
+                onChange={e => setAccountId(e.target.value)}
+                disabled={isCurrentVoucherPosted}
+                className="w-full py-2 px-3 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:border-blue-600 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500"
+              >
+                {cashAndBankAccounts.map(acc => (
+                  <option key={acc.id} value={acc.id}>
+                    [{acc.code}] {acc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* 🌟 LIVE PARTNER FINANCIAL BALANCE & IMPACT CARD 🌟 */}
-          {selectedPartner && selectedPartnerStatement && balanceSimulation && (
-            <div className="p-3 sm:p-4 bg-gradient-to-r from-slate-50 via-indigo-50/40 to-slate-50 border-b border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 animate-in fade-in duration-150">
-              <div className="flex items-start gap-3">
-                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 border ${
-                  selectedPartner.type === 'CUSTOMER' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-purple-100 text-purple-700 border-purple-200'
-                }`}>
-                  {selectedPartner.type === 'CUSTOMER' ? <Users size={18} /> : <Truck size={18} />}
-                </div>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-bold text-slate-900 text-xs sm:text-sm">{selectedPartner.name}</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
-                      selectedPartner.type === 'CUSTOMER' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-purple-50 text-purple-700 border-purple-200'
-                    }`}>
-                      {selectedPartner.type === 'CUSTOMER' ? 'حساب عميل' : 'حساب مورد'}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] sm:text-xs text-slate-500 mt-0.5">
-                    {selectedPartner.taxNumber && <span>الرقم الضريبي: {selectedPartner.taxNumber}</span>}
-                    {selectedPartner.phone && <span>هاتف: {selectedPartner.phone}</span>}
-                  </div>
-                </div>
-              </div>
-
-              {/* Balances Comparison */}
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2.5 sm:gap-4 md:gap-6 text-xs bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200 shadow-2xs">
-                
-                {/* Current Balance */}
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-slate-400 font-medium">الرصيد الحالي قبل السند:</span>
-                  <span className="font-bold font-mono text-slate-800 text-xs sm:text-sm">
-                    {balanceSimulation.currentBalanceFormatted} ريال
-                  </span>
-                  <span className="text-[10px] text-slate-500">{balanceSimulation.currentBalanceLabel}</span>
-                </div>
-
-                <span className="text-slate-300 font-light text-xl hidden sm:inline">←</span>
-
-                {/* Voucher Impact */}
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-slate-400 font-medium">قيمة السند الحالي:</span>
-                  <span className={`font-bold font-mono text-xs sm:text-sm ${isReceipt ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {isReceipt ? '+' : '-'} {balanceSimulation.voucherImpact.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencySymbol}
-                  </span>
-                  <span className="text-[10px] text-slate-500">{isReceipt ? 'مقبوضات تسدد الحساب' : 'مدفوعات تصرف للطرف'}</span>
-                </div>
-
-                <span className="text-slate-300 font-light text-xl hidden sm:inline">←</span>
-
-                {/* Projected New Balance */}
-                <div className="flex flex-col bg-slate-50 p-1.5 rounded-lg border border-slate-100 col-span-2 sm:col-span-1">
-                  <span className="text-[10px] text-indigo-600 font-bold">الرصيد المتوقع بعد الترحيل:</span>
-                  <span className="font-bold font-mono text-indigo-700 text-xs sm:text-sm">
-                    {balanceSimulation.projectedNetFormatted} {currencySymbol}
-                  </span>
-                  <span className="text-[10px] text-slate-600 font-semibold">{balanceSimulation.projectedLabel}</span>
-                </div>
-
-                {/* View Statement Button */}
+            {/* 4. Payment Method */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <CreditCard size={14} className="text-indigo-600 shrink-0" />
+                <span>طريقة السداد / الصرف</span>
+              </label>
+              <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
                 <button
                   type="button"
-                  onClick={() => setSelectedPartnerForStatement(selectedPartner)}
-                  className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition-colors cursor-pointer min-h-[38px]"
-                  title="عرض كشف حساب تفصيلي كامل ومطابقة الحركات"
+                  disabled={isCurrentVoucherPosted}
+                  onClick={() => setPaymentMethod('CASH')}
+                  className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-0.5 ${
+                    paymentMethod === 'CASH'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
                 >
-                  <FileText size={14} />
-                  <span>كشف الحساب</span>
+                  <Banknote size={13} />
+                  <span>نقد</span>
                 </button>
-
+                <button
+                  type="button"
+                  disabled={isCurrentVoucherPosted}
+                  onClick={() => setPaymentMethod('BANK_TRANSFER')}
+                  className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-0.5 ${
+                    paymentMethod === 'BANK_TRANSFER'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  <Landmark size={13} />
+                  <span>تحويل</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isCurrentVoucherPosted}
+                  onClick={() => setPaymentMethod('CHECK')}
+                  className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-0.5 ${
+                    paymentMethod === 'CHECK'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  <FileText size={13} />
+                  <span>شيك</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isCurrentVoucherPosted}
+                  onClick={() => setPaymentMethod('SPAN')}
+                  className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-0.5 ${
+                    paymentMethod === 'SPAN'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  <CreditCard size={13} />
+                  <span>مدى</span>
+                </button>
               </div>
+            </div>
+          </div>
+
+          {/* Linked Transfer / Check / Mada details */}
+          {(paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CHECK' || paymentMethod === 'SPAN') && (
+            <div className="p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs animate-fadeIn">
+              <div>
+                <label className="block text-[11px] font-bold text-indigo-950 mb-1">
+                  {paymentMethod === 'CHECK' ? 'رقم الشيك' : 'رقم الحوالة / المرجع'}
+                </label>
+                <input
+                  type="text"
+                  value={referenceNo}
+                  onChange={e => setReferenceNo(e.target.value)}
+                  disabled={isCurrentVoucherPosted}
+                  placeholder="Ref / Check No..."
+                  className="w-full py-1.5 px-2.5 rounded-lg border border-indigo-200 bg-white text-xs font-mono font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-indigo-950 mb-1">اسم البنك</label>
+                <input
+                  type="text"
+                  value={bankName}
+                  onChange={e => setBankName(e.target.value)}
+                  disabled={isCurrentVoucherPosted}
+                  placeholder="مصرف الراجحي / البنك الأهلي..."
+                  className="w-full py-1.5 px-2.5 rounded-lg border border-indigo-200 bg-white text-xs font-bold"
+                />
+              </div>
+              {paymentMethod === 'CHECK' && (
+                <div>
+                  <label className="block text-[11px] font-bold text-amber-950 mb-1">تاريخ استحقاق الشيك</label>
+                  <input
+                    type="date"
+                    value={checkDueDate}
+                    onChange={e => setCheckDueDate(e.target.value)}
+                    disabled={isCurrentVoucherPosted}
+                    className="w-full py-1.5 px-2.5 rounded-lg border border-amber-200 bg-white text-xs font-bold"
+                  />
+                </div>
+              )}
             </div>
           )}
 
-          {/* Account / Safe / Bank & Amount Details */}
-          <div className="p-3.5 sm:p-5 md:p-6 bg-white print:p-0 print:mb-6 flex flex-col gap-4 sm:gap-6">
-            
-            {/* Row 1: Account, Payment Method & Amount */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4 md:gap-6">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
-                  <span>حساب الصندوق / البنك <span className="text-red-500">*</span></span>
-                  <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded font-bold">دليل الحسابات</span>
-                </label>
-                <select 
-                  required 
-                  value={accountId} 
-                  onChange={e => setAccountId(e.target.value)} 
-                  disabled={isCurrentVoucherPosted}
-                  className={`border-2 p-2.5 rounded-xl text-sm font-bold focus:outline-none focus:border-blue-600 shadow-2xs min-h-[42px] ${
-                    isCurrentVoucherPosted ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'border-slate-300 text-slate-900 bg-white'
-                  }`}
-                >
-                  {cashAndBankAccounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>
-                      [{acc.code}] {acc.name}
-                    </option>
-                  ))}
-                  {/* Backward compatibility */}
-                  {accountId === 'cash' && <option value="cash">الصندوق الرئيسي (الخزينة النقدية)</option>}
-                  {accountId === 'bank' && <option value="bank">البنك الأهلي السعودي (حساب جاري)</option>}
-                </select>
-              </div>
+          {/* Row 3: [البيان والشرح المحاسبي] */}
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+              <AlignLeft size={14} className="text-slate-600 shrink-0" />
+              <span>البيان والشرح المحاسبي</span>
+            </label>
+            <textarea
+              rows={2}
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              disabled={isCurrentVoucherPosted}
+              placeholder="بيان الشرح المحاسبي والسبب التفصيلي للعملية..."
+              className="w-full py-2 px-3 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none transition-all resize-none disabled:bg-slate-100 disabled:text-slate-500"
+            />
+          </div>
 
-              {/* Payment Method Selector */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-black uppercase text-slate-800 tracking-wide">طريقة السداد / التحصيل</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                  <button
-                    type="button"
-                    disabled={isCurrentVoucherPosted}
-                    onClick={() => setPaymentMethod('CASH')}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer min-h-[40px] ${
-                      paymentMethod === 'CASH'
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Banknote size={14} />
-                    <span>نقداً</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={isCurrentVoucherPosted}
-                    onClick={() => setPaymentMethod('BANK_TRANSFER')}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer min-h-[40px] ${
-                      paymentMethod === 'BANK_TRANSFER'
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Landmark size={14} />
-                    <span>تحويل بنكي</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={isCurrentVoucherPosted}
-                    onClick={() => setPaymentMethod('CHECK')}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer min-h-[40px] ${
-                      paymentMethod === 'CHECK'
-                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <FileText size={14} />
-                    <span>شيك</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={isCurrentVoucherPosted}
-                    onClick={() => setPaymentMethod('SPAN')}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer min-h-[40px] ${
-                      paymentMethod === 'SPAN'
-                        ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <CreditCard size={14} />
-                    <span>شبكة / مدى</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Amount */}
-              <div className="flex flex-col gap-1.5">
-                <label className={`text-xs font-black uppercase tracking-wide flex items-center justify-between ${
-                  isReceipt ? 'text-emerald-950' : 'text-rose-950'
-                }`}>
-                  <span>المبلغ المدفوع / المستلم ({currencyFullNameAr}) <span className="text-red-500">*</span></span>
-                </label>
-                <input 
-                  type="number" 
-                  step="0.01" 
-                  min="0.01" 
-                  required 
-                  value={amount} 
-                  onChange={e => setAmount(e.target.value)} 
-                  disabled={isCurrentVoucherPosted}
-                  placeholder="0.00" 
-                  className={`border-2 p-2.5 rounded-xl text-base sm:text-base focus:outline-none font-mono text-left font-black shadow-2xs min-h-[42px] ${
-                    isCurrentVoucherPosted
-                      ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed'
-                      : isReceipt 
-                        ? 'border-emerald-400 focus:border-emerald-600 text-emerald-950 bg-white' 
-                        : 'border-rose-400 focus:border-rose-600 text-rose-950 bg-white'
-                  }`} 
-                  dir="ltr" 
-                />
-                <div className="text-[11px] font-bold text-slate-600 flex flex-wrap items-baseline gap-1 mt-0.5">
-                  <span className="text-slate-500">المبلغ كتابة:</span>
-                  <span className="text-slate-900 font-black">({tafqeet(Number(amount) || 0)})</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Row 2: Conditional Payment Method Metadata */}
-            {paymentMethod !== 'CASH' && (
-              <div className="p-3.5 sm:p-4 bg-slate-50/80 rounded-2xl border border-slate-200/90 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 animate-fadeIn">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                    <Hash size={13} className="text-indigo-600" />
-                    <span>
-                      {paymentMethod === 'BANK_TRANSFER' ? 'رقم الحوالة / المرجع البنكي' : paymentMethod === 'CHECK' ? 'رقم الشيك المصرفي' : 'رقم إيصال العملية / البطاقة'}
-                    </span>
-                  </label>
-                  <input
-                    type="text"
-                    value={referenceNo}
-                    onChange={e => setReferenceNo(e.target.value)}
-                    disabled={isCurrentVoucherPosted}
-                    placeholder={paymentMethod === 'CHECK' ? 'مثال: CHQ-98214' : 'مثال: TRF-2024-001'}
-                    className="border border-slate-300 p-2 sm:p-2.5 rounded-xl text-sm font-mono font-bold focus:outline-none focus:border-blue-600 bg-white min-h-[40px]"
-                  />
-                </div>
-
-                {(paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CHECK') && (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                      <Landmark size={13} className="text-indigo-600" />
-                      <span>{paymentMethod === 'CHECK' ? 'اسم البنك المسحوب عليه الشيك' : 'اسم البنك المحول منه'}</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={bankName}
-                      onChange={e => setBankName(e.target.value)}
-                      disabled={isCurrentVoucherPosted}
-                      placeholder="مثال: مصرف الراجحي / البنك الأهلي"
-                      className="border border-slate-300 p-2 sm:p-2.5 rounded-xl text-sm font-bold focus:outline-none focus:border-blue-600 bg-white min-h-[40px]"
-                    />
+          {/* Invoice Allocations / Matching Section if partner selected */}
+          {selectedPartner && (
+            <div className="pt-2 border-t border-slate-100">
+              <div className="p-3 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <Layers size={16} className="text-blue-600" />
+                    <span className="font-bold text-xs text-slate-800">تسوية وتخصيص السند على فواتير ({selectedPartner.name})</span>
                   </div>
-                )}
-
-                {paymentMethod === 'CHECK' && (
-                  <div className="flex flex-col gap-1.5 sm:col-span-2 md:col-span-1">
-                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                      <Calendar size={13} className="text-amber-600" />
-                      <span>تاريخ استحقاق وصرف الشيك</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={checkDueDate}
-                      onChange={e => setCheckDueDate(e.target.value)}
-                      disabled={isCurrentVoucherPosted}
-                      className="border border-slate-300 p-2 sm:p-2.5 rounded-xl text-sm font-mono font-bold focus:outline-none focus:border-blue-600 bg-white min-h-[40px]"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Row 3: Cost Center, Balance & Description */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5 sm:gap-4 md:gap-6">
-              {/* Cost Center Selector */}
-              <div className="flex flex-col gap-1.5 md:col-span-2">
-                <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Building2 size={13} className="text-indigo-600" />
-                    <span>مركز التكلفة (Cost Center)</span>
-                  </span>
-                  <span className="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded font-bold border border-indigo-200">
-                    ربط المشاريع والفروع
-                  </span>
-                </label>
-                <select
-                  value={costCenterId}
-                  onChange={e => setCostCenterId(e.target.value)}
-                  disabled={isCurrentVoucherPosted}
-                  className={`border-2 p-2.5 rounded-xl text-sm font-bold focus:outline-none focus:border-indigo-600 shadow-2xs min-h-[42px] ${
-                    isCurrentVoucherPosted ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'border-slate-300 text-slate-900 bg-white'
-                  }`}
-                >
-                  <option value="">-- بدون تحديد مركز تكلفة (عام) --</option>
-                  {costCenters.map(cc => (
-                    <option key={cc.id} value={cc.id}>
-                      [{cc.code}] {cc.name} - ({getCostCenterTypeLabel(cc.type)})
-                    </option>
-                  ))}
-                </select>
-                {selectedCostCenter && (
-                  <div className="text-[11px] text-slate-600 flex flex-wrap items-center justify-between gap-1 bg-indigo-50/70 px-2.5 py-1.5 rounded-lg border border-indigo-100">
-                    <span className="font-bold text-indigo-900">المسؤول: {selectedCostCenter.manager || 'غير محدد'}</span>
-                    <span className="font-mono text-indigo-700">الميزانية: {selectedCostCenter.budget?.toLocaleString() || 0} {currencyFullNameAr}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* المبلغ المتبقي */}
-              <div className="flex flex-col gap-1.5 md:col-span-2">
-                <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
-                  <span>المبلغ المتبقي ({currencyFullNameAr})</span>
-                  {balanceSimulation && (
-                    <span className="text-[11px] font-bold text-slate-600 font-sans">
-                      {balanceSimulation.projectedLabel}
-                    </span>
-                  )}
-                </label>
-                <div className="border-2 border-slate-300 bg-slate-50 p-2.5 rounded-xl text-base font-mono text-left font-black text-slate-900 shadow-2xs flex justify-between items-center min-h-[42px]" dir="ltr">
-                  <span>{balanceSimulation ? balanceSimulation.projectedNetFormatted : '0.00'}</span>
-                  <span className="text-xs font-sans text-slate-500 font-bold">{currencyFullNameAr}</span>
-                </div>
-              </div>
-
-              {/* البيان والشرح المحاسبي */}
-              <div className="md:col-span-4 flex flex-col gap-1.5">
-                <label className="text-xs font-black uppercase text-slate-800 tracking-wide">البيان والشرح المحاسبي <span className="text-red-500">*</span></label>
-                <input 
-                  type="text" 
-                  required 
-                  value={description} 
-                  onChange={e => setDescription(e.target.value)} 
-                  disabled={isCurrentVoucherPosted}
-                  placeholder={isReceipt ? 'سداد دفعة عن فاتورة مبيعات / دفعة مقدمة...' : 'سداد مستحقات توريد / دفعة لمورد...'} 
-                  className={`border-2 p-2.5 rounded-xl text-sm sm:text-base font-bold focus:outline-none focus:border-blue-600 shadow-2xs min-h-[42px] ${
-                    isCurrentVoucherPosted ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'border-slate-300 text-slate-900 bg-white'
-                  }`} 
-                />
-              </div>
-            </div>
-
-            {/* 🌟 INVOICE MATCHING & ALLOCATION CARD (البند رقم 1: تسوية وتخصيص السندات على الفواتير) 🌟 */}
-            {selectedPartner && (
-              <div className="p-3.5 sm:p-5 bg-slate-50/80 rounded-2xl border-2 border-slate-200 flex flex-col gap-3.5 shadow-2xs">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
-                  <div className="flex items-start sm:items-center gap-2.5">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black shrink-0 ${
-                      isReceipt ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300'
-                    }`}>
-                      <SplitSquareVertical size={18} />
-                    </div>
-                    <div>
-                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                        <h3 className="text-xs sm:text-sm font-black text-slate-900">
-                          تسوية وتخصيص الفواتير المستحقة (Invoice Matching & Allocation)
-                        </h3>
-                        <span className="text-[10px] bg-indigo-50 text-indigo-800 px-2 py-0.5 rounded-full font-bold border border-indigo-200">
-                          {isReceipt ? 'فواتير مبيعات العميل' : 'فواتير مشتريات المورد'}
-                        </span>
-                        {pendingInvoices.length > 0 && (
-                          <span className="text-[10px] bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full font-bold border border-amber-200 font-mono">
-                            {pendingInvoices.length} فواتير معلقة
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-500 font-medium">
-                        ربط مبلغ السند بتسوية الفواتير المعلقة كلياً أو جزئياً وتحديث حالتها تلقائياً إلى "مدفوعة" أو "مدفوعة جزئياً"
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Mode Selector */}
-                  <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs self-start sm:self-auto w-full sm:w-auto">
+                  <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-slate-200 text-xs">
                     <button
                       type="button"
-                      disabled={isCurrentVoucherPosted}
+                      onClick={() => setAllocationMode('GENERAL_ON_ACCOUNT')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                        allocationMode === 'GENERAL_ON_ACCOUNT' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      دفعة عامة على الحساب
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setAllocationMode('AUTO_ALLOCATE')}
-                      className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        allocationMode === 'AUTO_ALLOCATE'
-                          ? (isReceipt ? 'bg-emerald-600 text-white shadow-xs' : 'bg-rose-600 text-white shadow-xs')
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                        allocationMode === 'AUTO_ALLOCATE' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      <CheckSquare size={13} />
-                      <span>تخصيص فواتير محددة</span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isCurrentVoucherPosted}
-                      onClick={() => {
-                        setAllocationMode('GENERAL_ON_ACCOUNT');
-                        setAllocationsMap({});
-                      }}
-                      className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        allocationMode === 'GENERAL_ON_ACCOUNT'
-                          ? 'bg-slate-800 text-white shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                      }`}
-                    >
-                      <Banknote size={13} />
-                      <span>دفعة عامة على الحساب</span>
+                      ربط بفواتير معينة
                     </button>
                   </div>
                 </div>
-
-                {/* Feedback message */}
-                {allocationMessage && (
-                  <div className="p-2.5 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl text-xs font-bold flex items-center justify-between animate-fadeIn">
-                    <span>{allocationMessage}</span>
-                    <button type="button" onClick={() => setAllocationMessage(null)} className="text-blue-500 hover:text-blue-700">
-                      <X size={14} />
-                    </button>
-                  </div>
-                )}
 
                 {allocationMode === 'GENERAL_ON_ACCOUNT' ? (
-                  <div className="p-3.5 sm:p-4 bg-white rounded-xl border border-dashed border-slate-300 text-slate-600 text-xs font-medium flex items-center gap-2.5">
-                    <Banknote size={18} className="text-slate-400 shrink-0" />
-                    <span>
-                      تم اختيار تسجيل هذا السند كـ <strong>دفعة عامة على الحساب</strong> دون ربطه بفواتير معينة. سيتم تسجيل السند مباشرة وتحديث رصيد ({selectedPartner.name}) في دفتر الأستاذ وكشف الحساب.
-                    </span>
-                  </div>
+                  <p className="text-xs text-slate-600 font-medium">
+                    سيتم قيد هذا السند كـ <strong>دفعة عامة على الحساب</strong> لـ ({selectedPartner.name}) دون تخصيص لفواتير محددة.
+                  </p>
                 ) : pendingInvoices.length === 0 ? (
-                  <div className="p-3.5 sm:p-4 bg-emerald-50/70 rounded-xl border border-emerald-200 text-emerald-900 text-xs font-medium flex items-center gap-2.5">
-                    <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
-                    <span>
-                      لا توجد أي فواتير معلقة أو غير مسددة لـ ({selectedPartner.name}) حالياً. جميع فواتيره السابقة مسددة بالكامل، ومبلغ هذا السند سيقيد كدفعة في رصيده العام.
-                    </span>
-                  </div>
+                  <p className="text-xs text-emerald-700 font-medium bg-emerald-50 p-2 rounded-xl border border-emerald-200">
+                    لا توجد فواتير معلقة لـ ({selectedPartner.name}) حالياً. سيقيد السند بالكامل على الحساب العام.
+                  </p>
                 ) : (
-                  <div className="flex flex-col gap-3">
-                    {/* Action buttons */}
-                    {!isCurrentVoucherPosted && (
-                      <div className="flex flex-wrap items-center justify-between gap-2 bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200 shadow-2xs">
-                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                          <span className="text-xs font-black text-slate-700">أدوات التسوية السريعة:</span>
-                          <button
-                            type="button"
-                            onClick={handleDistributeFifo}
-                            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-                            title="توزيع المبلغ المدخل تلقائياً على الفواتير الأقدم أولاً (FIFO)"
-                          >
-                            <Sparkles size={13} className="text-indigo-600" />
-                            <span>توزيع تلقائي (FIFO)</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={handleMatchVoucherToAllocations}
-                            disabled={totalAllocatedAmount <= 0}
-                            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-                            title="ضبط خانة مبلغ السند ليطابق إجمالي الفواتير المخصصة"
-                          >
-                            <Calculator size={13} className="text-emerald-600" />
-                            <span>مطابقة مبلغ السند مع التخصيص</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={handlePayAllInvoices}
-                            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-                            title="تخصيص كامل المتبقي لجميع الفواتير دفعة واحدة وتحديث مبلغ السند"
-                          >
-                            <CheckCircle2 size={13} className="text-blue-600" />
-                            <span>سداد كافة الفواتير بالكامل ({totalPendingInvoicesRemaining.toLocaleString()} {currencyFullNameAr})</span>
-                          </button>
-                        </div>
-
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="text-slate-600 font-bold">
+                        الفواتير المعلقة ({pendingInvoices.length}) — إجمالي المتبقي: {totalPendingInvoicesRemaining.toLocaleString()} {currencySymbol}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleDistributeFifo}
+                          className="text-xs text-indigo-700 hover:underline font-bold cursor-pointer"
+                        >
+                          توزيع تلقائي (FIFO)
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={handlePayAllInvoices}
+                          className="text-xs text-emerald-700 hover:underline font-bold cursor-pointer"
+                        >
+                          تخصيص كامل المتبقي
+                        </button>
                         {totalAllocatedAmount > 0 && (
-                          <button
-                            type="button"
-                            onClick={handleClearAllocations}
-                            className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <RotateCcw size={12} />
-                            <span>تصفير التخصيص</span>
-                          </button>
+                          <>
+                            <span className="text-slate-300">|</span>
+                            <button
+                              type="button"
+                              onClick={handleMatchVoucherToAllocations}
+                              className="text-xs text-amber-700 hover:underline font-bold cursor-pointer"
+                            >
+                              مطابقة مبلغ السند ({totalAllocatedAmount.toLocaleString()})
+                            </button>
+                          </>
                         )}
                       </div>
+                    </div>
+                    {allocationMessage && (
+                      <div className="text-[11px] font-bold text-indigo-800 bg-indigo-50 border border-indigo-200 px-2.5 py-1.5 rounded-lg">
+                        {allocationMessage}
+                      </div>
                     )}
-
-                    {/* Warning if over allocated */}
                     {isOverAllocated && (
-                      <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-900 text-xs font-bold flex flex-wrap items-center justify-between gap-2 animate-fadeIn">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle size={16} className="text-rose-600 shrink-0" />
-                          <span>
-                            تنبيه: مجموع المبالغ المخصصة للفواتير ({totalAllocatedAmount.toLocaleString()} {currencySymbol}) أكبر من مبلغ السند ({voucherNumericAmount.toLocaleString()} {currencySymbol})!
-                          </span>
-                        </div>
-                        {!isCurrentVoucherPosted && (
-                          <button
-                            type="button"
-                            onClick={handleMatchVoucherToAllocations}
-                            className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-black transition-colors cursor-pointer shadow-2xs"
-                          >
-                            مطابقة وتحديث مبلغ السند فوراً
-                          </button>
-                        )}
+                      <div className="text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2.5 py-1.5 rounded-lg">
+                        تنبيه: مجموع المبالغ المخصصة ({totalAllocatedAmount.toLocaleString()}) أكبر من مبلغ السند ({voucherNumericAmount.toLocaleString()}).
                       </div>
                     )}
-
-                    {/* Responsive Mobile Cards (< sm) & Desktop Table (>= sm) */}
-                    {/* Mobile Invoices List (< sm) */}
-                    <div className="block sm:hidden space-y-2.5">
-                      {pendingInvoices.map(inv => {
-                        const currentAlloc = allocationsMap[inv.id] ?? allocationsMap[inv.invoiceNumber] ?? 0;
-                        const newRem = Math.max(0, inv.remainingBeforeCurrent - currentAlloc);
-                        const willBeFullyPaid = currentAlloc > 0 && newRem <= 0.001;
-                        const willBePartial = currentAlloc > 0 && newRem > 0.001;
-
-                        return (
-                          <div
-                            key={inv.id}
-                            className={`p-3 rounded-xl border transition-all ${
-                              currentAlloc > 0
-                                ? 'bg-indigo-50/50 border-indigo-300 shadow-xs'
-                                : 'bg-white border-slate-200'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2 mb-2">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-mono font-black text-xs text-blue-700">#{inv.invoiceNumber}</span>
-                                <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
-                                  inv.status === 'POSTED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                                }`}>
-                                  {inv.status === 'POSTED' ? 'مرحلة' : 'مسودة'}
-                                </span>
-                              </div>
-                              <span className="text-[11px] font-mono text-slate-500">{inv.date || '-'}</span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50/80 p-2 rounded-lg mb-2">
-                              <div>
-                                <span className="text-[10px] text-slate-500 block">إجمالي الفاتورة:</span>
-                                <span className="font-mono font-bold text-slate-800" dir="ltr">
-                                  {inv.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-[10px] text-slate-500 block">المتبقي المستحق:</span>
-                                <span className="font-mono font-black text-rose-700" dir="ltr">
-                                  {inv.remainingBeforeCurrent.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Settlement Allocation Input */}
-                            <div className="space-y-1.5">
-                              <div className="flex items-center justify-between text-[11px] font-bold">
-                                <span className="text-slate-700">المبلغ المخصص بالسند:</span>
-                                {willBeFullyPaid ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 font-black">
-                                    <CheckCircle2 size={11} className="text-emerald-600" />
-                                    <span>سداد كامل</span>
-                                  </span>
-                                ) : willBePartial ? (
-                                  <span className="text-[10px] text-blue-700 font-bold">
-                                    متبقي: {newRem.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                  </span>
-                                ) : null}
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  max={inv.remainingBeforeCurrent}
-                                  value={currentAlloc > 0 ? currentAlloc : ''}
-                                  onChange={e => handleSingleInvoiceAllocationChange(inv.id, parseFloat(e.target.value) || 0, inv.remainingBeforeCurrent)}
-                                  disabled={isCurrentVoucherPosted}
-                                  placeholder="0.00"
-                                  className={`flex-1 border-2 p-2 rounded-lg text-sm font-mono font-bold text-left focus:outline-none shadow-2xs min-h-[40px] ${
-                                    isCurrentVoucherPosted
-                                      ? 'bg-slate-100 border-slate-200 text-slate-500'
-                                      : currentAlloc > 0
-                                        ? 'border-indigo-500 bg-indigo-50/50 text-indigo-950 font-black'
-                                        : 'border-slate-300 bg-white text-slate-900 focus:border-indigo-600'
-                                  }`}
-                                  dir="ltr"
-                                />
-                                {!isCurrentVoucherPosted && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSettleInvoiceFull(inv.id, inv.remainingBeforeCurrent)}
-                                    className={`px-3 py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer whitespace-nowrap shadow-2xs min-h-[40px] ${
-                                      willBeFullyPaid
-                                        ? 'bg-emerald-600 text-white border-emerald-600'
-                                        : 'bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 text-slate-700 border-slate-200'
-                                    }`}
-                                  >
-                                    سداد كامل
-                                  </button>
-                                )}
-                              </div>
-                            </div>
+                    <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                      {pendingInvoices.map(inv => (
+                        <div key={inv.id} className="p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-between text-xs gap-2">
+                          <div>
+                            <span className="font-bold text-slate-800">فاتورة #{inv.invoiceNumber}</span>
+                            <span className="text-[10px] text-slate-500 mr-2">المتبقي: {inv.remainingBeforeCurrent.toLocaleString()} {currencySymbol}</span>
                           </div>
-                        );
-                      })}
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={allocationsMap[inv.id] ?? ''}
+                            onChange={e => setAllocationsMap(prev => ({ ...prev, [inv.id]: Number(e.target.value) || 0 }))}
+                            placeholder="0.00"
+                            className="w-24 py-1 px-2 rounded-lg border border-slate-300 font-mono text-xs font-bold text-left"
+                            dir="ltr"
+                          />
+                        </div>
+                      ))}
                     </div>
-
-                    {/* Table of Invoices (Desktop >= sm) */}
-                    <div className="hidden sm:block overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs -mx-1 sm:mx-0">
-                      <table className="w-full text-right text-xs min-w-[680px]">
-                        <thead>
-                          <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                            <th className="py-2.5 px-3">رقم الفاتورة والحالة</th>
-                            <th className="py-2.5 px-3">تاريخها والاستحقاق</th>
-                            <th className="py-2.5 px-3 text-left">إجمالي الفاتورة</th>
-                            <th className="py-2.5 px-3 text-left">المسدد سابقاً</th>
-                            <th className="py-2.5 px-3 text-left">المتبقي المستحق</th>
-                            <th className="py-2.5 px-3 w-44 text-center">المبلغ المخصص بالسند</th>
-                            <th className="py-2.5 px-3 text-center">الرصيد والحالة بعد التسوية</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {pendingInvoices.map(inv => {
-                            const currentAlloc = allocationsMap[inv.id] ?? allocationsMap[inv.invoiceNumber] ?? 0;
-                            const newRem = Math.max(0, inv.remainingBeforeCurrent - currentAlloc);
-                            const willBeFullyPaid = currentAlloc > 0 && newRem <= 0.001;
-                            const willBePartial = currentAlloc > 0 && newRem > 0.001;
-
-                            return (
-                              <tr key={inv.id} className={`hover:bg-slate-50/70 transition-colors ${currentAlloc > 0 ? 'bg-indigo-50/30' : ''}`}>
-                                <td className="py-2.5 px-3">
-                                  <div className="flex flex-col">
-                                    <span className="font-mono font-bold text-blue-700">#{inv.invoiceNumber}</span>
-                                    <div className="flex items-center gap-1 mt-0.5">
-                                      <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
-                                        inv.status === 'POSTED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                                      }`}>
-                                        {inv.status === 'POSTED' ? 'مرحلة' : 'مسودة'}
-                                      </span>
-                                      {inv.classification && (
-                                        <span className="text-[9px] text-slate-500 font-medium">
-                                          {inv.classification === 'TAX' ? 'ضريبية' : 'عادية'}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </td>
-
-                                <td className="py-2.5 px-3">
-                                  <div className="flex flex-col font-mono text-slate-600">
-                                    <span>{inv.date || '-'}</span>
-                                    {inv.dueDate && (
-                                      <span className="text-[10px] text-slate-400">استحقاق: {inv.dueDate}</span>
-                                    )}
-                                  </div>
-                                </td>
-
-                                <td className="py-2.5 px-3 text-left font-mono font-bold text-slate-800" dir="ltr">
-                                  {inv.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </td>
-
-                                <td className="py-2.5 px-3 text-left font-mono text-slate-500" dir="ltr">
-                                  {(inv.initialPaid + inv.otherAllocated).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </td>
-
-                                <td className="py-2.5 px-3 text-left font-mono font-black text-rose-700" dir="ltr">
-                                  {inv.remainingBeforeCurrent.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </td>
-
-                                <td className="py-2 px-3">
-                                  <div className="flex items-center gap-1.5 justify-center">
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      max={inv.remainingBeforeCurrent}
-                                      value={currentAlloc > 0 ? currentAlloc : ''}
-                                      onChange={e => handleSingleInvoiceAllocationChange(inv.id, parseFloat(e.target.value) || 0, inv.remainingBeforeCurrent)}
-                                      disabled={isCurrentVoucherPosted}
-                                      placeholder="0.00"
-                                      className={`w-28 border-2 p-1.5 rounded-lg text-xs font-mono font-bold text-left focus:outline-none shadow-2xs min-h-[36px] ${
-                                        isCurrentVoucherPosted
-                                          ? 'bg-slate-100 border-slate-200 text-slate-500'
-                                          : currentAlloc > 0
-                                            ? 'border-indigo-500 bg-indigo-50/50 text-indigo-950 font-black'
-                                            : 'border-slate-300 bg-white text-slate-900 focus:border-indigo-600'
-                                      }`}
-                                      dir="ltr"
-                                    />
-                                    {!isCurrentVoucherPosted && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSettleInvoiceFull(inv.id, inv.remainingBeforeCurrent)}
-                                        className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer whitespace-nowrap shadow-2xs min-h-[36px] ${
-                                          willBeFullyPaid
-                                            ? 'bg-emerald-600 text-white border-emerald-600'
-                                            : 'bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 text-slate-700 border-slate-200'
-                                        }`}
-                                        title="سداد كامل المبلغ المتبقي لهذه الفاتورة"
-                                      >
-                                        سداد كامل
-                                      </button>
-                                    )}
-                                  </div>
-                                </td>
-
-                                <td className="py-2.5 px-3 text-center">
-                                  {willBeFullyPaid ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                      <CheckCircle2 size={11} className="text-emerald-600" />
-                                      <span>ستصبح مدفوعة بالكامل</span>
-                                    </span>
-                                  ) : willBePartial ? (
-                                    <div className="flex flex-col items-center">
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-300">
-                                        <span>مدفوعة جزئياً</span>
-                                      </span>
-                                      <span className="text-[10px] font-mono text-slate-500 mt-0.5">
-                                        متبقي: {newRem.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-[10px] text-slate-400 font-semibold">غير مخصصة (معلقة)</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Summary row */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-                      <div className="flex flex-col">
-                        <span className="text-[11px] font-bold text-slate-500">إجمالي المخصص للفواتير:</span>
-                        <span className="text-sm sm:text-base font-mono font-black text-indigo-700">
-                          {totalAllocatedAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencyFullNameAr}
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          {Object.values(allocationsMap).filter(v => Number(v) > 0).length} فواتير مسواة
-                        </span>
+                    {unallocatedAmount > 0 && totalAllocatedAmount > 0 && (
+                      <div className="text-[11px] text-slate-500 font-medium">
+                        المبلغ غير المخصص المتبقي من السند: <span className="font-bold text-slate-800">{unallocatedAmount.toLocaleString()} {currencySymbol}</span>
                       </div>
-
-                      <div className="flex flex-col">
-                        <span className="text-[11px] font-bold text-slate-500">مبلغ السند الإجمالي:</span>
-                        <span className={`text-sm sm:text-base font-mono font-black ${
-                          isReceipt ? 'text-emerald-700' : 'text-rose-700'
-                        }`}>
-                          {voucherNumericAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencyFullNameAr}
-                        </span>
-                        <span className="text-[10px] text-slate-400">قيمة السند المسجلة</span>
-                      </div>
-
-                      <div className="flex flex-col">
-                        <span className="text-[11px] font-bold text-slate-500">المتبقي كدفعة عامة على الحساب:</span>
-                        <span className="text-sm sm:text-base font-mono font-black text-slate-800">
-                          {unallocatedAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currencyFullNameAr}
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          {unallocatedAmount > 0.001 ? 'رصيد دائن/مدين عام' : 'مخصص بالكامل للفواتير'}
-                        </span>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-
-          </div>
-          
-          {/* Live Anti-Tamper Barcode & QR Verification Banner */}
-          <div className="p-3 sm:p-3.5 bg-slate-50 border-t border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs print:hidden">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-purple-100 text-purple-700 rounded-xl shrink-0">
-                <Scan size={18} />
-              </div>
-              <div>
-                <div className="font-bold text-slate-800 flex flex-wrap items-center gap-1.5">
-                  <span>المطابقة الضوئية لمنع التلاعب (Anti-Tamper Barcode & QR)</span>
-                  <span className="text-[10px] bg-purple-100 text-purple-900 border border-purple-200 px-1.5 py-0.5 rounded font-mono font-bold">
-                    #{voucherNumber}
-                  </span>
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  كود تحقق أمني مشفر ومقروء بالماسح الضوئي في قوالب الطباعة الحرارية والرسمية
-                </div>
-              </div>
             </div>
-            <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs self-center sm:self-auto">
-              <div className="h-8 flex items-center overflow-hidden">
-                <BarcodeImage value={voucherNumber || nextCalculatedVoucherNum} height={26} barWidth={1.05} fontSize={7} />
-              </div>
-              {systemSettings?.taxAndInvoice?.enableQrCode !== false && (
-                <div className="border-r border-slate-200 pr-2">
-                  <VoucherQrCodeImage data={currentPreviewObject} size={32} showVerificationHash={false} />
-                </div>
-              )}
-            </div>
-          </div>
+          )}
+        </div>
 
-          {/* Action Bar */}
-          <div className="bg-slate-900 text-white p-4 sm:p-5 md:p-6 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0 print:hidden border-t-2 border-slate-800">
-            <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
-              <div>
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-[10px] uppercase font-bold text-slate-400">المبلغ الإجمالي للسند</span>
-                  {voucherStatus === 'POSTED' ? (
-                    <span className="text-[10px] bg-emerald-900/80 text-emerald-300 px-2 py-0.2 rounded-md font-bold border border-emerald-700/60 flex items-center gap-1">
-                      <CheckCircle2 size={10} /> مرحل بالحسابات
-                    </span>
-                  ) : (
-                    <span className="text-[10px] bg-amber-900/80 text-amber-300 px-2 py-0.2 rounded-md font-bold border border-amber-700/60 flex items-center gap-1">
-                      <AlertTriangle size={10} /> مسودة غير مرحلة
-                    </span>
-                  )}
-                </div>
-                <span className={`text-xl sm:text-2xl md:text-3xl font-mono font-black ${
-                  isReceipt ? 'text-emerald-400' : 'text-rose-400'
-                }`}>
-                  {amount ? Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
-                  <span className="text-xs font-sans text-slate-400 mr-1.5 font-bold">{currencyFullNameAr}</span>
+        {/* Approval Stepper if enabled */}
+        {systemSettings?.approvalWorkflow?.enabled && (
+          <div className="mt-4">
+            <VoucherApprovalStepper
+              voucher={currentActiveVoucher}
+              voucherId={editingVoucherId}
+              voucherType={isReceipt ? 'RECEIPT' : 'PAYMENT'}
+              voucherNumber={voucherNumber}
+              amount={Number(amount) || 0}
+              approvalStatus={currentActiveVoucher?.approvalStatus || 'NOT_REQUIRED'}
+              preparedBy={currentActiveVoucher?.preparedBy || 'المحاسب'}
+              systemSettings={systemSettings}
+              onApprovalChanged={() => {
+                const fresh = loadStoredVouchers(isReceipt ? DB_RECEIPT_VOUCHERS_KEY : DB_PAYMENT_VOUCHERS_KEY);
+                if (isReceipt) setReceiptVouchers(fresh);
+                else setPaymentVouchers(fresh);
+              }}
+              onOpenApprovalCenter={() => setShowApprovalCenterModal(true)}
+              onPost={handlePostCurrentVoucher}
+              onUnpost={handleUnpostCurrentVoucher}
+            />
+          </div>
+        )}
+
+        {/* Sleek, Compact Modern Summary Footer Banner (شريط التلخيص المالي والتفقيط) */}
+        <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-md border border-slate-800 flex flex-wrap items-center justify-between gap-4 mt-5 print:hidden">
+          <div className="flex items-center gap-3.5">
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold shrink-0 ${
+              isReceipt ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+            }`}>
+              <Banknote size={24} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-300">
+                  {isReceipt ? 'إجمالي المبلغ المقبوض' : 'إجمالي المبلغ المصروف'}
                 </span>
+                {voucherStatus === 'POSTED' ? (
+                  <span className="text-[10px] bg-emerald-900/90 text-emerald-300 px-2.5 py-0.5 rounded-full font-bold border border-emerald-700/60 flex items-center gap-1">
+                    <CheckCircle2 size={11} /> مرحل بالحسابات
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-amber-900/90 text-amber-300 px-2.5 py-0.5 rounded-full font-bold border border-amber-700/60 flex items-center gap-1">
+                    <AlertTriangle size={11} /> مسودة (غير مرحل)
+                  </span>
+                )}
               </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto justify-stretch sm:justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setCustomPreviewData(null);
-                  setShowPrintPreview(true);
-                }}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded-xl font-bold text-xs border border-slate-700 transition-colors cursor-pointer min-h-[42px]"
-              >
-                <Eye size={15} />
-                <span>معاينة الطباعة</span>
-              </button>
-
-              {/* زر الحفظ كمسودة */}
-              {!isCurrentVoucherPosted && (
-                <button
-                  type="submit"
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-800 hover:bg-amber-950/40 text-amber-300 hover:text-amber-200 border border-amber-500/40 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs min-h-[42px]"
-                  title="حفظ السند كمسودة غير مرحلة بانتظار الترحيل اليدوي"
-                >
-                  <Save size={15} />
-                  <span>حفظ كمسودة</span>
-                </button>
-              )}
-
-              {/* زر إلغاء الترحيل البارز والواضح جداً إذا كان السند مرحلاً */}
-              {isCurrentVoucherPosted && (
-                <button
-                  type="button"
-                  onClick={handleUnpostCurrentVoucher}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl shadow-lg shadow-amber-950/40 text-sm font-black transition-all cursor-pointer border border-amber-400/40 min-h-[42px]"
-                  title="إلغاء ترحيل هذا السند فوراً وإعادته كمسودة وإيقاف أثره المالي"
-                >
-                  <RotateCcw size={17} />
-                  <span>إلغاء الترحيل</span>
-                </button>
-              )}
-
-              {/* زر الترحيل اليدوي */}
-              {!isCurrentVoucherPosted && (
-                <button 
-                  type="button"
-                  onClick={handlePostCurrentVoucher}
-                  className={`w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-white rounded-xl shadow-lg text-sm font-black transition-all cursor-pointer border min-h-[42px] ${
-                    isReceipt
-                      ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 border-emerald-400/30 shadow-emerald-950/40'
-                      : 'bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 hover:from-rose-500 hover:to-red-600 border-rose-400/30 shadow-rose-950/40'
-                  }`}
-                  title="ترحيل السند في الحسابات العامة وتحديث كشف الحساب ودفتر الأستاذ فوراً"
-                >
-                  <CheckCircle2 size={18} /> 
-                  <span>ترحيل السند في الحسابات</span>
-                </button>
-              )}
+              <span className="text-xs sm:text-sm font-extrabold text-amber-300 block mt-1 tracking-wide">
+                الرصيد كتابة: {tafqeet(Number(amount) || 0)}
+              </span>
             </div>
           </div>
 
+          <div className="text-left shrink-0">
+            <span className={`text-2xl sm:text-3xl font-mono font-black ${isReceipt ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {amount ? Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+            </span>
+            <span className="text-xs text-slate-300 font-bold mr-1.5">{currencySymbol}</span>
+          </div>
         </div>
       </form>
-
       {/* Partner Statement Modal */}
       <PartnerStatementModal
         partner={selectedPartnerForStatement}
@@ -2903,10 +2398,10 @@ export default function ExternalVouchers({ fixedType }: ExternalVouchersProps = 
   );
 }
 
-export function ExternalReceiptVoucher() {
-  return <ExternalVouchers fixedType={VoucherType.Receipt} />;
+export function ExternalReceiptVoucher({ isInWindow }: { isInWindow?: boolean } = {}) {
+  return <ExternalVouchers fixedType={VoucherType.Receipt} isInWindow={isInWindow} />;
 }
 
-export function ExternalPaymentVoucher() {
-  return <ExternalVouchers fixedType={VoucherType.Payment} />;
+export function ExternalPaymentVoucher({ isInWindow }: { isInWindow?: boolean } = {}) {
+  return <ExternalVouchers fixedType={VoucherType.Payment} isInWindow={isInWindow} />;
 }

@@ -19,6 +19,7 @@ export interface StoredPurchaseInvoice {
   id: string;
   invoiceNumber: string;
   supplierRef?: string;
+  serviceType?: string;
   date: string;
   dueDate: string;
   partnerId: string;
@@ -38,7 +39,9 @@ export interface StoredPurchaseInvoice {
     remainingBalance?: number;
   };
   status: 'DRAFT' | 'POSTED';
-  notes?: string;
+  partnerBalanceSnapshot?: number | undefined;
+  costCenterId?: string | undefined;
+  notes?: string | undefined;
   createdAt: string;
 }
 

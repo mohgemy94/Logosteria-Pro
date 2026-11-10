@@ -13,6 +13,9 @@ interface AddCustomerFormProps {
     country?: string | undefined;
     address?: string | undefined;
     email?: string | undefined;
+    region?: string | undefined;
+    city?: string | undefined;
+    customerGrade?: string | undefined;
     creditLimit?: number | undefined;
     paymentTermsDays?: number | undefined;
     openingBalance?: number;
@@ -38,12 +41,45 @@ export default function AddCustomerForm({
     country: 'SA',
     address: '',
     email: '',
+    region: '',
+    city: '',
+    customerGrade: '',
     creditLimit: '',
     paymentTermsDays: '0',
     openingBalance: '',
     balanceType: 'DEBIT' as 'DEBIT' | 'CREDIT' // DEBIT (مدين - عليه مبالغ لنا) or CREDIT (دائن - له رصيد مقدم علينا)
   });
   const [errors, setErrors] = useState({ name: '', taxNumber: '', phone: '' });
+
+  // Load dynamic lists from MasterDatabaseSettings
+  const masterData = React.useMemo(() => {
+    try {
+      const raw = localStorage.getItem('alpha_master_database_settings_v1');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return {};
+  }, []);
+
+  const regionsList: string[] = React.useMemo(() => {
+    if (Array.isArray(masterData?.regions)) {
+      return masterData.regions.map((r: any) => r.name || r.title || '').filter(Boolean);
+    }
+    return ['المنطقة الوسطى', 'المنطقة الغربية', 'المنطقة الشرقية', 'المنطقة الجنوبية', 'المنطقة الشمالية'];
+  }, [masterData]);
+
+  const citiesList: string[] = React.useMemo(() => {
+    if (Array.isArray(masterData?.cities)) {
+      return masterData.cities.map((c: any) => c.name || c.title || '').filter(Boolean);
+    }
+    return ['الرياض', 'جدة', 'الدمام', 'مكة المكرمة', 'المدينة المنورة', 'الخبر', 'القصيم', 'أبها', 'تبوك'];
+  }, [masterData]);
+
+  const customerGradesList: string[] = React.useMemo(() => {
+    if (Array.isArray(masterData?.customerGrades)) {
+      return masterData.customerGrades.map((g: any) => g.name || g.title || '').filter(Boolean);
+    }
+    return ['تاجر جملة (درجة A)', 'موزع معتمد (درجة B)', 'عميل تجزئة / مستهلك (درجة C)'];
+  }, [masterData]);
 
   const validate = () => {
     let isValid = true;
@@ -77,6 +113,9 @@ export default function AddCustomerForm({
         country: newCustomer.country,
         address: newCustomer.address.trim(),
         email: newCustomer.email.trim() || undefined,
+        region: newCustomer.region.trim() || undefined,
+        city: newCustomer.city.trim() || undefined,
+        customerGrade: newCustomer.customerGrade.trim() || undefined,
         creditLimit: limitVal !== undefined && !isNaN(limitVal) ? limitVal : undefined,
         paymentTermsDays: termsVal !== undefined && !isNaN(termsVal) ? termsVal : undefined,
         openingBalance: finalBal
@@ -221,6 +260,57 @@ export default function AddCustomerForm({
             />
           </div>
 
+          {/* Region */}
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+              المنطقة
+            </label>
+            <input 
+              list="customer-regions-list"
+              value={newCustomer.region} 
+              onChange={e => setNewCustomer({...newCustomer, region: e.target.value})} 
+              className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs" 
+              placeholder="اختر أو اكتب المنطقة..." 
+            />
+            <datalist id="customer-regions-list">
+              {regionsList.map((r, i) => <option key={i} value={r} />)}
+            </datalist>
+          </div>
+
+          {/* City */}
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+              المدينة
+            </label>
+            <input 
+              list="customer-cities-list"
+              value={newCustomer.city} 
+              onChange={e => setNewCustomer({...newCustomer, city: e.target.value})} 
+              className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs" 
+              placeholder="اختر أو اكتب المدينة..." 
+            />
+            <datalist id="customer-cities-list">
+              {citiesList.map((c, i) => <option key={i} value={c} />)}
+            </datalist>
+          </div>
+
+          {/* Customer Grade / Classification */}
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+              تصنيف ودرجة العميل
+            </label>
+            <input 
+              list="customer-grades-list"
+              value={newCustomer.customerGrade} 
+              onChange={e => setNewCustomer({...newCustomer, customerGrade: e.target.value})} 
+              className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs font-semibold" 
+              placeholder="تاجر جملة / موزع / مستهلك..." 
+            />
+            <datalist id="customer-grades-list">
+              {customerGradesList.map((g, i) => <option key={i} value={g} />)}
+            </datalist>
+          </div>
+
           {/* Address */}
           <div>
             <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
@@ -230,7 +320,7 @@ export default function AddCustomerForm({
               value={newCustomer.address} 
               onChange={e => setNewCustomer({...newCustomer, address: e.target.value})} 
               className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs" 
-              placeholder="المدينة - الحي - الشارع" 
+              placeholder="الحي - الشارع" 
             />
           </div>
         </div>
@@ -260,6 +350,7 @@ export default function AddCustomerForm({
                 step="0.01"
                 min="0"
                 value={newCustomer.creditLimit} 
+                onFocus={e => e.target.select()}
                 onChange={e => setNewCustomer({...newCustomer, creditLimit: e.target.value})} 
                 className="w-full pl-10 pr-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs" 
                 placeholder="50000" 
@@ -303,6 +394,7 @@ export default function AddCustomerForm({
                 step="0.01"
                 min="0"
                 value={newCustomer.openingBalance} 
+                onFocus={e => e.target.select()}
                 onChange={e => setNewCustomer({...newCustomer, openingBalance: e.target.value})} 
                 className="w-full pl-10 pr-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs" 
                 placeholder="0.00" 

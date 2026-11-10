@@ -250,7 +250,8 @@ export function getSavedPrintPaperFormat(): {
 export function applyPrintPageStyle(
   format: PrintPaperFormat, 
   customSize?: CustomPaperSize,
-  colorMode?: PrintColorMode
+  colorMode?: PrintColorMode,
+  orientation: 'portrait' | 'landscape' = 'portrait'
 ): void {
   if (typeof document === 'undefined') return;
 
@@ -270,8 +271,15 @@ export function applyPrintPageStyle(
     sizeCss = `${def.widthMm}mm auto`;
     marginCss = '2mm';
   } else if (def.heightMm) {
-    sizeCss = `${def.widthMm}mm ${def.heightMm}mm`;
-    marginCss = def.widthMm <= 110 ? '3mm' : def.widthMm <= 150 ? '4mm' : '6mm';
+    if (orientation === 'landscape') {
+      const w = Math.max(def.widthMm, def.heightMm);
+      const h = Math.min(def.widthMm, def.heightMm);
+      sizeCss = `${w}mm ${h}mm landscape`;
+      marginCss = '5mm';
+    } else {
+      sizeCss = `${def.widthMm}mm ${def.heightMm}mm portrait`;
+      marginCss = def.widthMm <= 110 ? '3mm' : def.widthMm <= 150 ? '4mm' : '6mm';
+    }
   } else {
     sizeCss = `${def.widthMm}mm auto`;
   }

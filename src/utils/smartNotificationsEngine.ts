@@ -397,7 +397,8 @@ export async function evaluateAndTriggerSmartAlerts(force = false): Promise<{
       const urgentChecks = checks.filter(c => {
         if (c.status !== 'UNDER_COLLECTION') return false;
         const info = getCheckUrgencyInfo(c.dueDate, c.status);
-        return info.urgency === 'OVERDUE' || info.urgency === 'DUE_TODAY' || info.urgency === 'CRITICAL' || info.daysRemaining <= 2;
+        const urgencyStr = String(info.urgency);
+        return urgencyStr === 'OVERDUE' || urgencyStr === 'DUE_TODAY' || urgencyStr === 'CRITICAL' || info.daysRemaining <= 2;
       });
 
       if (urgentChecks.length > 0) {
@@ -490,7 +491,7 @@ export async function evaluateAndTriggerSmartAlerts(force = false): Promise<{
     try {
       const purchases = loadPurchaseInvoices();
       const dueInvoices = purchases.filter(p => {
-        if (p.status === 'CANCELLED') return false;
+        if (String(p.status) === 'CANCELLED') return false;
         if (!p.dueDate) return false;
         return p.dueDate <= todayStr;
       });

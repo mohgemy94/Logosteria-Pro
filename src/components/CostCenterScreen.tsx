@@ -20,7 +20,9 @@ import {
   Edit, 
   Trash2, 
   PieChart, 
-  Scale
+  Scale,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import { 
   CostCenter, 
@@ -39,13 +41,16 @@ import {
 } from '../utils/costCenterStore';
 import { useSystemCurrency } from '../utils/currency';
 import { getSystemSettings } from '../utils/settings';
+import { useIsInWindow } from './DesktopWindowManager';
 
 interface CostCenterScreenProps {
   onNavigate?: (view: string) => void;
   initialCenterId?: string;
+  isInWindow?: boolean;
 }
 
-export default function CostCenterScreen({ onNavigate: _onNavigate, initialCenterId }: CostCenterScreenProps) {
+export default function CostCenterScreen({ onNavigate: _onNavigate, initialCenterId, isInWindow: explicitIsInWindow }: CostCenterScreenProps) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { symbol: currencySymbol } = useSystemCurrency();
   const systemSettings = getSystemSettings();
 
@@ -64,6 +69,66 @@ export default function CostCenterScreen({ onNavigate: _onNavigate, initialCente
 
   // Detail Statement Modal
   const [selectedCenterForReport, setSelectedCenterForReport] = useState<CostCenterSummary | null>(null);
+  const [modalZoom, setModalZoom] = useState<number>(100);
+  const [modalPan, setModalPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isModalDragging, setIsModalDragging] = useState<boolean>(false);
+  const modalDragRef = useState<{ startX: number; startY: number; initPanX: number; initPanY: number }>({ startX: 0, startY: 0, initPanX: 0, initPanY: 0 })[0];
+
+  // Reset zoom and pan whenever detail report modal is opened or closed
+  useEffect(() => {
+    setModalZoom(100);
+    setModalPan({ x: 0, y: 0 });
+  }, [selectedCenterForReport]);
+
+  const resetModalPan = () => {
+    setModalPan({ x: 0, y: 0 });
+  };
+
+  const handleModalMouseDown = (e: React.MouseEvent) => {
+    if (modalZoom <= 100) return;
+    setIsModalDragging(true);
+    modalDragRef.startX = e.clientX;
+    modalDragRef.startY = e.clientY;
+    modalDragRef.initPanX = modalPan.x;
+    modalDragRef.initPanY = modalPan.y;
+  };
+
+  const handleModalMouseMove = (e: React.MouseEvent) => {
+    if (!isModalDragging || modalZoom <= 100) return;
+    const dx = e.clientX - modalDragRef.startX;
+    const dy = e.clientY - modalDragRef.startY;
+    setModalPan({
+      x: modalDragRef.initPanX + dx,
+      y: modalDragRef.initPanY + dy
+    });
+  };
+
+  const handleModalMouseUp = () => {
+    setIsModalDragging(false);
+  };
+
+  const handleModalTouchStart = (e: React.TouchEvent) => {
+    if (modalZoom <= 100 || e.touches.length !== 1) return;
+    setIsModalDragging(true);
+    modalDragRef.startX = e.touches[0].clientX;
+    modalDragRef.startY = e.touches[0].clientY;
+    modalDragRef.initPanX = modalPan.x;
+    modalDragRef.initPanY = modalPan.y;
+  };
+
+  const handleModalTouchMove = (e: React.TouchEvent) => {
+    if (!isModalDragging || modalZoom <= 100) return;
+    const dx = e.touches[0].clientX - modalDragRef.startX;
+    const dy = e.touches[0].clientY - modalDragRef.startY;
+    setModalPan({
+      x: modalDragRef.initPanX + dx,
+      y: modalDragRef.initPanY + dy
+    });
+  };
+
+  const handleModalTouchEnd = () => {
+    setIsModalDragging(false);
+  };
 
   // Form State for Add / Edit
   const [formData, setFormData] = useState({
@@ -131,8 +196,8 @@ export default function CostCenterScreen({ onNavigate: _onNavigate, initialCente
       }
       if (searchQuery.trim()) {
         const q = searchQuery.trim().toLowerCase();
-        const matchesName = s.costCenter.name.toLowerCase().includes(q);
-        const matchesCode = s.costCenter.code.toLowerCase().includes(q);
+        const matchesName = (s.costCenter.name || '').toLowerCase().includes(q);
+        const matchesCode = (s.costCenter.code || '').toLowerCase().includes(q);
         const matchesManager = (s.costCenter.manager || '').toLowerCase().includes(q);
         const matchesDesc = (s.costCenter.description || '').toLowerCase().includes(q);
         if (!matchesName && !matchesCode && !matchesManager && !matchesDesc) {
@@ -261,6 +326,7 @@ export default function CostCenterScreen({ onNavigate: _onNavigate, initialCente
     <div className="flex flex-col flex-1 bg-slate-50 min-h-screen text-slate-800 p-4 sm:p-6 lg:p-8 font-sans">
       {/* Top Application Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 print:hidden">
+        {!isInWindow && (
         <div>
           <div className="flex items-center gap-2 mb-1 text-slate-500 text-xs font-bold">
             <span>المالية والحسابات</span>
@@ -285,6 +351,7 @@ export default function CostCenterScreen({ onNavigate: _onNavigate, initialCente
             </div>
           </div>
         </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
@@ -681,7 +748,55 @@ export default function CostCenterScreen({ onNavigate: _onNavigate, initialCente
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 print:hidden">
+              <div className="flex items-center gap-2 print:hidden flex-wrap">
+                {/* أداة التكبير والتصغير المرنة بأي قيمة (Flexible Zoom Control with Slider & Stepper) */}
+                <div className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 shadow-2xs text-white">
+                  <button
+                    type="button"
+                    onClick={() => setModalZoom(z => Math.max(z - 15, 30))}
+                    className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                    title="تصغير (-15%)"
+                  >
+                    <ZoomOut size={14} />
+                  </button>
+
+                  <input
+                    type="range"
+                    min="30"
+                    max="220"
+                    step="5"
+                    value={modalZoom}
+                    onChange={(e) => setModalZoom(Number(e.target.value))}
+                    className="w-20 sm:w-28 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                    title={`نسبة التكبير: ${modalZoom}% (اسحب للتحكم بأي قيمة)`}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setModalZoom(z => Math.min(z + 15, 220))}
+                    className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                    title="تكبير (+15%)"
+                  >
+                    <ZoomIn size={14} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalZoom(100);
+                      resetModalPan();
+                    }}
+                    className={`font-mono text-xs font-bold px-2 py-0.5 rounded-lg transition-colors cursor-pointer ${
+                      modalZoom === 100 
+                        ? 'bg-slate-700 text-slate-300' 
+                        : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                    }`}
+                    title="إعادة ضبط المعاينة إلى 100%"
+                  >
+                    {modalZoom}%
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => window.print()}
@@ -700,8 +815,29 @@ export default function CostCenterScreen({ onNavigate: _onNavigate, initialCente
               </div>
             </div>
 
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 flex flex-col gap-6 print:overflow-visible print:p-0">
+            {/* Modal Body with 4-Way Pan & Drag */}
+            <div 
+              className={`flex-1 overflow-y-auto p-6 sm:p-8 flex flex-col gap-6 select-none print:overflow-visible print:p-0 ${
+                modalZoom > 100 
+                  ? (isModalDragging ? 'cursor-grabbing' : 'cursor-grab') 
+                  : 'cursor-default'
+              }`}
+              onMouseDown={handleModalMouseDown}
+              onMouseMove={handleModalMouseMove}
+              onMouseUp={handleModalMouseUp}
+              onMouseLeave={handleModalMouseUp}
+              onTouchStart={handleModalTouchStart}
+              onTouchMove={handleModalTouchMove}
+              onTouchEnd={handleModalTouchEnd}
+            >
+              <div 
+                className="w-full transition-transform duration-100 origin-top flex flex-col gap-6"
+                style={{
+                  transform: `translate3d(${modalPan.x}px, ${modalPan.y}px, 0px) scale(${modalZoom / 100})`,
+                  transformOrigin: 'top center',
+                  marginBottom: modalZoom > 100 ? `${(modalZoom - 100) * 8}px` : '0px'
+                }}
+              >
               
               {/* Printable Organization Header */}
               <div className="hidden print:flex items-center justify-between border-b pb-4 mb-4">
@@ -826,6 +962,7 @@ export default function CostCenterScreen({ onNavigate: _onNavigate, initialCente
                 </div>
               </div>
 
+              </div>
             </div>
 
             {/* Modal Footer */}

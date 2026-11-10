@@ -7,6 +7,7 @@ import {
   DB_INTERNAL_VOUCHERS_KEY
 } from './sequences';
 import { getSystemSettings } from './settings';
+import { loadChartOfAccounts } from './trialBalanceStore';
 import { exportElementToPdf, printElementDirectly } from './pdfExport';
 import { saveOrShareBlob } from './fileSaver';
 
@@ -52,21 +53,20 @@ export interface VoucherExportFilters {
 }
 
 const ACCOUNT_NAME_MAP: Record<string, string> = {
-  cash: 'الصندوق الرئيسي (نقداً)',
-  cash1: 'الخزينة الرئيسية (الصندوق العام)',
-  cash2: 'صندوق المعرض / المبيعات اليومية',
-  cash3: 'صندوق العهد والمصروفات النثرية',
-  bank1: 'البنك الأهلي التجاري',
-  bank2: 'مصرف الراجحي',
-  bank3: 'بنك الرياض',
-  '1111': 'الصندوق الرئيسي',
-  '1112': 'صندوق الفرع الثاني',
-  '1121': 'البنك الأهلي التجاري',
-  '1122': 'مصرف الراجحي',
+  cash: 'النقدية بالصندوق (الصندوق الرئيسي)',
+  cash1: 'النقدية بالصندوق (الصندوق الرئيسي)',
+  '1101': 'النقدية بالصندوق (الصندوق الرئيسي)',
+  bank: 'النقدية بالبنك (الحساب البنكي الجاري)',
+  bank1: 'النقدية بالبنك (الحساب البنكي الجاري)',
+  '1102': 'النقدية بالبنك (الحساب البنكي الجاري)',
+  '1105': 'العهدة النقدية والمصروفات النثرية',
 };
 
 export function resolveAccountLabel(accountId?: string): string {
-  if (!accountId) return 'الخزينة الرئيسية';
+  if (!accountId) return 'النقدية بالصندوق (الصندوق الرئيسي)';
+  const chart = loadChartOfAccounts();
+  const found = chart.find(a => a.id === accountId || a.code === accountId);
+  if (found) return `[${found.code}] ${found.name}`;
   return ACCOUNT_NAME_MAP[accountId] || accountId;
 }
 
@@ -333,9 +333,9 @@ export function filterUnifiedVouchers(items: ExportVoucherItem[], filters: Vouch
     // 6. Search Query
     if (filters.searchQuery && filters.searchQuery.trim() !== '') {
       const q = filters.searchQuery.trim().toLowerCase();
-      const matchVoucher = item.voucherNumber.toLowerCase().includes(q);
-      const matchParty = item.partyName.toLowerCase().includes(q);
-      const matchAccount = item.accountName.toLowerCase().includes(q);
+      const matchVoucher = (item.voucherNumber || '').toLowerCase().includes(q);
+      const matchParty = (item.partyName || '').toLowerCase().includes(q);
+      const matchAccount = (item.accountName || '').toLowerCase().includes(q);
       const matchDesc = (item.description || '').toLowerCase().includes(q);
       const matchRef = (item.referenceNo || '').toLowerCase().includes(q);
       if (!matchVoucher && !matchParty && !matchAccount && !matchDesc && !matchRef) {

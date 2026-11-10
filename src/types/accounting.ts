@@ -17,11 +17,18 @@ export interface Account {
   id: string;
   code: string;
   name: string;
+  nameEn?: string | undefined;
   type: AccountType;
   balanceType: BalanceType;
   parentId?: string | undefined;
+  assetClassification?: 'CURRENT' | 'NON_CURRENT' | undefined;
   isControlAccount?: boolean | undefined;
   controlType?: AccountControlType | undefined;
+  isActive?: boolean | undefined;
+  isSystemLocked?: boolean | undefined;
+  level?: number | undefined;
+  isPosting?: boolean | undefined;
+  isGroup?: boolean | undefined;
 }
 
 /**
@@ -38,6 +45,7 @@ export interface JournalItem {
   partnerType?: 'CUSTOMER' | 'VENDOR' | 'EMPLOYEE' | undefined;
   costCenterId?: string | undefined;
   costCenterName?: string | undefined;
+  description?: string | undefined;
   debit: PositiveNumber;
   credit: PositiveNumber;
 }
@@ -87,6 +95,9 @@ export interface Partner {
   openingBalance?: number | undefined;
   openingBalanceDate?: string | undefined;
   openingBalanceType?: 'DEBIT' | 'CREDIT' | undefined;
+  region?: string | undefined;
+  city?: string | undefined;
+  customerGrade?: string | undefined;
   isActive?: boolean | undefined;
 }
 

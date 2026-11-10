@@ -151,11 +151,11 @@ export default function CustomerKpiModal({
     if (!search.trim()) return data;
     const q = search.toLowerCase().trim();
     return data.filter(({ customer: c }) => 
-      c.name.toLowerCase().includes(q) ||
+      (c.name || '').toLowerCase().includes(q) ||
       (c.phone && c.phone.includes(q)) ||
       (c.taxNumber && c.taxNumber.includes(q)) ||
-      (c.code && c.code.toLowerCase().includes(q)) ||
-      (c.address && c.address.toLowerCase().includes(q))
+      (c.code && (c.code || '').toLowerCase().includes(q)) ||
+      (c.address && (c.address || '').toLowerCase().includes(q))
     );
   }, [data, search]);
 

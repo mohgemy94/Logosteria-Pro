@@ -1,3 +1,4 @@
+import { useIsInWindow } from './DesktopWindowManager';
 import { useState, useMemo, useEffect } from 'react';
 import { 
   Warehouse, 
@@ -34,6 +35,7 @@ import PrintDropdown from './PrintDropdown';
 import ItemAnalyticsModal, { type AnalyticItem } from './ItemAnalyticsModal';
 import WarehouseCardModal from './WarehouseCardModal';
 import ExportButtonGroup from './ExportButtonGroup';
+import StockTransferModal from './StockTransferModal';
 import { getSystemSettings } from '../utils/settings';
 import { useSystemCurrency } from '../utils/currency';
 import { 
@@ -41,9 +43,14 @@ import {
   saveStoredItems, 
   updateSingleItemStock, 
   transferItemWarehouse, 
+  getDynamicWarehousesList,
   DEFAULT_INITIAL_ITEMS,
   type Item 
 } from '../utils/itemsStore';
+import { loadChartOfAccounts, saveJournalEntry } from '../utils/trialBalanceStore';
+import { JournalEntryStatus } from '../types/accounting';
+import { loadStoredPurchaseInvoices, saveStoredPurchaseInvoices, type StoredPurchaseInvoice } from '../utils/purchasesStore';
+import { loadVendors } from '../utils/partnerLedger';
 
 export type WarehouseItem = Item;
 
@@ -59,7 +66,8 @@ export type WarehouseCardType =
   | 'BY_WAREHOUSE' 
   | 'BY_CATEGORY';
 
-export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: string) => void } = {}) {
+export default function WarehouseBalances({ onNavigate, isInWindow: explicitIsInWindow }: { onNavigate?: (view: string) => void; isInWindow?: boolean } = {}) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { symbol: currencySymbol } = useSystemCurrency();
   const [systemSettings] = useState(() => getSystemSettings());
 
@@ -77,7 +85,7 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
   }>({
     isOpen: false,
     item: null,
-    targetWarehouse: 'مستودع فرع جدة',
+    targetWarehouse: 'المستودع الرئيسي',
     quantity: 1,
     newShelfLocation: '',
     notes: ''
@@ -159,6 +167,7 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
 
   // Modal for Item Analytics
   const [selectedAnalyticItem, setSelectedAnalyticItem] = useState<AnalyticItem | null>(null);
+  const [isStockTransferOpen, setIsStockTransferOpen] = useState(false);
 
   // Categories list
   const categories = useMemo(() => {
@@ -172,6 +181,9 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
   // Warehouses list
   const warehouses = useMemo(() => {
     const set = new Set<string>();
+    getDynamicWarehousesList().forEach(w => {
+      if (w.label) set.add(w.label);
+    });
     items.forEach(item => {
       if (item.warehouseName) set.add(item.warehouseName);
     });
@@ -355,8 +367,8 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
       // search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchName = item.name.toLowerCase().includes(q);
-        const matchCode = item.code.toLowerCase().includes(q);
+        const matchName = (item.name || '').toLowerCase().includes(q);
+        const matchCode = (item.code || '').toLowerCase().includes(q);
         const matchBar = item.barcode && item.barcode.includes(q);
         const matchLoc = item.shelfLocation && item.shelfLocation.toLowerCase().includes(q);
         const matchSupp = item.supplierName && item.supplierName.toLowerCase().includes(q);
@@ -401,15 +413,61 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
     setItems(updated);
   };
 
-  // Execute full adjustment with reason
+  // Execute full adjustment with reason and post journal entry
   const handleSaveDetailedAdjustment = () => {
     if (!adjustModalData.item) return;
+    const oldStock = adjustModalData.item.stock;
+    const newStock = Math.max(0, adjustModalData.newStock);
+    const diff = newStock - oldStock;
+    const unitCost = adjustModalData.item.costPrice || 0;
+    const varianceVal = Math.abs(diff) * unitCost;
+
     const updated = updateSingleItemStock(
       adjustModalData.item.id,
-      Math.max(0, adjustModalData.newStock),
+      newStock,
       adjustModalData.reason || 'تسوية جردية للمخزون'
     );
     setItems(updated);
+
+    if (diff !== 0 && varianceVal > 0) {
+      const accounts = loadChartOfAccounts();
+      const invAcc = accounts.find(a => a.code === '1301');
+      const gainAcc = accounts.find(a => a.code === '4202');
+      const lossAcc = accounts.find(a => a.code === '5107');
+
+      if (invAcc) {
+        if (diff > 0 && gainAcc) {
+          // Surplus: Debit Inventory 1301, Credit Inventory Gain 4202
+          saveJournalEntry({
+            id: `ADJ-${Date.now()}`,
+            entryNumber: `ADJ-${Date.now().toString().slice(-6)}`,
+            date: new Date().toISOString().split('T')[0],
+            reference: adjustModalData.item.code || adjustModalData.item.name,
+            description: `تسوية زيادة مخزون لصنف ${adjustModalData.item.name} (${diff}+ وحدة) - ${adjustModalData.reason}`,
+            status: JournalEntryStatus.Posted,
+            items: [
+              { id: `i1-${Date.now()}`, accountId: invAcc.id, debit: varianceVal, credit: 0 },
+              { id: `i2-${Date.now()}`, accountId: gainAcc.id, debit: 0, credit: varianceVal }
+            ]
+          });
+        } else if (diff < 0 && lossAcc) {
+          // Deficit: Debit Inventory Loss 5107, Credit Inventory 1301
+          saveJournalEntry({
+            id: `ADJ-${Date.now()}`,
+            entryNumber: `ADJ-${Date.now().toString().slice(-6)}`,
+            date: new Date().toISOString().split('T')[0],
+            reference: adjustModalData.item.code || adjustModalData.item.name,
+            description: `تسوية عجز/تلف مخزون لصنف ${adjustModalData.item.name} (${Math.abs(diff)}- وحدة) - ${adjustModalData.reason}`,
+            status: JournalEntryStatus.Posted,
+            items: [
+              { id: `i1-${Date.now()}`, accountId: lossAcc.id, debit: varianceVal, credit: 0 },
+              { id: `i2-${Date.now()}`, accountId: invAcc.id, debit: 0, credit: varianceVal }
+            ]
+          });
+        }
+      }
+    }
+
     setAdjustModalData({ isOpen: false, item: null, newStock: 0, reason: '' });
   };
 
@@ -443,6 +501,77 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
     if (confirm('هل ترغب في إعادة ضبط بيانات المخازن والأرصدة إلى القيم النموذجية؟')) {
       saveStoredItems(DEFAULT_INITIAL_ITEMS, true);
       setItems(DEFAULT_INITIAL_ITEMS);
+    }
+  };
+
+  // Convert low-stock and out-of-stock items into a Draft Purchase Order
+  const handleCreateShortagePurchaseOrder = () => {
+    const shortageItems = items.filter(i => i.stock <= (i.minReorderLevel || 15));
+    if (shortageItems.length === 0) {
+      alert('جميع الأصناف في المخزن متوفرة فوق حد الطلب الأدنى ولا توجد نواقص حالياً.');
+      return;
+    }
+
+    const vendors = loadVendors();
+    const defaultVendor = vendors[0] || { id: 'V-001', name: 'مورد عام - نواقص المخزون' };
+    const poItems = shortageItems.map((it, idx) => {
+      const reorderTarget = Math.max((it.maxStockLevel || 50), (it.minReorderLevel || 15) * 2);
+      const qtyToOrder = Math.max(1, reorderTarget - it.stock);
+      const price = Number(it.costPrice) || 10;
+      return {
+        id: `po-line-${Date.now()}-${idx}`,
+        itemId: it.id,
+        itemCode: it.code,
+        description: it.name,
+        quantity: qtyToOrder,
+        unitPrice: price,
+        taxRate: 15,
+        unit: it.unit || 'حبة / قطعة',
+        availableStock: it.stock,
+        costPrice: price
+      };
+    });
+
+    const subtotal = poItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+    const taxTotal = Math.round(subtotal * 0.15 * 100) / 100;
+    const grandTotal = Math.round((subtotal + taxTotal) * 100) / 100;
+    const today = new Date().toISOString().split('T')[0];
+
+    const draftPO: StoredPurchaseInvoice = {
+      id: `PO-SHORTAGE-${Date.now()}`,
+      invoiceNumber: `PUR-DRF-${Date.now().toString().slice(-4)}`,
+      supplierRef: 'أمر شراء آلي للنواقص',
+      date: today,
+      dueDate: today,
+      partnerId: defaultVendor.id,
+      partnerName: defaultVendor.name,
+      classification: 'TAX',
+      taxRate: 15,
+      invoiceType: 'CREDIT_PURCHASE',
+      source: 'MAIN_WAREHOUSE',
+      safe: 'MAIN_SAFE',
+      items: poItems,
+      totals: {
+        subtotal,
+        taxTotal,
+        discountTotal: 0,
+        grandTotal,
+        cashPaid: 0,
+        remainingBalance: grandTotal
+      },
+      status: 'DRAFT',
+      notes: `أمر شراء (مسودة فاتورة مشتريات) مولد تلقائياً لاستكمال نواقص المخزون (${shortageItems.length} صنف تحت حد الطلب).`,
+      createdAt: new Date().toISOString()
+    };
+
+    const existing = loadStoredPurchaseInvoices();
+    saveStoredPurchaseInvoices([draftPO, ...existing]);
+
+    alert(`تم توليد مسودة فاتورة مشتريات رقم (${draftPO.invoiceNumber}) بنجاح لعدد (${shortageItems.length}) صنف من النواقص بقيمة إجمالية ${grandTotal.toLocaleString()} ${currencySymbol}.\nسيتم نقلك الآن إلى شاشة المشتريات لمراجعتها واعتمادها.`);
+    if (onNavigate) {
+      onNavigate('purchases');
+    } else {
+      window.dispatchEvent(new CustomEvent('alpha-navigate', { detail: { view: 'purchases' } }));
     }
   };
 
@@ -639,6 +768,7 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
       
       {/* Top Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 print:hidden">
+        {!isInWindow && (
         <div>
           <div className="flex items-center gap-2 mb-1 text-slate-500">
             <span className="text-xs uppercase font-bold tracking-tight">المخزون والمستودعات</span>
@@ -657,6 +787,7 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
             </div>
           </div>
         </div>
+        )}
 
         {/* Header Action Controls */}
         <div className="flex flex-wrap items-center gap-2">
@@ -710,6 +841,16 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
             <span>دليل الأصناف والباركود</span>
           </button>
 
+          <button
+            type="button"
+            onClick={handleCreateShortagePurchaseOrder}
+            className="btn-3d btn-3d-amber flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black shadow-xs hover:scale-105 active:scale-95 transition-all cursor-pointer"
+            title="توليد مسودة فاتورة مشتريات تلقائياً لكافة الأصناف النافذة والتي وصلت لحد الطلب الأدنى"
+          >
+            <AlertTriangle size={15} />
+            <span>تحويل النواقص لأمر شراء ({cardsData.lowStock.count + cardsData.outOfStock.count})</span>
+          </button>
+
           <ExportButtonGroup
             title={`تقرير أرصدة المخزون والمستودعات - ${selectedCard}`}
             filename={`ارصدة_المخزن_${selectedCard}`}
@@ -752,6 +893,16 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
             })}
             size="sm"
           />
+
+          <button
+            type="button"
+            onClick={() => setIsStockTransferOpen(true)}
+            className="btn-3d btn-3d-indigo flex items-center gap-1.5 px-3.5 py-2 text-white rounded-xl text-xs font-black shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer"
+            title="إنشاء إذن صرف وتحويل مخزني مباشر بين الفروع والمستودعات"
+          >
+            <ArrowRightLeft size={14} className="text-white" />
+            <span>إذن تحويل مخزني</span>
+          </button>
 
           <button
             type="button"
@@ -1841,10 +1992,9 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
                   onChange={e => setTransferModalData({ ...transferModalData, targetWarehouse: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 bg-white"
                 >
-                  <option value="المستودع الرئيسي - الرياض">المستودع الرئيسي - الرياض</option>
-                  <option value="مستودع فرع جدة">مستودع فرع جدة</option>
-                  <option value="مستودع معرض المبيعات">مستودع معرض المبيعات</option>
-                  <option value="مستودع المنطقة الشرقية">مستودع المنطقة الشرقية</option>
+                  {warehouses.map(wh => (
+                    <option key={wh} value={wh}>{wh}</option>
+                  ))}
                 </select>
               </div>
 
@@ -1855,8 +2005,14 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
                     type="number"
                     min={1}
                     max={transferModalData.item.stock}
-                    value={transferModalData.quantity}
-                    onChange={e => setTransferModalData({ ...transferModalData, quantity: Number(e.target.value) })}
+                    value={transferModalData.quantity ?? ''}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setTransferModalData({ ...transferModalData, quantity: e.target.value === '' ? ('' as any) : Number(e.target.value) })}
+                    onBlur={() => {
+                      if (!transferModalData.quantity || (transferModalData.quantity as any) === '') {
+                        setTransferModalData(prev => ({ ...prev, quantity: 1 }));
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-mono"
                   />
                 </div>
@@ -1945,8 +2101,14 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
                 <input
                   type="number"
                   min={0}
-                  value={adjustModalData.newStock}
-                  onChange={e => setAdjustModalData({ ...adjustModalData, newStock: Number(e.target.value) })}
+                  value={adjustModalData.newStock ?? ''}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setAdjustModalData({ ...adjustModalData, newStock: e.target.value === '' ? ('' as any) : Number(e.target.value) })}
+                  onBlur={() => {
+                    if ((adjustModalData.newStock as any) === '') {
+                      setAdjustModalData(prev => ({ ...prev, newStock: 0 }));
+                    }
+                  }}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 font-mono text-base font-bold text-slate-900"
                 />
               </div>
@@ -2022,7 +2184,7 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
           setTransferModalData({
             isOpen: true,
             item: it,
-            targetWarehouse: warehouses.find(w => w !== it.warehouseName) || 'مستودع فرع جدة',
+            targetWarehouse: warehouses.find(w => w !== it.warehouseName) || warehouses[0] || 'المستودع الرئيسي',
             quantity: 1,
             newShelfLocation: '',
             notes: ''
@@ -2059,6 +2221,16 @@ export default function WarehouseBalances({ onNavigate }: { onNavigate?: (view: 
           تقرير أرصدة المخازن مستخرج من نظام لوجوستريا للمحاسبة والمستودعات - {new Date().toLocaleString('ar-SA')}
         </p>
       </div>
+
+      {/* Direct Inter-Warehouse Stock Transfer Modal */}
+      <StockTransferModal
+        isOpen={isStockTransferOpen}
+        onClose={() => setIsStockTransferOpen(false)}
+        defaultSourceWarehouse={warehouseFilter !== 'ALL' ? warehouseFilter : 'المستودع الرئيسي'}
+        onSuccess={() => {
+          setRefreshKey(k => k + 1);
+        }}
+      />
 
     </div>
   );

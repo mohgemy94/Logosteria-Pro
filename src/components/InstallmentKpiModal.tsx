@@ -36,8 +36,8 @@ export default function InstallmentKpiModal({
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
-    contracts.forEach(contract => {
-      contract.schedule.forEach(item => {
+    (contracts || []).forEach(contract => {
+      (contract.schedule || []).forEach(item => {
         const due = new Date(item.dueDate);
         due.setHours(0, 0, 0, 0);
         const diffTime = due.getTime() - now.getTime();
@@ -144,11 +144,11 @@ export default function InstallmentKpiModal({
     if (!search.trim()) return items;
     const q = search.toLowerCase().trim();
     return items.filter(({ contract: c, item: i }) => 
-      c.customerName.toLowerCase().includes(q) ||
-      c.contractNumber.toLowerCase().includes(q) ||
+      (c.customerName || '').toLowerCase().includes(q) ||
+      (c.contractNumber || '').toLowerCase().includes(q) ||
       (c.customerPhone && c.customerPhone.includes(q)) ||
-      (i.receiptVoucherNumber && i.receiptVoucherNumber.toLowerCase().includes(q)) ||
-      (i.promissoryNoteId && i.promissoryNoteId.toLowerCase().includes(q))
+      (i.receiptVoucherNumber && (i.receiptVoucherNumber || '').toLowerCase().includes(q)) ||
+      (i.promissoryNoteId && (i.promissoryNoteId || '').toLowerCase().includes(q))
     );
   }, [items, search]);
 

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Printer, 
   RefreshCcw,
@@ -17,11 +17,14 @@ import {
   Target,
   Wallet,
   ArrowRightLeft,
-  Banknote
+  Banknote,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import { AccountType } from '../types/accounting';
 import { calculateTrialBalance, getAccountLedgerMovements } from '../utils/trialBalanceStore';
 import { getSystemSettings } from '../utils/settings';
+import { useIsInWindow } from './DesktopWindowManager';
 import ExportButtonGroup from './ExportButtonGroup';
 import { 
   getSelectedBrowsingYear, 
@@ -31,15 +34,81 @@ import {
 
 interface FinancialReportsScreenProps {
   onNavigate?: (view: string) => void;
+  isInWindow?: boolean;
 }
 
-export default function FinancialReportsScreen({ onNavigate }: FinancialReportsScreenProps) {
+export default function FinancialReportsScreen({ onNavigate, isInWindow: explicitIsInWindow }: FinancialReportsScreenProps) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const systemSettings = getSystemSettings();
   const currencySymbol = systemSettings.financial?.currencySymbol || 'ر.س';
 
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [selectedReport, setSelectedReport] = useState<'INCOME' | 'BALANCE' | 'CASH_FLOW' | 'RATIOS' | 'COMPARISON' | null>(null);
+  const [reportZoom, setReportZoom] = useState<number>(100);
+  const [reportPan, setReportPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isReportDragging, setIsReportDragging] = useState(false);
+  const reportDragRef = useRef<{ startX: number; startY: number; initialPanX: number; initialPanY: number }>({ startX: 0, startY: 0, initialPanX: 0, initialPanY: 0 });
+
+  // Reset zoom and pan whenever report modal is opened or closed
+  useEffect(() => {
+    setReportZoom(100);
+    setReportPan({ x: 0, y: 0 });
+  }, [selectedReport]);
+
+  const resetReportPan = () => {
+    setReportPan({ x: 0, y: 0 });
+  };
+
+  const handleReportMouseDown = (e: React.MouseEvent) => {
+    if (reportZoom <= 100) return;
+    setIsReportDragging(true);
+    reportDragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialPanX: reportPan.x,
+      initialPanY: reportPan.y
+    };
+  };
+
+  const handleReportMouseMove = (e: React.MouseEvent) => {
+    if (!isReportDragging || reportZoom <= 100) return;
+    const dx = e.clientX - reportDragRef.current.startX;
+    const dy = e.clientY - reportDragRef.current.startY;
+    setReportPan({
+      x: reportDragRef.current.initialPanX + dx,
+      y: reportDragRef.current.initialPanY + dy
+    });
+  };
+
+  const handleReportMouseUp = () => {
+    setIsReportDragging(false);
+  };
+
+  const handleReportTouchStart = (e: React.TouchEvent) => {
+    if (reportZoom <= 100 || e.touches.length !== 1) return;
+    setIsReportDragging(true);
+    reportDragRef.current = {
+      startX: e.touches[0].clientX,
+      startY: e.touches[0].clientY,
+      initialPanX: reportPan.x,
+      initialPanY: reportPan.y
+    };
+  };
+
+  const handleReportTouchMove = (e: React.TouchEvent) => {
+    if (!isReportDragging || reportZoom <= 100) return;
+    const dx = e.touches[0].clientX - reportDragRef.current.startX;
+    const dy = e.touches[0].clientY - reportDragRef.current.startY;
+    setReportPan({
+      x: reportDragRef.current.initialPanX + dx,
+      y: reportDragRef.current.initialPanY + dy
+    });
+  };
+
+  const handleReportTouchEnd = () => {
+    setIsReportDragging(false);
+  };
   const [selectedLedgerAccount, setSelectedLedgerAccount] = useState<any | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -73,15 +142,30 @@ export default function FinancialReportsScreen({ onNavigate }: FinancialReportsS
     );
   }, [startDate, endDate, refreshKey]);
 
-  // Comparative data calculation
+  // Filter out parent/group accounts to prevent double/triple counting after hierarchical rollup
+  const filterLeafRows = (inputRows: typeof rows) => {
+    return inputRows.filter(r => {
+      if (r.account.isGroup || r.account.isPosting === false) return false;
+      const hasChildren = inputRows.some(other =>
+        other.account.id !== r.account.id &&
+        (other.account.parentId === r.account.id ||
+          (other.account.code.length > r.account.code.length && other.account.code.startsWith(r.account.code)))
+      );
+      return !hasChildren;
+    });
+  };
+
+  const leafRows = useMemo(() => filterLeafRows(rows), [rows]);
+
+  // Comparative data calculation (leaf rows only)
   const compPeriod1Rows = useMemo(() => {
-    if (!compPeriod1Start && !compPeriod1End) return rows;
-    return calculateTrialBalance(compPeriod1Start || undefined, compPeriod1End || undefined, 'ALL', true).rows;
-  }, [compPeriod1Start, compPeriod1End, rows]);
+    if (!compPeriod1Start && !compPeriod1End) return leafRows;
+    return filterLeafRows(calculateTrialBalance(compPeriod1Start || undefined, compPeriod1End || undefined, 'ALL', true).rows);
+  }, [compPeriod1Start, compPeriod1End, leafRows]);
 
   const compPeriod2Rows = useMemo(() => {
     if (!compPeriod2Start && !compPeriod2End) return [];
-    return calculateTrialBalance(compPeriod2Start || undefined, compPeriod2End || undefined, 'ALL', true).rows;
+    return filterLeafRows(calculateTrialBalance(compPeriod2Start || undefined, compPeriod2End || undefined, 'ALL', true).rows);
   }, [compPeriod2Start, compPeriod2End]);
 
   const selectedLedgerItems = useMemo(() => {
@@ -90,8 +174,8 @@ export default function FinancialReportsScreen({ onNavigate }: FinancialReportsS
   }, [selectedLedgerAccount, startDate, endDate, refreshKey]);
 
   // Income Statement Calculations
-  const revenues = rows.filter(r => r.account.type === AccountType.Revenue);
-  const expenses = rows.filter(r => r.account.type === AccountType.Expense);
+  const revenues = leafRows.filter(r => r.account.type === AccountType.Revenue);
+  const expenses = leafRows.filter(r => r.account.type === AccountType.Expense);
   
   const operatingRevenues = revenues.filter(r => r.account.code.startsWith('41'));
   const otherRevenues = revenues.filter(r => !r.account.code.startsWith('41'));
@@ -109,9 +193,9 @@ export default function FinancialReportsScreen({ onNavigate }: FinancialReportsS
   const netIncome = grossProfit + totalOtherRevs - totalOpExps;
 
   // Balance Sheet Calculations
-  const assets = rows.filter(r => r.account.type === AccountType.Asset);
-  const liabilities = rows.filter(r => r.account.type === AccountType.Liability);
-  const equity = rows.filter(r => r.account.type === AccountType.Equity);
+  const assets = leafRows.filter(r => r.account.type === AccountType.Asset);
+  const liabilities = leafRows.filter(r => r.account.type === AccountType.Liability);
+  const equity = leafRows.filter(r => r.account.type === AccountType.Equity);
 
   const totalAssets = assets.reduce((sum, r) => sum + (r.endingDebit - r.endingCredit), 0);
   const totalLiabilities = liabilities.reduce((sum, r) => sum + (r.endingCredit - r.endingDebit), 0);
@@ -120,32 +204,51 @@ export default function FinancialReportsScreen({ onNavigate }: FinancialReportsS
   const totalEquity = totalEquityBase + netIncome;
   const totalLiabilitiesAndEquity = totalLiabilities + totalEquity;
 
-  // Cash & Cash Equivalents (1101, 1102, etc.)
-  const cashAccounts = assets.filter(r => r.account.code.startsWith('1101') || r.account.code.startsWith('1102') || r.account.name.includes('صندوق') || r.account.name.includes('بنك') || r.account.name.includes('خزينة'));
+  // Cash & Cash Equivalents (1101, 1102, etc. excluding checks under collection 1104)
+  const cashAccounts = assets.filter(r =>
+    r.account.code.startsWith('1101') ||
+    r.account.code.startsWith('1102') ||
+    r.account.code.startsWith('1103') ||
+    ((r.account.name.includes('صندوق') || r.account.name.includes('بنك') || r.account.name.includes('خزينة')) && !r.account.code.startsWith('1104'))
+  );
   const endingCashBalance = cashAccounts.reduce((sum, r) => sum + (r.endingDebit - r.endingCredit), 0);
   const beginningCashBalance = cashAccounts.reduce((sum, r) => sum + (r.openingDebit - r.openingCredit), 0);
 
   // Cash Flow Statement (Indirect Method)
   // 1. Operating Activities
-  // Receivables change (negative if increased)
-  const arAccounts = assets.filter(r => r.account.code.startsWith('1103') || r.account.name.includes('عملاء') || r.account.name.includes('مدين'));
+  // Receivables change (12xx Customers/Advances & 1104 Checks Under Collection)
+  const arAccounts = assets.filter(r =>
+    r.account.code.startsWith('12') ||
+    r.account.code.startsWith('1104') ||
+    r.account.name.includes('عملاء') ||
+    r.account.name.includes('مدين')
+  );
   const arChange = arAccounts.reduce((sum, r) => sum + ((r.endingDebit - r.endingCredit) - (r.openingDebit - r.openingCredit)), 0);
   const cashFromAr = -arChange; // Increase in AR consumes cash
 
-  // Inventory change (negative if increased)
-  const invAccounts = assets.filter(r => r.account.code.startsWith('1104') || r.account.name.includes('مخزون') || r.account.name.includes('بضاعة'));
+  // Inventory change (13xx Inventory)
+  const invAccounts = assets.filter(r =>
+    r.account.code.startsWith('13') ||
+    r.account.name.includes('مخزون') ||
+    r.account.name.includes('بضاعة')
+  );
   const invChange = invAccounts.reduce((sum, r) => sum + ((r.endingDebit - r.endingCredit) - (r.openingDebit - r.openingCredit)), 0);
   const cashFromInv = -invChange;
 
   // Payables change (positive if increased)
-  const apAccounts = liabilities.filter(r => r.account.code.startsWith('2101') || r.account.name.includes('موردين') || r.account.name.includes('دائن'));
+  const apAccounts = liabilities.filter(r => r.account.code.startsWith('21') || r.account.name.includes('موردين') || r.account.name.includes('دائن'));
   const apChange = apAccounts.reduce((sum, r) => sum + ((r.endingCredit - r.endingDebit) - (r.openingCredit - r.openingDebit)), 0);
   const cashFromAp = apChange; // Increase in AP provides cash
 
   const operatingCashFlow = netIncome + cashFromAr + cashFromInv + cashFromAp;
 
-  // 2. Investing Activities (Fixed Assets changes)
-  const fixedAssetAccounts = assets.filter(r => r.account.code.startsWith('12') || (!r.account.code.startsWith('11') && r.account.type === AccountType.Asset));
+  // 2. Investing Activities (Fixed Assets changes: 14xx, 15xx, or NON_CURRENT)
+  const fixedAssetAccounts = assets.filter(r =>
+    r.account.code.startsWith('14') ||
+    r.account.code.startsWith('15') ||
+    r.account.assetClassification === 'NON_CURRENT' ||
+    r.account.name.includes('أصول ثابتة')
+  );
   const fixedAssetChange = fixedAssetAccounts.reduce((sum, r) => sum + ((r.endingDebit - r.endingCredit) - (r.openingDebit - r.openingCredit)), 0);
   const investingCashFlow = -fixedAssetChange;
 
@@ -159,8 +262,10 @@ export default function FinancialReportsScreen({ onNavigate }: FinancialReportsS
   const calculatedNetCashChange = operatingCashFlow + investingCashFlow + financingCashFlow;
 
   // Financial Ratios Calculations
-  const currentAssets = assets.filter(r => r.account.code.startsWith("11")).reduce((sum, r) => sum + (r.endingDebit - r.endingCredit), 0);
-  const currentLiabilities = liabilities.filter(r => r.account.code.startsWith("21")).reduce((sum, r) => sum + (r.endingCredit - r.endingDebit), 0);
+  const currentAssets = assets
+    .filter(r => !fixedAssetAccounts.some(fa => fa.account.id === r.account.id))
+    .reduce((sum, r) => sum + (r.endingDebit - r.endingCredit), 0);
+  const currentLiabilities = liabilities.filter(r => r.account.code.startsWith("21") || r.account.code.startsWith("2201")).reduce((sum, r) => sum + (r.endingCredit - r.endingDebit), 0);
 
   const netProfitMargin = totalRevenues > 0 ? (netIncome / totalRevenues) * 100 : 0;
   const grossProfitMargin = totalOpRevs > 0 ? (grossProfit / totalOpRevs) * 100 : 0;
@@ -261,6 +366,7 @@ export default function FinancialReportsScreen({ onNavigate }: FinancialReportsS
         {/* Header */}
         <div className="flex-shrink-0 bg-white border-b border-slate-200 p-4 sm:px-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {!isInWindow && (
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-950 flex items-center justify-center text-blue-100 shadow-sm border border-blue-800">
                 <PieChart size={20} />
@@ -270,6 +376,7 @@ export default function FinancialReportsScreen({ onNavigate }: FinancialReportsS
                 <p className="text-xs text-slate-500 font-medium mt-0.5">لوحة تحكم القوائم المالية</p>
               </div>
             </div>
+            )}
             
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -589,6 +696,54 @@ export default function FinancialReportsScreen({ onNavigate }: FinancialReportsS
                   />
                 )}
 
+                {/* أداة التكبير والتصغير المرنة بأي قيمة (Flexible Zoom Control with Slider & Stepper) */}
+                <div className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 shadow-2xs text-white">
+                  <button
+                    type="button"
+                    onClick={() => setReportZoom(z => Math.max(z - 15, 30))}
+                    className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                    title="تصغير (-15%)"
+                  >
+                    <ZoomOut size={14} />
+                  </button>
+
+                  <input
+                    type="range"
+                    min="30"
+                    max="220"
+                    step="5"
+                    value={reportZoom}
+                    onChange={(e) => setReportZoom(Number(e.target.value))}
+                    className="w-20 sm:w-28 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    title={`نسبة التكبير: ${reportZoom}% (اسحب للتحكم بأي قيمة)`}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setReportZoom(z => Math.min(z + 15, 220))}
+                    className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                    title="تكبير (+15%)"
+                  >
+                    <ZoomIn size={14} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReportZoom(100);
+                      resetReportPan();
+                    }}
+                    className={`font-mono text-xs font-bold px-2 py-0.5 rounded-lg transition-colors cursor-pointer ${
+                      reportZoom === 100 
+                        ? 'bg-slate-700 text-slate-300' 
+                        : 'bg-blue-600 text-white hover:bg-blue-500'
+                    }`}
+                    title="إعادة ضبط المعاينة إلى 100%"
+                  >
+                    {reportZoom}%
+                  </button>
+                </div>
+
                 <button 
                   onClick={handlePrint} 
                   className="btn-3d btn-3d-slate h-9 px-3 sm:px-4 text-xs font-black shadow-none border-slate-700 bg-slate-800 hover:bg-slate-700 text-white"
@@ -607,8 +762,29 @@ export default function FinancialReportsScreen({ onNavigate }: FinancialReportsS
               </div>
             </div>
 
-            {/* Modal Content (The Report) */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 print:overflow-visible print:p-0">
+            {/* Modal Content with Zoom & Pan */}
+            <div 
+              className={`flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 print:overflow-visible print:p-0 select-none ${
+                reportZoom > 100 
+                  ? (isReportDragging ? 'cursor-grabbing' : 'cursor-grab') 
+                  : 'cursor-default'
+              }`}
+              onMouseDown={handleReportMouseDown}
+              onMouseMove={handleReportMouseMove}
+              onMouseUp={handleReportMouseUp}
+              onMouseLeave={handleReportMouseUp}
+              onTouchStart={handleReportTouchStart}
+              onTouchMove={handleReportTouchMove}
+              onTouchEnd={handleReportTouchEnd}
+            >
+              <div 
+                className="w-full transition-transform duration-100 origin-top flex flex-col pointer-events-auto"
+                style={{
+                  transform: `translate3d(${reportPan.x}px, ${reportPan.y}px, 0px) scale(${reportZoom / 100})`,
+                  transformOrigin: 'top center',
+                  marginBottom: reportZoom > 100 ? `${(reportZoom - 100) * 8}px` : '0px'
+                }}
+              >
               
               {/* Print Header (Visible only when printing) */}
               <div className="hidden print:block text-slate-900 mb-8 border-b-2 border-slate-800 pb-6">
@@ -1300,6 +1476,7 @@ export default function FinancialReportsScreen({ onNavigate }: FinancialReportsS
                 </div>
               )}
 
+              </div>
             </div>
           </div>
         </div>

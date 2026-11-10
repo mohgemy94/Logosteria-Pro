@@ -293,11 +293,17 @@ export default function GosiTab({ employees, currency, onRefresh }: GosiTabProps
                   <input
                     type="number"
                     step="0.01"
-                    value={editingEmpGosi.gosiEmployeePercent ?? (editingEmpGosi.nationalityType === 'SAUDI' ? 9.75 : 0)}
+                    value={editingEmpGosi.gosiEmployeePercent !== undefined ? editingEmpGosi.gosiEmployeePercent : (editingEmpGosi.nationalityType === 'SAUDI' ? 9.75 : 0)}
+                    onFocus={e => e.target.select()}
                     onChange={(e) => setEditingEmpGosi({
                       ...editingEmpGosi,
-                      gosiEmployeePercent: Number(e.target.value)
+                      gosiEmployeePercent: e.target.value === '' ? ('' as any) : Number(e.target.value)
                     })}
+                    onBlur={() => {
+                      if ((editingEmpGosi.gosiEmployeePercent as any) === '') {
+                        setEditingEmpGosi(prev => prev ? ({ ...prev, gosiEmployeePercent: prev.nationalityType === 'SAUDI' ? 9.75 : 0 }) : null);
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-mono font-bold"
                   />
                 </div>
@@ -307,11 +313,17 @@ export default function GosiTab({ employees, currency, onRefresh }: GosiTabProps
                   <input
                     type="number"
                     step="0.01"
-                    value={editingEmpGosi.gosiCompanyPercent ?? (editingEmpGosi.nationalityType === 'SAUDI' ? 11.75 : 2.0)}
+                    value={editingEmpGosi.gosiCompanyPercent !== undefined ? editingEmpGosi.gosiCompanyPercent : (editingEmpGosi.nationalityType === 'SAUDI' ? 11.75 : 2.0)}
+                    onFocus={e => e.target.select()}
                     onChange={(e) => setEditingEmpGosi({
                       ...editingEmpGosi,
-                      gosiCompanyPercent: Number(e.target.value)
+                      gosiCompanyPercent: e.target.value === '' ? ('' as any) : Number(e.target.value)
                     })}
+                    onBlur={() => {
+                      if ((editingEmpGosi.gosiCompanyPercent as any) === '') {
+                        setEditingEmpGosi(prev => prev ? ({ ...prev, gosiCompanyPercent: prev.nationalityType === 'SAUDI' ? 11.75 : 2.0 }) : null);
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-mono font-bold"
                   />
                 </div>

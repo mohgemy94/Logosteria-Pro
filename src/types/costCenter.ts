@@ -26,7 +26,7 @@ export interface CostCenterTransaction {
   id: string;
   date: string;
   docNumber: string;
-  docType: 'EXTERNAL_PAYMENT' | 'EXTERNAL_RECEIPT' | 'INTERNAL_PAYMENT' | 'INTERNAL_RECEIPT' | 'JOURNAL_ENTRY';
+  docType: 'EXTERNAL_PAYMENT' | 'EXTERNAL_RECEIPT' | 'INTERNAL_PAYMENT' | 'INTERNAL_RECEIPT' | 'JOURNAL_ENTRY' | 'SALES_INVOICE' | 'PURCHASE_INVOICE' | 'MANUFACTURING_ORDER' | 'PAYROLL';
   docTypeLabel: string;
   partnerName?: string | undefined;
   description: string;

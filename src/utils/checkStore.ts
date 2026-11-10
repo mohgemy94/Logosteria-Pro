@@ -358,6 +358,77 @@ export function saveBankCheck(check: BankCheck): void {
   try {
     const list = syncChecksFromVouchers();
     const idx = list.findIndex(c => c.id === check.id);
+
+    // If this is a manual check under collection, ensure its initial receipt/issue journal entry is recorded
+    if (check.source === 'MANUAL' && check.status === 'UNDER_COLLECTION' && check.amount > 0) {
+      const accounts = loadChartOfAccounts();
+      const customerAcc = accounts.find(a => a.code === '1201') || { id: 'acc-1201', code: '1201', name: 'ذمم العملاء' };
+      const vendorAcc = accounts.find(a => a.code === '2101') || { id: 'acc-2101', code: '2101', name: 'ذمم الموردين' };
+      const checkCollectionAcc = accounts.find(a => a.code === '1104') || { id: 'acc-1104', code: '1104', name: 'أوراق قبض وشيكات تحت التحصيل' };
+      const checkPayableAcc = accounts.find(a => a.code === '2104') || { id: 'acc-2104', code: '2104', name: 'أوراق دفع وشيكات صادرة آجلة' };
+
+      const issueJeId = `je-chq-iss-${check.id}`;
+      const issueJeNumber = `JV-CHQ-ISS-${check.checkNumber.replace(/\s+/g, '')}`;
+
+      const issueJe: JournalEntry = check.type === 'INCOMING'
+        ? {
+            id: issueJeId,
+            entryNumber: issueJeNumber,
+            date: check.issueDate || getTodayIsoDate(),
+            status: JournalEntryStatus.Posted,
+            reference: `استلام شيك #${check.checkNumber}`,
+            description: `استلام شيك وارد برسم التحصيل رقم [${check.checkNumber}] مسحوب على ${check.bankName} من العميل: ${check.partnerName}`,
+            items: [
+              {
+                id: `ji-iss-${check.id}-1`,
+                accountId: checkCollectionAcc.id,
+                debit: check.amount,
+                credit: 0
+              },
+              {
+                id: `ji-iss-${check.id}-2`,
+                accountId: customerAcc.id,
+                partnerId: check.partnerId,
+                partnerName: check.partnerName,
+                partnerType: 'CUSTOMER',
+                debit: 0,
+                credit: check.amount
+              }
+            ]
+          }
+        : {
+            id: issueJeId,
+            entryNumber: issueJeNumber,
+            date: check.issueDate || getTodayIsoDate(),
+            status: JournalEntryStatus.Posted,
+            reference: `إصدار شيك #${check.checkNumber}`,
+            description: `تحرير وتسليم شيك صادر برسم الصرف رقم [${check.checkNumber}] مسحوب على ${check.bankName} للمورد: ${check.partnerName}`,
+            items: [
+              {
+                id: `ji-iss-${check.id}-1`,
+                accountId: vendorAcc.id,
+                partnerId: check.partnerId,
+                partnerName: check.partnerName,
+                partnerType: 'VENDOR',
+                debit: check.amount,
+                credit: 0
+              },
+              {
+                id: `ji-iss-${check.id}-2`,
+                accountId: checkPayableAcc.id,
+                debit: 0,
+                credit: check.amount
+              }
+            ]
+          };
+
+      saveJournalEntry(issueJe);
+      if (!check.journalEntryId) {
+        check.journalEntryId = issueJe.id;
+        check.journalEntryNumber = issueJe.entryNumber;
+      }
+    }
+
     let updated: BankCheck[];
     if (idx >= 0) {
       updated = [...list];
@@ -386,6 +457,7 @@ export function deleteBankCheck(checkId: string): void {
     if (target?.bounceJournalEntryId) {
       deleteJournalEntry(target.bounceJournalEntryId);
     }
+    deleteJournalEntry(`je-chq-iss-${checkId}`);
     const updated = list.filter(c => c.id !== checkId);
     localStorage.setItem(CHECKS_STORAGE_KEY, JSON.stringify(updated));
     dispatchChecksUpdated();

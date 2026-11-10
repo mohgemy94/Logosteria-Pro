@@ -24,6 +24,8 @@ import {
   exportVouchersReportPDF 
 } from '../utils/vouchersExport';
 import { mobileNavigationController } from '../utils/mobileNavigation';
+import { loadChartOfAccounts } from '../utils/trialBalanceStore';
+import { isCashOrBankAccount } from '../utils/accountingIntegration';
 
 interface VouchersExportModalProps {
   isOpen: boolean;
@@ -34,17 +36,6 @@ interface VouchersExportModalProps {
   preloadedItems?: ExportVoucherItem[];
   title?: string;
 }
-
-const ACCOUNT_OPTIONS = [
-  { id: 'ALL', name: 'جميع الخزائن والحسابات البنكية' },
-  { id: 'cash', name: 'الصندوق الرئيسي (نقداً)' },
-  { id: 'cash1', name: 'الخزينة الرئيسية (الصندوق العام)' },
-  { id: 'cash2', name: 'صندوق المعرض / المبيعات اليومية' },
-  { id: 'cash3', name: 'صندوق العهد والمصروفات النثرية' },
-  { id: 'bank1', name: 'البنك الأهلي التجاري' },
-  { id: 'bank2', name: 'مصرف الراجحي' },
-  { id: 'bank3', name: 'بنك الرياض' },
-];
 
 export default function VouchersExportModal({
   isOpen,
@@ -59,6 +50,17 @@ export default function VouchersExportModal({
   const [allVouchers, setAllVouchers] = useState<ExportVoucherItem[]>(() => {
     return preloadedItems || loadAllUnifiedVouchers();
   });
+
+  const accountOptions = useMemo(() => {
+    const chart = loadChartOfAccounts();
+    const cashBanks = chart
+      .filter(a => isCashOrBankAccount(a, chart))
+      .map(a => ({ id: a.code || a.id, name: `${a.code} - ${a.name}` }));
+    return [
+      { id: 'ALL', name: 'جميع الخزائن والحسابات البنكية' },
+      ...cashBanks
+    ];
+  }, []);
 
   // Reload when modal opens
   useEffect(() => {
@@ -161,7 +163,7 @@ export default function VouchersExportModal({
     else parts.push('كافة الفترات');
 
     if (selectedAccount !== 'ALL') {
-      const acc = ACCOUNT_OPTIONS.find(a => a.id === selectedAccount);
+      const acc = accountOptions.find(a => a.id === selectedAccount);
       parts.push(`الحساب: ${acc?.name || selectedAccount}`);
     }
     if (postingStatus === 'POSTED') parts.push('المرحلة بالحسابات فقط');
@@ -173,7 +175,7 @@ export default function VouchersExportModal({
     if (searchQuery) parts.push(`بحث: "${searchQuery}"`);
 
     return parts.join(' | ');
-  }, [startDate, endDate, selectedAccount, postingStatus, voucherType, voucherCategory, searchQuery]);
+  }, [startDate, endDate, selectedAccount, postingStatus, voucherType, voucherCategory, searchQuery, accountOptions]);
 
   // Export handlers
   const handleExportXLSX = () => {
@@ -340,7 +342,7 @@ export default function VouchersExportModal({
                 onChange={e => setSelectedAccount(e.target.value)}
                 className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden"
               >
-                {ACCOUNT_OPTIONS.map(acc => (
+                {accountOptions.map(acc => (
                   <option key={acc.id} value={acc.id}>{acc.name}</option>
                 ))}
               </select>

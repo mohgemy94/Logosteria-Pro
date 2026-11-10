@@ -82,6 +82,9 @@ export function downloadSystemBackupJSON(): boolean {
       'alpha_mfg_work_orders_v1',
       'alpha_mfg_work_centers_v1',
       'alpha_inventory_audits_v1',
+      'alpha_bank_checks_v1',
+      'alpha_audit_trail_v1',
+      'alpha_stock_transfers_v1',
       'alpha_print_paper_format',
       'alpha_print_color_mode'
     ];
@@ -123,7 +126,8 @@ export function downloadSystemBackupJSON(): boolean {
  * Level 1 Reset: Resets transactions and operations only.
  * Deletes all Sales/Purchase Invoices, Journal Entries, Vouchers, Inventory movements,
  * Installments, and Work Orders, and resets document sequences to 1.
- * PRESERVES Chart of Accounts, Customers, Vendors, Items list, and Company settings.
+ * PRESERVES Customer records/pages, Vendor records/pages, Items catalog, Chart of Accounts, and Company settings,
+ * while resetting all customer and vendor opening balances and financial dues to 0.
  */
 export function resetTransactionsOnly(): ResetSummary {
   if (typeof window === 'undefined') {
@@ -163,37 +167,90 @@ export function resetTransactionsOnly(): ResetSummary {
   const clearedJournalEntriesCount = countKey(JOURNAL_ENTRIES_STORAGE_KEY);
   const clearedInventoryAuditsCount = countKey(STORAGE_KEY_INVENTORY_AUDITS);
 
-  const preservedCustomersCount = countKey(CUSTOMERS_STORAGE_KEY);
-  const preservedVendorsCount = countKey(VENDORS_STORAGE_KEY);
-  const preservedItemsCount = countKey(DB_ITEMS_KEY);
+  // 1. Preserve Customer records/pages, but zero out all their financial data (opening balances to 0)
+  let currentCustomers: any[] = [];
+  try {
+    const raw = localStorage.getItem(CUSTOMERS_STORAGE_KEY);
+    if (raw) currentCustomers = JSON.parse(raw);
+  } catch {}
+  if (!Array.isArray(currentCustomers) || currentCustomers.length === 0) {
+    try {
+      const fallbackRaw = localStorage.getItem('alpha_customers_v1') || localStorage.getItem('customers');
+      if (fallbackRaw) currentCustomers = JSON.parse(fallbackRaw);
+    } catch {}
+  }
+  if (!Array.isArray(currentCustomers)) {
+    currentCustomers = [];
+  }
+  const zeroedCustomers = currentCustomers.map(cust => ({
+    ...cust,
+    openingBalance: 0,
+    openingBalanceType: undefined,
+    openingBalanceDate: undefined
+  }));
+  localStorage.setItem(CUSTOMERS_STORAGE_KEY, JSON.stringify(zeroedCustomers));
+  localStorage.setItem('alpha_customers_v1', JSON.stringify(zeroedCustomers));
+  localStorage.setItem('customers', JSON.stringify(zeroedCustomers));
 
-  // 1. Wipe Invoices (Sales & Purchases)
+  // 2. Preserve Vendor records/pages, but zero out all their financial data (opening balances to 0)
+  let currentVendors: any[] = [];
+  try {
+    const raw = localStorage.getItem(VENDORS_STORAGE_KEY);
+    if (raw) currentVendors = JSON.parse(raw);
+  } catch {}
+  if (!Array.isArray(currentVendors) || currentVendors.length === 0) {
+    try {
+      const fallbackRaw = localStorage.getItem('alpha_vendors_v1') || localStorage.getItem('vendors');
+      if (fallbackRaw) currentVendors = JSON.parse(fallbackRaw);
+    } catch {}
+  }
+  if (!Array.isArray(currentVendors)) {
+    currentVendors = [];
+  }
+  const zeroedVendors = currentVendors.map(vend => ({
+    ...vend,
+    openingBalance: 0,
+    openingBalanceType: undefined,
+    openingBalanceDate: undefined
+  }));
+  localStorage.setItem(VENDORS_STORAGE_KEY, JSON.stringify(zeroedVendors));
+  localStorage.setItem('alpha_vendors_v1', JSON.stringify(zeroedVendors));
+  localStorage.setItem('vendors', JSON.stringify(zeroedVendors));
+
+  // 3. Preserve Items catalog on the items page
+  const preservedItemsCount = countKey(DB_ITEMS_KEY);
+  const preservedCustomersCount = zeroedCustomers.length;
+  const preservedVendorsCount = zeroedVendors.length;
+
+  // 4. Wipe Invoices (Sales & Purchases)
   localStorage.setItem(DB_SALES_INVOICES_KEY, JSON.stringify([]));
   localStorage.setItem(DB_PURCHASES_INVOICES_KEY, JSON.stringify([]));
 
-  // 2. Wipe Vouchers (External & Internal)
+  // 5. Wipe Vouchers (External & Internal)
   localStorage.setItem(DB_RECEIPT_VOUCHERS_KEY, JSON.stringify([]));
   localStorage.setItem(DB_PAYMENT_VOUCHERS_KEY, JSON.stringify([]));
   localStorage.setItem(DB_INTERNAL_VOUCHERS_KEY, JSON.stringify([]));
   localStorage.setItem(DB_INTERNAL_RECEIPT_VOUCHERS_KEY, JSON.stringify([]));
   localStorage.setItem(DB_INTERNAL_PAYMENT_VOUCHERS_KEY, JSON.stringify([]));
 
-  // 3. Wipe Journal Entries
+  // 6. Wipe Journal Entries
   localStorage.setItem(JOURNAL_ENTRIES_STORAGE_KEY, JSON.stringify([]));
 
-  // 4. Wipe Transaction Running Balances (Partner movements & Warehouse movements)
+  // 7. Wipe Transaction Running Balances (Partner movements & Warehouse movements)
   localStorage.setItem('alpha_partner_balances_v1', JSON.stringify([]));
   localStorage.setItem('alpha_partner_balances_v2', JSON.stringify([]));
   localStorage.setItem('alpha_warehouse_balances_v1', JSON.stringify([]));
   localStorage.setItem('alpha_warehouse_balances_v2', JSON.stringify([]));
 
-  // 5. Wipe Operational Transactions & Periodic Inventory Audits
+  // 8. Wipe Operational Transactions & Periodic Inventory Audits
   localStorage.setItem(STORAGE_KEY_INSTALLMENTS, JSON.stringify([]));
   localStorage.setItem(STORAGE_KEY_PROMISSORY_NOTES, JSON.stringify([]));
   localStorage.setItem(STORAGE_KEY_WORK_ORDERS, JSON.stringify([]));
   localStorage.setItem(STORAGE_KEY_INVENTORY_AUDITS, JSON.stringify([]));
+  localStorage.setItem('alpha_bank_checks_v1', JSON.stringify([]));
+  localStorage.setItem('alpha_stock_transfers_v1', JSON.stringify([]));
 
-  // 6. Reset Document Sequences back to 1 for transactional documents, keeping itemCode sequence intact
+  // 9. Reset Document Sequences back to 1 for transactional documents, keeping itemCode sequence intact
   const currentSeqs = getSequences();
   const txSequences: SequencesStore = {
     salesInvoice: 1,
@@ -207,9 +264,12 @@ export function resetTransactionsOnly(): ResetSummary {
   };
   saveSequences(txSequences);
 
-  // 7. Dispatch comprehensive notification events across the entire application
+  // 10. Dispatch comprehensive notification events across the entire application
   notifyDataChanged();
   dispatchPartnerLedgerUpdated();
+  window.dispatchEvent(new Event('alpha-partners-updated'));
+  window.dispatchEvent(new Event('alpha-customers-updated'));
+  window.dispatchEvent(new Event('alpha-vendors-updated'));
   window.dispatchEvent(new Event('alpha-chart-of-accounts-updated'));
   window.dispatchEvent(new Event('alpha-journal-entries-updated'));
   window.dispatchEvent(new Event('alpha-vouchers-updated'));
@@ -218,6 +278,8 @@ export function resetTransactionsOnly(): ResetSummary {
   window.dispatchEvent(new Event('alpha-inventory-audits-updated'));
   window.dispatchEvent(new Event('alpha-installments-updated'));
   window.dispatchEvent(new Event('alpha-promissory-notes-updated'));
+  window.dispatchEvent(new Event('alpha-checks-updated'));
+  window.dispatchEvent(new Event('alpha-stock-transfers-updated'));
   window.dispatchEvent(new Event('alpha-work-orders-updated'));
   window.dispatchEvent(new Event('alpha-payroll-updated'));
   window.dispatchEvent(new Event('alpha-master-data-updated'));
@@ -235,9 +297,9 @@ export function resetTransactionsOnly(): ResetSummary {
     recordAuditLog({
       action: 'SYSTEM_RESET',
       module: 'SYSTEM',
-      documentType: 'تصفير الحركات والعمليات المالية',
-      summary: `تم تصفير جميع الحركات المالية والعمليات بنجاح (مسح ${clearedInvoicesCount} فاتورة، و${clearedVouchersCount} سند، و${clearedJournalEntriesCount} قيد)`,
-      summaryEn: `Reset all transactional data (cleared ${clearedInvoicesCount} invoices, ${clearedVouchersCount} vouchers, ${clearedJournalEntriesCount} journal entries)`,
+      documentType: 'تصفير العمليات والفواتير وأرصدة العملاء والموردين',
+      summary: `تم تصفير جميع العمليات والفواتير وأرصدة وحركات العملاء والموردين بالكامل مع الإبقاء على ملفاتهم وأصناف المخزون (مسح ${clearedInvoicesCount} فاتورة، و${clearedVouchersCount} سند، و${clearedJournalEntriesCount} قيد، وتصفير أرصدة ${preservedCustomersCount} عميل و${preservedVendorsCount} مورد إلى صفر)`,
+      summaryEn: `Reset all transactional data and partner balances while preserving customer, vendor, and item profiles (cleared ${clearedInvoicesCount} invoices, ${clearedVouchersCount} vouchers, ${clearedJournalEntriesCount} journal entries, zeroed balances for ${preservedCustomersCount} customers and ${preservedVendorsCount} vendors)`,
       severity: 'CRITICAL',
       details: {
         clearedInvoicesCount,
@@ -304,9 +366,21 @@ export function resetEntireSystemToFactoryDefaults(): ResetSummary {
     }
   };
 
-  const clearedItemsCount = countKey(DB_ITEMS_KEY);
-  const clearedCustomersCount = countKey(CUSTOMERS_STORAGE_KEY);
-  const clearedVendorsCount = countKey(VENDORS_STORAGE_KEY);
+  const clearedItemsCount = Math.max(
+    countKey(DB_ITEMS_KEY),
+    countKey('alpha_warehouse_items_v1'),
+    countKey('alpha_warehouse_balances_v2')
+  );
+  const clearedCustomersCount = Math.max(
+    countKey(CUSTOMERS_STORAGE_KEY),
+    countKey('alpha_customers_v1'),
+    countKey('customers')
+  );
+  const clearedVendorsCount = Math.max(
+    countKey(VENDORS_STORAGE_KEY),
+    countKey('alpha_vendors_v1'),
+    countKey('vendors')
+  );
   const clearedInvoicesCount = countKey(DB_SALES_INVOICES_KEY) + countKey(DB_PURCHASES_INVOICES_KEY);
   const clearedVouchersCount = 
     countKey(DB_RECEIPT_VOUCHERS_KEY) + 
@@ -317,10 +391,15 @@ export function resetEntireSystemToFactoryDefaults(): ResetSummary {
   const clearedJournalEntriesCount = countKey(JOURNAL_ENTRIES_STORAGE_KEY);
   const clearedInventoryAuditsCount = countKey(STORAGE_KEY_INVENTORY_AUDITS);
 
-  // 1. Wipe Master Data (Items, Customers, Vendors, Partner Balances, Warehouse Balances)
+  // 1. Wipe Master Data completely (Items, Customers, Vendors, Partner Balances, Warehouse Balances)
   localStorage.setItem(DB_ITEMS_KEY, JSON.stringify([]));
+  localStorage.setItem('alpha_warehouse_items_v1', JSON.stringify([]));
   localStorage.setItem(CUSTOMERS_STORAGE_KEY, JSON.stringify([]));
+  localStorage.setItem('alpha_customers_v1', JSON.stringify([]));
+  localStorage.setItem('customers', JSON.stringify([]));
   localStorage.setItem(VENDORS_STORAGE_KEY, JSON.stringify([]));
+  localStorage.setItem('alpha_vendors_v1', JSON.stringify([]));
+  localStorage.setItem('vendors', JSON.stringify([]));
   localStorage.setItem('alpha_partner_balances_v1', JSON.stringify([]));
   localStorage.setItem('alpha_partner_balances_v2', JSON.stringify([]));
   localStorage.setItem('alpha_warehouse_balances_v1', JSON.stringify([]));
@@ -349,6 +428,9 @@ export function resetEntireSystemToFactoryDefaults(): ResetSummary {
   localStorage.setItem(STORAGE_KEY_WORK_ORDERS, JSON.stringify([]));
   localStorage.setItem(STORAGE_KEY_WORK_CENTERS, JSON.stringify([]));
   localStorage.setItem(STORAGE_KEY_INVENTORY_AUDITS, JSON.stringify([]));
+  localStorage.setItem('alpha_bank_checks_v1', JSON.stringify([]));
+  localStorage.setItem('alpha_stock_transfers_v1', JSON.stringify([]));
+  localStorage.setItem('alpha_audit_trail_v1', JSON.stringify([]));
 
   // 6. Reset Chart of Accounts to default standard base
   localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(DEFAULT_ACCOUNTS));
@@ -371,17 +453,27 @@ export function resetEntireSystemToFactoryDefaults(): ResetSummary {
   savePrintPaperFormat('A4');
   savePrintColorMode('bw');
   localStorage.removeItem('alpha_master_database_settings_v1');
+  localStorage.setItem('alpha_cost_centers_v1', JSON.stringify([]));
+  localStorage.removeItem('alpha_custom_warehouses_v1');
 
   // 9. Dispatch comprehensive notification events across the entire application
   notifyDataChanged();
   dispatchPartnerLedgerUpdated();
+  window.dispatchEvent(new Event('alpha-partners-updated'));
+  window.dispatchEvent(new Event('alpha-customers-updated'));
+  window.dispatchEvent(new Event('alpha-vendors-updated'));
   window.dispatchEvent(new Event('alpha-chart-of-accounts-updated'));
+  window.dispatchEvent(new Event('alpha-cost-centers-updated'));
   window.dispatchEvent(new Event('alpha-journal-entries-updated'));
   window.dispatchEvent(new Event('alpha-vouchers-updated'));
   window.dispatchEvent(new Event('alpha-trial-balance-updated'));
   window.dispatchEvent(new Event('alpha-items-updated'));
+  window.dispatchEvent(new Event('alpha-stock-updated'));
   window.dispatchEvent(new Event('alpha-installments-updated'));
   window.dispatchEvent(new Event('alpha-promissory-notes-updated'));
+  window.dispatchEvent(new Event('alpha-checks-updated'));
+  window.dispatchEvent(new Event('alpha-stock-transfers-updated'));
+  window.dispatchEvent(new Event('alpha-audit-trail-updated'));
   window.dispatchEvent(new Event('alpha-bom-updated'));
   window.dispatchEvent(new Event('alpha-work-orders-updated'));
   window.dispatchEvent(new Event('alpha-work-centers-updated'));
@@ -396,6 +488,29 @@ export function resetEntireSystemToFactoryDefaults(): ResetSummary {
   try {
     fetch('/api/accounts/reset', { method: 'POST' }).catch(() => {});
   } catch {}
+
+  // Record audit log for full factory reset
+  try {
+    recordAuditLog({
+      action: 'SYSTEM_RESET',
+      module: 'SYSTEM',
+      documentType: 'استعادة ضبط المصنع الكامل',
+      summary: `تمت استعادة ضبط المصنع ومسح كافة البيانات وسجلات وأسماء العملاء (${clearedCustomersCount}) والموردين (${clearedVendorsCount}) والأصناف (${clearedItemsCount}) والفواتير والعمليات بالكامل`,
+      summaryEn: `Full factory reset: cleared all customers (${clearedCustomersCount}), vendors (${clearedVendorsCount}), items (${clearedItemsCount}), invoices, vouchers, and transactions`,
+      severity: 'CRITICAL',
+      details: {
+        clearedCustomersCount,
+        clearedVendorsCount,
+        clearedItemsCount,
+        clearedInvoicesCount,
+        clearedVouchersCount,
+        clearedJournalEntriesCount,
+        clearedInventoryAuditsCount
+      }
+    });
+  } catch (e) {
+    console.error('Audit logging failed on factory reset:', e);
+  }
 
   return {
     success: true,

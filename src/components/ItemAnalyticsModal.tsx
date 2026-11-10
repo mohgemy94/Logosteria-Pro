@@ -184,10 +184,10 @@ export default function ItemAnalyticsModal({
     if (!searchTerm.trim()) return items;
     const term = searchTerm.toLowerCase();
     return items.filter(it => 
-      it.name.toLowerCase().includes(term) ||
-      it.code.toLowerCase().includes(term) ||
+      (it.name || '').toLowerCase().includes(term) ||
+      (it.code || '').toLowerCase().includes(term) ||
       (it.barcode && it.barcode.includes(term)) ||
-      (it.category && it.category.toLowerCase().includes(term))
+      (it.category && (it.category || '').toLowerCase().includes(term))
     );
   }, [items, searchTerm]);
 

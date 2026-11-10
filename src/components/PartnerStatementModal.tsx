@@ -447,19 +447,46 @@ export default function PartnerStatementModal({
                     </tr>
                   )}
                 </tbody>
-                <tfoot className="sticky bottom-0 bg-slate-100 font-bold border-t-2 border-slate-300 text-slate-800 text-xs">
+                <tfoot className="sticky bottom-0 bg-slate-100 font-bold border-t-2 border-slate-300 text-slate-800 text-xs divide-y divide-slate-200">
+                  {/* إجمالي حركات الفترة */}
                   <tr>
-                    <td colSpan={4} className="p-3 text-right">
-                      الإجمالي لحركات الفترة المحددة:
+                    <td colSpan={4} className="p-3 text-right text-slate-700">
+                      إجمالي حركات الفترة المحددة:
                     </td>
-                    <td className="p-3 text-left font-mono text-blue-700">
+                    <td className="p-3 text-left font-mono text-blue-700 font-black">
                       {filteredTransactions.reduce((acc, t) => acc + t.debit, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="p-3 text-left font-mono text-emerald-700">
+                    <td className="p-3 text-left font-mono text-emerald-700 font-black">
                       {filteredTransactions.reduce((acc, t) => acc + t.credit, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="p-3 text-left font-mono text-indigo-800 font-bold">
+                    <td className="p-3 text-left font-mono text-slate-400 font-normal">
+                      -
+                    </td>
+                    <td></td>
+                  </tr>
+
+                  {/* صف المبلغ المتبقي (سواء دائن أو مدين) */}
+                  <tr className={
+                    statement.balance > 0
+                      ? 'bg-rose-50/90 text-rose-950 border-t-2 border-slate-400'
+                      : statement.balance < 0
+                        ? 'bg-emerald-50/90 text-emerald-950 border-t-2 border-slate-400'
+                        : 'bg-slate-200 text-slate-900 border-t-2 border-slate-400'
+                  }>
+                    <td colSpan={4} className="p-3 text-right font-black text-sm">
+                      المبلغ المتبقي النهائي المستحق ({statement.balanceType === 'DEBIT' ? 'مدين' : statement.balanceType === 'CREDIT' ? 'دائن' : 'متزن'}):
+                    </td>
+                    <td className="p-3 text-left font-mono font-black text-rose-700">
+                      {statement.balance > 0 ? statement.balance.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
+                    </td>
+                    <td className="p-3 text-left font-mono font-black text-emerald-700">
+                      {statement.balance < 0 ? Math.abs(statement.balance).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
+                    </td>
+                    <td className="p-3 text-left font-mono font-black text-indigo-900 text-sm">
                       {statement.balanceFormatted} {currencySymbol}
+                      <span className="text-[10px] mr-1 font-bold block">
+                        ({statement.balanceType === 'DEBIT' ? 'رصيد مدين' : statement.balanceType === 'CREDIT' ? 'رصيد دائن' : 'متزن'})
+                      </span>
                     </td>
                     <td></td>
                   </tr>

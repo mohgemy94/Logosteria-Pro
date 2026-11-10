@@ -122,8 +122,8 @@ export const WarehouseCardModal: React.FC<WarehouseCardModalProps> = ({
       // Search
       if (modalSearch.trim()) {
         const q = modalSearch.toLowerCase();
-        const matchName = item.name.toLowerCase().includes(q);
-        const matchCode = item.code.toLowerCase().includes(q);
+        const matchName = (item.name || '').toLowerCase().includes(q);
+        const matchCode = (item.code || '').toLowerCase().includes(q);
         const matchBar = item.barcode && item.barcode.includes(q);
         const matchLoc = item.shelfLocation && item.shelfLocation.toLowerCase().includes(q);
         const matchSupp = item.supplierName && item.supplierName.toLowerCase().includes(q);

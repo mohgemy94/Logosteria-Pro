@@ -12,7 +12,7 @@ export type AuditAction =
   | 'SETTINGS_CHANGE' 
   | 'SYSTEM_RESET' 
   | 'YEAR_END_CLOSE'
-  | 'STATUS_CHANGE';
+  | 'STATUS_CHANGE' | 'LOCK' | 'UNLOCK' | 'ROLLFORWARD';
 
 export type AuditModule = 
   | 'SALES' 
@@ -28,7 +28,7 @@ export type AuditModule =
   | 'INVENTORY_COUNT' 
   | 'SETTINGS' 
   | 'YEAR_END' 
-  | 'SYSTEM';
+  | 'SYSTEM' | 'PERIOD_LOCK';
 
 export type AuditSeverity = 'INFO' | 'WARN' | 'DANGER' | 'CRITICAL';
 

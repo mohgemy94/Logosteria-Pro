@@ -1,5 +1,5 @@
 import { forwardRef, useMemo } from 'react';
-import { Phone, MapPin, User, FileText, Calendar, CreditCard, Clock, ShieldCheck } from 'lucide-react';
+import { Phone, MapPin, User, FileText, Calendar, CreditCard, Clock, ShieldCheck, Building } from 'lucide-react';
 import type { PrintPreviewData } from './PrintPreviewModal';
 import { tafqeetArabic, tafqeetEnglish } from '../utils/tafqeet';
 import { getSystemSettings } from '../utils/settings';
@@ -49,9 +49,16 @@ function translateDocTitle(title: string, isEn: boolean): string {
 
 function translateSubtitle(sub: string | undefined, isEn: boolean): string {
   if (!sub) return '';
-  if (!isEn) return sub;
+  if (!isEn) {
+    if (sub.includes('فاتورة مرحلة ومعتمدة')) {
+      return 'معتمدة ومرحّلة';
+    }
+    return sub;
+  }
   const map: Record<string, string> = {
+    'معتمدة ومرحّلة': 'Official Posted & Certified Invoice',
     'فاتورة مرحلة ومعتمدة نظامياً': 'Official Posted & Certified Invoice',
+    'فاتورة مرحلة ومعتمدة نظاميا': 'Official Posted & Certified Invoice',
     'مسودة فاتورة قيد الإعداد': 'Draft Invoice Under Preparation',
     'سند قبض مرحل ومعتمد': 'Posted & Certified Receipt Voucher',
     'سند صرف مرحل ومعتمد': 'Posted & Certified Payment Voucher',
@@ -81,6 +88,14 @@ function translatePaymentMethod(method: string | undefined, isEn: boolean): stri
   return map[method.trim()] || method;
 }
 
+function cleanBalanceLabel(label: string | undefined): string {
+  if (!label) return 'متزن';
+  return label
+    .replace('مدين (مطلوب من العميل)', 'مدين')
+    .replace('مدين (مطلوب)', 'مدين')
+    .replace('مدين (مستحق لنا)', 'مدين');
+}
+
 export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvoiceDocumentProps>(
   ({ data, format = 'A4', customSize, colorMode = 'bw', language = 'ar', className = '', id = 'certified-invoice-document' }, ref) => {
     const isEn = language === 'en';
@@ -107,8 +122,8 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
       return getCurrencyInfo(settings?.financial?.currency);
     }, [data.currency, settings?.financial?.currency]);
 
-    const currSymbol = isEn ? currencyInfo.symbolEn : currencyInfo.symbol;
-    const currFullName = isEn ? `${currencyInfo.nameEn} (${currencyInfo.code})` : `${currencyInfo.nameAr} (${currencyInfo.code})`;
+    const currSymbol = isEn ? currencyInfo.symbolEn : (currencyInfo.code === 'SAR' || !currencyInfo.symbol || currencyInfo.symbol === 'SAR' ? 'ر.س' : currencyInfo.symbol);
+    const currFullName = isEn ? `${currencyInfo.nameEn} (${currencyInfo.code})` : 'ر.س';
 
     const effectiveVatRate = useMemo(() => {
       if (data.taxRate !== undefined && data.taxRate > 0) return data.taxRate;
@@ -124,7 +139,8 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
       if (isEn) {
         return tafqeetEnglish(grandAmount, currencyInfo.nameEn, currencyInfo.subunitEn);
       }
-      return data.amountInWords || tafqeetArabic(grandAmount, currencyInfo.nameAr, currencyInfo.subunitAr);
+      const raw = data.amountInWords || tafqeetArabic(grandAmount, currencyInfo.nameAr, currencyInfo.subunitAr);
+      return raw.replace(/ريال سعودي\s*\(?SAR\)?/gi, 'ر.س').replace(/ريال سعودي/g, 'ر.س');
     }, [data.amountInWords, grandAmount, isEn, currencyInfo]);
 
     const formattedTafqeet = useMemo(() => {
@@ -152,25 +168,27 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
     const isThermal = def.isThermal || isCompact;
     const isBw = colorMode === 'bw';
 
+    const safeTitle = String(data.title || '');
     const isVoucher = Boolean(
       data.voucherType ||
-      data.title.includes('سند') ||
-      data.title.toLowerCase().includes('voucher')
+      safeTitle.includes('سند') ||
+      safeTitle.toLowerCase().includes('voucher')
     );
-    const isReceiptVoucher = data.voucherType === 'RECEIPT' || data.title.includes('قبض');
-    const isPaymentVoucher = data.voucherType === 'PAYMENT' || data.title.includes('صرف');
-    const isInternalVoucher = data.voucherType === 'INTERNAL' || data.title.includes('تحويل');
-    const isStatement = Boolean(data.statementPeriod || (data.transactions && data.transactions.length > 0) || data.title.includes('كشف حساب'));
+    const isReceiptVoucher = data.voucherType === 'RECEIPT' || safeTitle.includes('قبض');
+    const isPaymentVoucher = data.voucherType === 'PAYMENT' || safeTitle.includes('صرف');
+    const isInternalVoucher = data.voucherType === 'INTERNAL' || safeTitle.includes('تحويل');
+    const isDetailedBlockStatement = Boolean(data.statementDocBlocks && data.statementDocBlocks.length > 0);
+    const isStatement = Boolean(data.statementPeriod || (data.transactions && data.transactions.length > 0) || isDetailedBlockStatement || safeTitle.includes('كشف حساب'));
 
     const isSalesDoc = Boolean(
       data.partnerType === 'CUSTOMER' ||
-      data.title.includes('مبيعات') ||
-      data.title.toLowerCase().includes('sale')
+      safeTitle.includes('مبيعات') ||
+      safeTitle.toLowerCase().includes('sale')
     );
     const isPurchaseDoc = Boolean(
       data.partnerType === 'VENDOR' ||
-      data.title.includes('مشتريات') ||
-      data.title.toLowerCase().includes('purchase')
+      safeTitle.includes('مشتريات') ||
+      safeTitle.toLowerCase().includes('purchase')
     );
 
     // Color Palette per Document Type:
@@ -331,7 +349,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
               {translateDocTitle(data.title, isEn)}
             </h2>
             <div className="flex justify-between items-center text-[10px] font-mono font-bold text-black">
-              <span>{isEn ? 'Doc No:' : 'رقم المستند:'} #{data.docNumber}</span>
+              <span>{isEn ? 'Doc No:' : 'رقم المستند:'} {data.docNumber}</span>
               <span>{isEn ? 'Date:' : 'التاريخ:'} {data.date}</span>
             </div>
             {/* Scannable Barcode on Thermal Receipt */}
@@ -340,7 +358,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                 value={data.docNumber || '0000'} 
                 height={26} 
                 barWidth={1.05} 
-                fontSize={7.5} 
+                includeText={false}
               />
             </div>
           </div>
@@ -417,7 +435,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                   <div className="space-y-0.5">
                     {data.allocatedInvoices.map((inv, idx) => (
                       <div key={idx} className="flex justify-between items-center font-mono">
-                        <span>#{inv.invoiceNumber}</span>
+                        <span>{inv.invoiceNumber}</span>
                         <span className="font-bold">{(inv.allocatedAmount || 0).toFixed(2)}</span>
                       </div>
                     ))}
@@ -458,7 +476,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
 
           {/* Totals */}
           <div className="py-2 border-b-2 border-dashed border-black space-y-1 font-mono text-[11px] font-bold text-black">
-            {data.subtotal !== undefined && (
+            {data.classification === 'TAX' && data.subtotal !== undefined && (
               <div className="flex justify-between">
                 <span className="font-sans font-bold">{isEn ? 'Taxable Amount:' : 'المبلغ الخاضع للضريبة:'}</span>
                 <span className="font-black">{data.subtotal.toFixed(2)} {currSymbol}</span>
@@ -476,15 +494,22 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                 <span className="font-black">-{data.discountTotal.toFixed(2)} {currSymbol}</span>
               </div>
             )}
-            <div className="border-t-2 border-b-2 border-black py-2 my-1 flex justify-between items-baseline font-black text-black text-xs bg-slate-100 px-1">
-              <span className="font-sans text-xs">{isEn ? 'GRAND TOTAL:' : 'الإجمالي النهائي:'}</span>
-              <span className="text-sm font-black">{grandAmount.toFixed(2)} {currSymbol}</span>
-            </div>
-
-            {/* المبلغ كتابة بالحروف وفقط أسفل الإجمالي النهائي */}
-            <div className="py-1 px-1 bg-slate-50 text-[10px] border border-black/30 rounded font-sans text-black leading-tight">
-              <span className="font-bold block text-[9px] text-slate-700">{isEn ? 'Amount in Words:' : 'المبلغ كتابة وفقط:'}</span>
-              <span className="font-bold">{tafqeetText}</span>
+            {data.servicesTotal !== undefined && data.servicesTotal > 0 && (
+              <div className="flex justify-between">
+                <span className="font-sans font-bold">{isEn ? 'Services / Charges:' : 'الخدمات (قيمة الخدمة):'}</span>
+                <span className="font-black">+{data.servicesTotal.toFixed(2)} {currSymbol}</span>
+              </div>
+            )}
+            {/* إطار الإجمالي النهائي مع المبلغ كتابة بالحروف بداخله */}
+            <div className="border-t-2 border-b-2 border-black py-1.5 my-1 bg-slate-100 px-1.5 font-black text-black flex flex-col gap-1">
+              <div className="flex justify-between items-baseline text-xs">
+                <span className="font-sans font-black">{isEn ? 'GRAND TOTAL:' : 'الإجمالي النهائي:'}</span>
+                <span className="text-sm font-black font-mono">{grandAmount.toFixed(2)} {currSymbol}</span>
+              </div>
+              <div className="pt-1 border-t border-black/30 text-[9.5px] font-sans font-bold leading-tight flex flex-wrap items-baseline gap-1">
+                <span className="text-slate-700">{isEn ? 'Amount in Words:' : 'المبلغ كتابة:'}</span>
+                <span>({tafqeetText})</span>
+              </div>
             </div>
 
             {data.paidAmount !== undefined && (
@@ -528,7 +553,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                 )}
                 <div className="flex justify-between font-black text-[10px] pt-0.5 border-t border-black">
                   <span className="font-sans">{isEn ? 'Balance After:' : 'الرصيد بعد الفاتورة:'}</span>
-                  <span>{data.partnerBalanceImpact.newBalanceFormatted} {currSymbol} ({data.partnerBalanceImpact.newBalanceLabel})</span>
+                  <span>{data.partnerBalanceImpact.newBalanceFormatted} {currSymbol} ({cleanBalanceLabel(data.partnerBalanceImpact.newBalanceLabel)})</span>
                 </div>
               </div>
             )}
@@ -577,6 +602,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
     customerItems.push({
       label: partnerRoleLabel,
       value: data.partnerName || (isEn ? 'Cash Customer' : 'عميل نقدي'),
+      icon: data.partnerType === 'VENDOR' ? Building : User,
       isBold: true,
     });
 
@@ -585,6 +611,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
       customerItems.push({
         label: isEn ? 'VAT / Tax No:' : 'الرقم الضريبي:',
         value: data.partnerTaxNo,
+        icon: FileText,
         isMono: true,
       });
     }
@@ -641,7 +668,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
         label: isEn ? 'Issue Date:' : 'تاريخ الإصدار:',
         value: data.date,
         icon: Calendar,
-        iconColor: 'text-blue-600',
+        iconColor: isBw ? 'text-black' : 'text-blue-600',
         isMono: true,
       });
     }
@@ -652,7 +679,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
         label: isEn ? 'Due Date:' : 'تاريخ الاستحقاق:',
         value: data.dueDate,
         icon: Clock,
-        iconColor: 'text-amber-600',
+        iconColor: isBw ? 'text-black' : 'text-amber-600',
         isMono: true,
       });
     }
@@ -663,11 +690,10 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
         label: isEn ? 'Payment Method:' : 'طريقة السداد:',
         value: translatePaymentMethod(data.paymentMethod, isEn),
         icon: CreditCard,
-        iconColor: 'text-emerald-600',
+        iconColor: isBw ? 'text-black' : 'text-emerald-600',
         isBold: true,
       });
     }
-
 
     // Service Type
     if (data.serviceType && data.serviceType.trim() !== '') {
@@ -675,7 +701,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
         label: isEn ? 'Service Type:' : 'نوع الخدمة:',
         valueBadge: data.serviceType,
         icon: FileText,
-        iconColor: 'text-indigo-600',
+        iconColor: isBw ? 'text-black' : 'text-indigo-600',
       });
     }
 
@@ -688,7 +714,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
           ? (isEn ? 'Tax Invoice' : 'فاتورة ضريبية')
           : (isEn ? 'Standard Invoice' : 'فاتورة عادية'),
         icon: ShieldCheck,
-        iconColor: isTax ? 'text-emerald-600' : 'text-slate-600',
+        iconColor: isBw ? 'text-black' : (isTax ? 'text-emerald-600' : 'text-slate-600'),
       });
     }
 
@@ -704,7 +730,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
           minHeight: def.heightMm ? `${Math.round(def.heightMm * 3.7795)}px` : 'auto',
         }}
         className={`printable-invoice-doc bg-white print:!w-full print:!min-h-0 ${
-          isBw ? 'text-black border-2 border-black' : 'text-slate-900 border border-slate-300 shadow-md'
+          isBw ? 'text-black border-2 border-black grayscale' : 'text-slate-900 border border-slate-300 shadow-md'
         } transition-all mx-auto select-none print:shadow-none print:border-none print:m-0 font-sans ${
           isMedium 
             ? 'p-4 rounded-lg text-[11px]' 
@@ -785,7 +811,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                   value={data.docNumber || '0000'} 
                   height={26} 
                   barWidth={1.1} 
-                  fontSize={7.5} 
+                  includeText={false} 
                 />
               </div>
               <div className="font-mono">
@@ -793,7 +819,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                   {isEn ? 'Document No.' : 'رقم المستند'}
                 </span>
                 <span className={`text-base font-black ${isBw ? 'text-black' : docTheme.accentText}`}>
-                  #{data.docNumber || '---'}
+                  {data.docNumber || '---'}
                 </span>
               </div>
             </div>
@@ -804,19 +830,19 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
         {/* CUSTOMER & INVOICE DETAILS (PAIRED IN SAME ROWS TO SAVE SPACE) */}
         {/* ============================================================== */}
         {pairedRowCount > 0 && (
-          <div className={`mb-2.5 rounded-lg overflow-hidden ${
+          <div className={`mb-2.5 rounded-lg overflow-hidden border ${
             isBw 
-              ? 'border-2 border-black bg-white' 
+              ? 'border-black bg-white'
               : isSalesDoc
-              ? 'border-2 border-blue-950 bg-white shadow-2xs'
+              ? 'border-blue-950 bg-white shadow-2xs'
               : 'border border-slate-200 bg-white shadow-2xs'
           }`}>
             {/* Card Header Bar */}
             <div className={`px-3 py-1 flex items-center justify-between text-[11px] font-bold ${
               isBw 
-                ? 'bg-slate-200 text-black border-b-2 border-black' 
+                ? 'bg-slate-200 text-black border-b border-black'
                 : isSalesDoc
-                ? 'bg-blue-950 text-white border-b-2 border-blue-950'
+                ? 'bg-blue-950 text-white border-b border-blue-950'
                 : 'bg-slate-100/90 text-slate-800 border-b border-slate-200'
             }`}>
               <div className="flex items-center gap-1.5">
@@ -841,7 +867,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
             </div>
 
             {/* Dynamic Paired Rows */}
-            <div className={`divide-y text-xs ${isBw ? 'divide-black' : 'divide-slate-100'}`}>
+            <div className={`divide-y text-xs ${isBw ? 'divide-black/40' : 'divide-slate-200'}`}>
               {Array.from({ length: pairedRowCount }).map((_, idx) => {
                 const custItem = customerItems[idx];
                 const metaItem = invoiceMetaItems[idx];
@@ -849,7 +875,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                 return (
                   <div 
                     key={idx} 
-                    className={`grid grid-cols-2 divide-x ${isEn ? '' : 'divide-x-reverse'} ${isBw ? 'divide-black' : 'divide-slate-200'}`}
+                    className={`grid grid-cols-2 divide-x ${isEn ? '' : 'divide-x-reverse'} ${isBw ? 'divide-black/60' : 'divide-slate-300'}`}
                   >
                     {/* Customer Side (Right in RTL, Left in LTR) */}
                     <div className="p-1.5 px-2.5 flex items-center gap-1.5 min-w-0">
@@ -953,7 +979,7 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                     <span className={`text-xs font-bold px-2 py-1 rounded ${
                       isBw ? 'bg-white border border-black text-black' : 'bg-white/10 text-white border border-white/20'
                     }`}>
-                      {currFullName}
+                      {currSymbol}
                     </span>
                   </div>
                 </div>
@@ -1013,17 +1039,17 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                       <tbody className="divide-y divide-slate-200">
                         {data.allocatedInvoices.map((inv, idx) => (
                           <tr key={idx} className={isBw ? 'even:bg-slate-100' : 'even:bg-slate-50/60'}>
-                            <td className="py-1.5 px-2 font-mono font-bold text-blue-700">#{inv.invoiceNumber}</td>
+                            <td className={`py-1.5 px-2 font-mono font-bold ${isBw ? 'text-black' : 'text-blue-700'}`}>{inv.invoiceNumber}</td>
                             <td className="py-1.5 px-2 font-mono text-slate-600">{inv.date || '-'}</td>
                             <td className={`py-1.5 px-2 font-mono ${isEn ? 'text-right' : 'text-left'}`}>
                               {(inv.invoiceTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
                             </td>
-                            <td className={`py-1.5 px-2 font-mono font-bold text-emerald-700 ${isEn ? 'text-right' : 'text-left'}`}>
+                            <td className={`py-1.5 px-2 font-mono font-bold ${isBw ? 'text-black' : 'text-emerald-700'} ${isEn ? 'text-right' : 'text-left'}`}>
                               {(inv.allocatedAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
                             </td>
                             <td className={`py-1.5 px-2 font-mono ${isEn ? 'text-right' : 'text-left'}`}>
                               {(inv.remainingBalance ?? 0) <= 0.001 ? (
-                                <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[9px] border border-emerald-200">
+                                <span className={`${isBw ? 'bg-slate-200 text-black border border-black' : 'text-emerald-700 font-bold bg-emerald-50 border border-emerald-200'} font-bold px-1.5 py-0.5 rounded text-[9px]`}>
                                   {isEn ? 'Paid in Full' : 'مسددة بالكامل'}
                                 </span>
                               ) : (
@@ -1039,31 +1065,286 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
               )}
             </div>
           </div>
+        ) : isDetailedBlockStatement && data.statementDocBlocks ? (
+          /* ============================================================== */
+          /* DETAILED BLOCK STATEMENT (9 COLUMNS WITH BLOCKS & SUMMARY CARDS) */
+          /* ============================================================== */
+          <div className="space-y-3 mb-3">
+            {/* 1. KPI Summary Cards */}
+            <div className="grid grid-cols-4 gap-2">
+              {/* Card 1: Prior Balance */}
+              <div className={`p-2 rounded-lg border ${isBw ? 'border-2 border-black bg-slate-50' : 'border-slate-300 bg-slate-50 shadow-2xs'}`}>
+                <span className={`text-[10px] font-bold block mb-0.5 ${isBw ? 'text-black' : 'text-slate-600'}`}>رصيد ما قبل الفترة</span>
+                <span className="text-sm font-black font-mono block text-slate-900">
+                  {(data.priorBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
+                </span>
+                <span className={`text-[9px] font-bold ${isBw ? 'text-black' : 'text-slate-500'}`}>
+                  طبيعة الرصيد: {data.priorBalanceType === 'DEBIT' ? 'مدين (لنا)' : data.priorBalanceType === 'CREDIT' ? 'دائن (له)' : 'متزن'}
+                </span>
+              </div>
+
+              {/* Card 2: Total Debit */}
+              <div className={`p-2 rounded-lg border ${isBw ? 'border-2 border-black bg-slate-50' : 'border-blue-300 bg-blue-50/50 shadow-2xs'}`}>
+                <span className={`text-[10px] font-bold block mb-0.5 ${isBw ? 'text-black' : 'text-blue-900'}`}>إجمالي المدين (+)</span>
+                <span className={`text-sm font-black font-mono block ${isBw ? 'text-black' : 'text-blue-950'}`}>
+                  {(data.totalDebitPeriod || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
+                </span>
+                <span className={`text-[9px] font-medium ${isBw ? 'text-black' : 'text-blue-700'}`}>فواتير ومسحوبات الفترة</span>
+              </div>
+
+              {/* Card 3: Total Credit */}
+              <div className={`p-2 rounded-lg border ${isBw ? 'border-2 border-black bg-slate-50' : 'border-emerald-300 bg-emerald-50/50 shadow-2xs'}`}>
+                <span className={`text-[10px] font-bold block mb-0.5 ${isBw ? 'text-black' : 'text-emerald-900'}`}>إجمالي الدائن (-)</span>
+                <span className={`text-sm font-black font-mono block ${isBw ? 'text-black' : 'text-emerald-950'}`}>
+                  {(data.totalCreditPeriod || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
+                </span>
+                <span className={`text-[9px] font-medium ${isBw ? 'text-black' : 'text-emerald-700'}`}>سندات قبض وتحصيلات</span>
+              </div>
+
+              {/* Card 4: Net Balance */}
+              <div className={`p-2 rounded-lg border ${isBw ? 'border-2 border-black bg-slate-200 text-black' : 'border-slate-900 bg-slate-900 text-white shadow-2xs'}`}>
+                <span className={`text-[10px] font-bold block mb-0.5 ${isBw ? 'text-black' : 'text-slate-300'}`}>الرصيد الختامي الصافي</span>
+                <span className={`text-sm font-black font-mono block ${isBw ? 'text-black' : 'text-white'}`}>
+                  {(data.finalBalance || data.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
+                </span>
+                <span className={`text-[9px] font-bold ${isBw ? 'text-black' : 'text-amber-300'}`}>
+                  {data.finalBalanceType === 'DEBIT' ? 'مدين (مستحق السداد لنا)' : data.finalBalanceType === 'CREDIT' ? 'دائن (له دفعة مقدمة)' : 'رصيد متزن'}
+                </span>
+              </div>
+            </div>
+
+            {/* 2. Detailed Statement Table: 11 Columns with Separate <tbody> per Document Block */}
+            <div className="overflow-x-auto rounded-lg border-2 border-black">
+              <table className={`w-full min-w-full ${isEn ? 'text-left' : 'text-right'} border-collapse border border-black text-[10px]`}>
+                <thead>
+                  <tr className="bg-slate-200 text-black border-b-2 border-black font-bold">
+                    <th className="py-2 px-2 whitespace-nowrap w-24 border border-black">النوع</th>
+                    <th className="py-2 px-2 whitespace-nowrap w-24 border border-black">رقم المستند</th>
+                    <th className="py-2 px-2 whitespace-nowrap w-24 border border-black">التاريخ</th>
+                    <th className="py-2 px-2 min-w-[160px] border border-black">البيان والشرح المحاسبي</th>
+                    <th className="py-2 px-2 text-center whitespace-nowrap w-14 border border-black">كمية</th>
+                    <th className="py-2 px-2 text-left whitespace-nowrap w-18 border border-black">سعر الوحدة</th>
+                    <th className="py-2 px-2 text-center whitespace-nowrap w-20 border border-black">الضريبة / الخصم</th>
+                    <th className="py-2 px-2 text-left whitespace-nowrap w-20 border border-black">الإجمالي</th>
+                    <th className={`py-2 px-2 text-left whitespace-nowrap w-22 border border-black ${isBw ? 'text-black' : 'text-blue-900'}`}>مدين (+)</th>
+                    <th className={`py-2 px-2 text-left whitespace-nowrap w-22 border border-black ${isBw ? 'text-black' : 'text-emerald-900'}`}>دائن (-)</th>
+                    <th className="py-2 px-2 text-center whitespace-nowrap w-28 border border-black bg-slate-300 text-slate-950 font-black">الرصيد التراكمي</th>
+                  </tr>
+                </thead>
+
+                {/* Prior balance row if exists */}
+                {data.priorBalance !== undefined && data.priorBalance > 0 && (
+                  <tbody className="border-b-2 border-black bg-slate-100">
+                    <tr className="font-bold">
+                      <td className="py-1.5 px-2 border border-black">رصيد سابق</td>
+                      <td className="py-1.5 px-2 font-mono text-slate-500 border border-black text-center" dir="ltr">-</td>
+                      <td className="py-1.5 px-2 font-mono border border-black">{data.date || '-'}</td>
+                      <td className="py-1.5 px-2 border border-black">رصيد ما قبل الفترة المنقول</td>
+                      <td className="py-1.5 px-2 text-center border border-black">-</td>
+                      <td className="py-1.5 px-2 text-left border border-black">-</td>
+                      <td className="py-1.5 px-2 text-center border border-black">-</td>
+                      <td className="py-1.5 px-2 font-mono text-left font-bold border border-black">{data.priorBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className={`py-1.5 px-2 font-mono text-left font-black border border-black ${isBw ? 'text-black' : 'text-blue-900'}`}>
+                        {data.priorBalanceType === 'DEBIT' ? data.priorBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
+                      </td>
+                      <td className={`py-1.5 px-2 font-mono text-left font-black border border-black ${isBw ? 'text-black' : 'text-emerald-900'}`}>
+                        {data.priorBalanceType === 'CREDIT' ? data.priorBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
+                      </td>
+                      <td className="py-1.5 px-2 font-mono text-center font-black border border-black bg-slate-200">
+                        {data.priorBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} ({data.priorBalanceType === 'DEBIT' ? 'مدين' : data.priorBalanceType === 'CREDIT' ? 'دائن' : 'متزن'})
+                      </td>
+                    </tr>
+                  </tbody>
+                )}
+
+                {/* Document Blocks */}
+                {data.statementDocBlocks.map((block: any, bIdx: number) => {
+                  const isMulti = Boolean(block.isMultiLine && block.lines && block.lines.length > 1);
+                  const balText = block.runningBalanceType === 'DEBIT' ? 'مدين' : block.runningBalanceType === 'CREDIT' ? 'دائن' : 'متزن';
+                  const balVal = typeof block.runningBalance === 'number' ? block.runningBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-';
+
+                  // 1. Single line transaction (Voucher, Single item invoice, Journal)
+                  if (!isMulti) {
+                    const line = (block.lines && block.lines[0]) || {
+                      typeLabel: block.docTypeLabel,
+                      docNumber: block.docNumber,
+                      date: block.date,
+                      description: block.docTypeLabel,
+                      quantity: null,
+                      unitPrice: null,
+                      total: block.docTotal
+                    };
+
+                    return (
+                      <tbody 
+                        key={block.id || bIdx} 
+                        className="border-b border-black bg-white"
+                      >
+                        <tr className="hover:bg-slate-50">
+                          <td className="py-1.5 px-2 font-bold whitespace-nowrap text-slate-800 border border-black">{block.docTypeLabel || line.typeLabel}</td>
+                          <td className="py-1.5 px-2 font-mono font-bold whitespace-nowrap text-slate-900 border border-black" dir="ltr">{block.docNumber || line.docNumber}</td>
+                          <td className="py-1.5 px-2 font-mono whitespace-nowrap text-slate-700 border border-black">{block.date || line.date}</td>
+                          <td className="py-1.5 px-2 font-medium text-slate-900 border border-black">{line.description}</td>
+                          <td className="py-1.5 px-2 font-mono text-center font-bold text-slate-800 border border-black">
+                            {line.quantity !== null && line.quantity !== undefined ? line.quantity.toLocaleString() : '-'}
+                          </td>
+                          <td className="py-1.5 px-2 font-mono text-left font-bold text-slate-800 border border-black">
+                            {line.unitPrice !== null && line.unitPrice !== undefined ? line.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
+                          </td>
+                          <td className="py-1.5 px-2 text-center text-slate-500 border border-black text-[9px]">
+                            {block.taxAmount > 0 ? `ض: ${block.taxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
+                          </td>
+                          <td className="py-1.5 px-2 font-mono text-left font-bold text-slate-900 border border-black">
+                            {block.docTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className={`py-1.5 px-2 font-mono text-left font-black border border-black ${isBw ? 'text-black' : 'text-blue-900'}`}>
+                            {block.totalDebit > 0 ? block.totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
+                          </td>
+                          <td className={`py-1.5 px-2 font-mono text-left font-black border border-black ${isBw ? 'text-black' : 'text-emerald-900'}`}>
+                            {block.totalCredit > 0 ? block.totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
+                          </td>
+                          <td className="py-1.5 px-2 font-mono text-center font-black border border-black bg-slate-50">
+                            {balVal} ({balText})
+                          </td>
+                        </tr>
+                      </tbody>
+                    );
+                  }
+
+                  // 2. Multi-line Invoice Block
+                  return (
+                    <tbody 
+                      key={block.id || bIdx} 
+                      className="border-b-2 border-black bg-white"
+                    >
+                      {/* Master Invoice Header */}
+                      <tr className="bg-slate-100 border-t border-black font-bold">
+                        <td className="py-1.5 px-2 font-bold whitespace-nowrap text-slate-900 border border-black">{block.docTypeLabel}</td>
+                        <td className="py-1.5 px-2 font-mono font-bold whitespace-nowrap text-slate-950 border border-black" dir="ltr">{block.docNumber}</td>
+                        <td className="py-1.5 px-2 font-mono whitespace-nowrap text-slate-700 border border-black">{block.date}</td>
+                        <td className="py-1.5 px-2 font-black text-slate-950 border border-black">
+                          {block.docTypeLabel} ({block.lines.length} أصناف)
+                        </td>
+                        <td className="py-1.5 px-2 font-mono text-center font-black text-slate-950 border border-black">
+                          {block.totalQuantity > 0 ? block.totalQuantity.toLocaleString() : '-'}
+                        </td>
+                        <td className="py-1.5 px-2 text-center text-slate-400 border border-black">-</td>
+                        <td className="py-1.5 px-2 text-center text-slate-700 border border-black text-[9px]">
+                          {block.taxAmount > 0 ? `ض: ${block.taxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
+                        </td>
+                        <td className="py-1.5 px-2 font-mono text-left font-black text-slate-950 border border-black">
+                          {block.docTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className={`py-1.5 px-2 font-mono text-left font-black border border-black ${isBw ? 'text-black' : 'text-blue-900'}`}>
+                          {block.totalDebit > 0 ? block.totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
+                        </td>
+                        <td className={`py-1.5 px-2 font-mono text-left font-black border border-black ${isBw ? 'text-black' : 'text-emerald-900'}`}>
+                          {block.totalCredit > 0 ? block.totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
+                        </td>
+                        <td className="py-1.5 px-2 font-mono text-center font-black border border-black bg-slate-200">
+                          {balVal} ({balText})
+                        </td>
+                      </tr>
+
+                      {/* Detail Lines */}
+                      {block.lines.map((line: any, lIdx: number) => (
+                        <tr key={line.id || lIdx} className="hover:bg-slate-50 text-[9px] bg-slate-50/40">
+                          <td className="py-1 px-2 text-center text-slate-400 border border-black">بند #{lIdx + 1}</td>
+                          <td className="py-1 px-2 font-mono text-slate-400 border border-black" dir="ltr">↳ {block.docNumber}</td>
+                          <td className="py-1 px-2 font-mono text-slate-500 border border-black">{line.date}</td>
+                          <td className="py-1 pr-4 pl-2 text-slate-900 font-semibold border border-black">
+                            ↳ {line.description}
+                          </td>
+                          <td className="py-1 px-2 font-mono text-center font-bold text-slate-800 border border-black">
+                            {line.quantity !== null && line.quantity !== undefined ? line.quantity.toLocaleString() : '-'}
+                          </td>
+                          <td className="py-1 px-2 font-mono text-left font-bold text-slate-800 border border-black">
+                            {line.unitPrice !== null && line.unitPrice !== undefined ? line.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
+                          </td>
+                          <td className="py-1 px-2 text-center text-slate-500 border border-black">
+                            {line.taxAmount ? `+${line.taxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
+                          </td>
+                          <td className="py-1 px-2 font-mono text-left font-bold text-slate-900 border border-black">
+                            {line.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-1 px-2 text-center text-slate-300 border border-black">-</td>
+                          <td className="py-1 px-2 text-center text-slate-300 border border-black">-</td>
+                          <td className="py-1 px-2 text-center text-slate-300 border border-black bg-slate-50/40">-</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  );
+                })}
+
+                {/* Grand Totals Footer */}
+                <tfoot>
+                  <tr className="bg-black text-white border-t-2 border-black font-black">
+                    <td colSpan={4} className="py-2 px-3 text-white border border-black">
+                      الإجمالي العام لكشف الحساب ({data.statementDocBlocks.length} مستند)
+                    </td>
+                    <td className="py-2 px-2 font-mono text-center font-black text-white border border-black">
+                      {data.totalQuantityPeriod !== undefined && data.totalQuantityPeriod > 0 ? data.totalQuantityPeriod.toLocaleString() : '-'}
+                    </td>
+                    <td className="py-2 px-2 text-center text-slate-400 border border-black">-</td>
+                    <td className="py-2 px-2 text-center text-slate-400 border border-black">-</td>
+                    <td className="py-2 px-2 text-center text-slate-400 border border-black">-</td>
+                    <td className={`py-2 px-2 font-mono text-left font-black border border-black ${isBw ? 'text-white' : 'text-blue-300'}`}>
+                      {(data.totalDebitPeriod ?? data.subtotal ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className={`py-2 px-2 font-mono text-left font-black border border-black ${isBw ? 'text-white' : 'text-emerald-300'}`}>
+                      {(data.totalCreditPeriod ?? data.taxTotal ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className={`py-2 px-2 font-mono text-center font-black border border-black ${isBw ? 'text-white bg-black' : 'text-amber-300 bg-slate-900'}`}>
+                      {(data.finalBalance || data.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} ({data.finalBalanceType === 'DEBIT' ? 'صافي مدين' : data.finalBalanceType === 'CREDIT' ? 'صافي دائن' : 'متزن'})
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* Statement Summary Notes & Tafqeet */}
+            <div className={`p-2.5 rounded-lg border ${isBw ? 'border-2 border-black bg-white text-black' : 'border border-slate-200 bg-slate-50 text-slate-800'}`}>
+              <div className="flex justify-between items-baseline mb-1">
+                <span className="text-xs font-black text-slate-900">المطابقة المحاسبية والرصيد النهائي:</span>
+                <span className="font-mono text-xs font-black text-slate-900">
+                  {(data.finalBalance || data.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
+                </span>
+              </div>
+              <p className="text-[11px] font-bold text-slate-700 mb-1">
+                المبلغ كتابة: {tafqeetText}
+              </p>
+              {data.notes && (
+                <p className="text-[10px] text-slate-600 font-medium">
+                  {data.notes}
+                </p>
+              )}
+            </div>
+          </div>
         ) : (
           /* Regular Itemized Table for Invoices/Quotations/Orders */
           data.items && data.items.length > 0 && (
-            <div className={`mb-2.5 overflow-x-auto overflow-y-hidden rounded-lg ${
+            <div className={`mb-2.5 overflow-x-auto overflow-y-hidden rounded-lg border ${
               isBw 
-                ? 'border-2 border-black' 
+                ? 'border-black'
                 : isSalesDoc 
-                ? 'border-2 border-blue-950 shadow-2xs' 
+                ? 'border-blue-950 shadow-2xs'
                 : 'border border-slate-200 shadow-2xs'
             }`}>
               <table className={`w-full min-w-full ${isEn ? 'text-left' : 'text-right'} border-collapse text-[11px]`}>
                 <thead>
-                  <tr className={`${docTheme.tableHeader} font-bold`}>
-                    <th className={`py-1.5 px-2 w-7 text-center ${isBw ? (isEn ? 'border-r-2 border-black' : 'border-l-2 border-black') : (isEn ? 'border-r border-slate-700/60' : 'border-l border-slate-700/60')}`}>#</th>
-                    <th className={`py-1.5 px-2 ${isBw ? (isEn ? 'border-r-2 border-black' : 'border-l-2 border-black') : (isEn ? 'border-r border-slate-700/60' : 'border-l border-slate-700/60')}`}>
+                  <tr className={`${docTheme.tableHeader} font-bold border-b ${isBw ? 'border-black' : 'border-slate-300'}`}>
+                    <th className={`py-1.5 px-2 w-7 text-center ${isEn ? 'border-r' : 'border-l'} ${isBw ? 'border-black/50' : 'border-slate-300/80'}`}>#</th>
+                    <th className={`py-1.5 px-2 ${isEn ? 'border-r' : 'border-l'} ${isBw ? 'border-black/50' : 'border-slate-300/80'}`}>
                       {isEn ? 'Item' : 'الصنف'}
                     </th>
-                    <th className={`py-1.5 px-2 text-center w-16 ${isBw ? (isEn ? 'border-r-2 border-black' : 'border-l-2 border-black') : (isEn ? 'border-r border-slate-700/60' : 'border-l border-slate-700/60')}`}>
+                    <th className={`py-1.5 px-2 text-center w-16 ${isEn ? 'border-r' : 'border-l'} ${isBw ? 'border-black/50' : 'border-slate-300/80'}`}>
                       {isEn ? 'Quantity' : 'الكمية'}
                     </th>
-                    <th className={`py-1.5 px-2 ${isEn ? 'text-right' : 'text-left'} w-20 ${isBw ? (isEn ? 'border-r-2 border-black' : 'border-l-2 border-black') : (isEn ? 'border-r border-slate-700/60' : 'border-l border-slate-700/60')}`}>
+                    <th className={`py-1.5 px-2 ${isEn ? 'text-right' : 'text-left'} w-20 ${isEn ? 'border-r' : 'border-l'} ${isBw ? 'border-black/50' : 'border-slate-300/80'}`}>
                       {isEn ? 'Unit Price' : 'سعر الوحدة'}
                     </th>
                     {data.classification === 'TAX' && (
-                      <th className={`py-1.5 px-2 text-center w-14 ${isBw ? (isEn ? 'border-r-2 border-black' : 'border-l-2 border-black') : (isEn ? 'border-r border-slate-700/60' : 'border-l border-slate-700/60')}`}>
+                      <th className={`py-1.5 px-2 text-center w-14 ${isEn ? 'border-r' : 'border-l'} ${isBw ? 'border-black/50' : 'border-slate-300/80'}`}>
                         {isEn ? 'VAT %' : 'الضريبة'}
                       </th>
                     )}
@@ -1072,25 +1353,25 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                     </th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y ${isBw ? 'divide-slate-300' : 'divide-slate-100'}`}>
+                <tbody className={`divide-y ${isBw ? 'divide-black/30' : 'divide-slate-200'}`}>
                   {data.items.map((item, idx) => {
                     const total = item.total ?? ((item.quantity || 1) * (item.unitPrice || 0));
                     return (
                       <tr key={idx} className={`${isBw ? 'even:bg-slate-50/60' : 'even:bg-slate-50/50 hover:bg-slate-50'}`}>
-                        <td className={`py-1.5 px-2 text-center font-mono font-bold ${isBw ? (isEn ? 'text-black border-r border-slate-400' : 'text-black border-l border-slate-400') : (isEn ? 'text-slate-500 border-r border-slate-100' : 'text-slate-500 border-l border-slate-100')}`}>
+                        <td className={`py-1.5 px-2 text-center font-mono font-bold ${isEn ? 'border-r' : 'border-l'} ${isBw ? 'text-black border-black/30' : 'text-slate-800 border-slate-200'}`}>
                           {idx + 1}
                         </td>
-                        <td className={`py-1.5 px-2 font-bold ${isBw ? (isEn ? 'text-black border-r border-slate-400' : 'text-black border-l border-slate-400') : (isEn ? 'text-slate-900 border-r border-slate-100' : 'text-slate-900 border-l border-slate-100')}`}>
+                        <td className={`py-1.5 px-2 font-bold ${isEn ? 'border-r' : 'border-l'} ${isBw ? 'text-black border-black/30' : 'text-slate-900 border-slate-200'}`}>
                           {item.description}
                         </td>
-                        <td className={`py-1.5 px-2 text-center font-mono font-bold ${isBw ? (isEn ? 'text-black border-r border-slate-400' : 'text-black border-l border-slate-400') : (isEn ? 'text-slate-800 border-r border-slate-100' : 'text-slate-800 border-l border-slate-100')}`}>
+                        <td className={`py-1.5 px-2 text-center font-mono font-bold ${isEn ? 'border-r' : 'border-l'} ${isBw ? 'text-black border-black/30' : 'text-slate-800 border-slate-200'}`}>
                           {item.quantity || 1} {item.unit || ''}
                         </td>
-                        <td className={`py-1.5 px-2 ${isEn ? 'text-right' : 'text-left'} font-mono font-bold ${isBw ? (isEn ? 'text-black border-r border-slate-400' : 'text-black border-l border-slate-400') : (isEn ? 'text-slate-800 border-r border-slate-100' : 'text-slate-800 border-l border-slate-100')}`}>
+                        <td className={`py-1.5 px-2 ${isEn ? 'text-right' : 'text-left'} font-mono font-bold ${isEn ? 'border-r' : 'border-l'} ${isBw ? 'text-black border-black/30' : 'text-slate-800 border-slate-200'}`}>
                           {(item.unitPrice || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </td>
                         {data.classification === 'TAX' && (
-                          <td className={`py-1.5 px-2 text-center font-mono font-bold ${isBw ? (isEn ? 'text-black border-r border-slate-400' : 'text-black border-l border-slate-400') : (isEn ? 'text-slate-700 border-r border-slate-100' : 'text-slate-700 border-l border-slate-100')}`}>
+                          <td className={`py-1.5 px-2 text-center font-mono font-bold ${isEn ? 'border-r' : 'border-l'} ${isBw ? 'text-black border-black/30' : 'text-slate-700 border-slate-200'}`}>
                             {item.taxRate !== undefined ? item.taxRate : effectiveVatRate}%
                           </td>
                         )}
@@ -1162,12 +1443,12 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
         {!isStatement && !isVoucher && (
           <div className="grid grid-cols-2 gap-2.5 items-start mb-3">
           {/* Column 1: Notes & Instructions */}
-          <div className={`space-y-2 p-2.5 rounded-lg ${isBw ? 'bg-slate-50 border-2 border-black' : 'bg-slate-50/70 border border-slate-200'}`}>
+          <div className={`space-y-2 p-2.5 rounded-lg ${isBw ? 'bg-slate-50 border border-black' : 'bg-slate-50/70 border border-black/40'}`}>
             <div>
               <span className={`text-[11px] font-bold block mb-0.5 ${isBw ? 'text-black' : 'text-slate-700'}`}>
                 {isEn ? 'Notes / Remarks & Terms:' : 'ملاحظات وشروط الفاتورة:'}
               </span>
-              <p className={`font-medium text-[11px] leading-relaxed p-2 rounded min-h-[48px] ${isBw ? 'bg-white border-2 border-black text-black' : 'bg-white border border-slate-200 text-slate-700 shadow-2xs'}`}>
+              <p className={`font-medium text-[11px] leading-relaxed p-2 rounded min-h-[48px] ${isBw ? 'bg-white border border-black text-black' : 'bg-white border border-black/30 text-slate-900 shadow-2xs'}`}>
                 {data.notes || (isEn ? 'Thank you for your business. Goods received in good condition.' : 'شكراً لتعاملكم معنا. البضاعة المسلمة بحالة جيدة وخاضعة للشروط المعتمدة.')}
               </p>
             </div>
@@ -1183,81 +1464,88 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
           </div>
 
           {/* Column 2: Financial Breakdown Box */}
-          <div className={`p-2.5 rounded-lg space-y-1.5 text-[11px] ${isBw ? 'bg-slate-50 border-2 border-black' : 'bg-slate-50/70 border border-slate-200'}`}>
-            {data.subtotal !== undefined && (
-              <div className="flex justify-between items-center text-slate-700 font-medium">
+          <div className={`p-2.5 rounded-lg space-y-1.5 text-[11px] ${isBw ? 'bg-slate-50 border border-black' : 'bg-slate-50/70 border border-black/40'}`}>
+            {data.classification === 'TAX' && data.subtotal !== undefined && (
+              <div className="flex justify-between items-center text-slate-900 font-bold">
                 <span>{isEn ? 'Subtotal (Excl. VAT):' : 'المجموع الفرعي (غير شامل الضريبة):'}</span>
-                <span className="font-mono font-bold text-slate-900">
+                <span className="font-mono font-black text-slate-950">
                   {data.subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
                 </span>
               </div>
             )}
 
             {data.taxTotal !== undefined && data.taxTotal > 0 && (
-              <div className="flex justify-between items-center text-slate-700 font-medium">
+              <div className="flex justify-between items-center text-slate-900 font-bold">
                 <span>{isEn ? `Value Added Tax (${effectiveVatRate}%):` : `ضريبة القيمة المضافة (${effectiveVatRate}%):`}</span>
-                <span className="font-mono font-bold text-indigo-700">
+                <span className="font-mono font-black text-slate-950">
                   {data.taxTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
                 </span>
               </div>
             )}
-
             {data.discountTotal !== undefined && data.discountTotal > 0 && (
-              <div className="flex justify-between items-center text-rose-700 font-medium">
+              <div className="flex justify-between items-center font-bold text-slate-900">
                 <span>{isEn ? 'Discount Applied:' : 'إجمالي الخصم الممنوح:'}</span>
-                <span className="font-mono font-bold">
+                <span className="font-mono font-bold text-slate-950">
                   -{data.discountTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
                 </span>
               </div>
             )}
-
-            <div className={`p-2 rounded-lg flex justify-between items-baseline mt-1.5 ${docTheme.totalBg}`}>
-              <span className="font-black text-xs">
-                {isEn ? 'GRAND TOTAL (NET):' : 'صافي المبلغ الإجمالي:'}
-              </span>
-              <div className={isEn ? 'text-right' : 'text-left'}>
-                <span className={`text-base font-mono font-black block ${docTheme.totalText}`}>
-                  {grandAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </span>
-                <span className={`text-[9px] font-bold ${isBw ? 'text-slate-800' : 'text-slate-200'}`}>
-                  {currFullName}
+            {data.servicesTotal !== undefined && data.servicesTotal > 0 && (
+              <div className="flex justify-between items-center font-bold text-slate-900">
+                <span>{isEn ? 'Services / Charges:' : 'قيمة الخدمات المضافة:'}</span>
+                <span className="font-mono font-bold text-slate-950">
+                  +{data.servicesTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
                 </span>
               </div>
-            </div>
+            )}
+            {/* إطار صافي المبلغ الإجمالي مع المبلغ كتابة بداخله */}
+            <div className={`p-2.5 rounded-lg flex flex-col gap-1.5 mt-1.5 ${isBw ? 'border-2 border-black bg-slate-100 text-black' : docTheme.totalBg}`}>
+              <div className="flex justify-between items-center">
+                <span className={`font-black text-xs ${isBw ? 'text-black' : 'text-white'}`}>
+                  {isEn ? 'GRAND TOTAL (NET):' : 'صافي المبلغ الإجمالي:'}
+                </span>
+                <div className={`flex items-baseline gap-1.5 ${isEn ? 'text-right' : 'text-left'}`}>
+                  <span className={`text-base font-mono font-black ${isBw ? 'text-black' : docTheme.totalText}`}>
+                    {grandAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                  <span className={`text-xs font-black ${isBw ? 'text-black' : 'text-slate-100'}`}>
+                    {currSymbol}
+                  </span>
+                </div>
+              </div>
 
-            {/* المبلغ كتابة بالحروف وفقط - أسفل خانة صافي المبلغ الإجمالي */}
-            <div className={`p-2 rounded-lg text-[11px] font-sans ${
-              isBw 
-                ? 'border-2 border-black bg-white text-black' 
-                : isSalesDoc
-                ? 'border border-blue-950/30 bg-amber-50/70 text-slate-900'
-                : 'border border-slate-200 bg-amber-50/70 text-slate-900'
-            }`}>
-              <span className={`text-[10px] font-bold block mb-0.5 ${isBw ? 'text-black' : 'text-amber-900'}`}>
-                {isEn ? 'Amount in Words:' : 'المبلغ كتابة بالحروف:'}
-              </span>
-              <p className={`font-black text-[11px] leading-relaxed ${
-                isBw 
-                  ? 'text-black' 
-                  : (grandAmount === 0 || tafqeetText.includes('صفر') || tafqeetText.includes('Zero'))
-                  ? 'text-amber-600 font-black' 
-                  : 'text-slate-900'
+              {/* المبلغ كتابة داخل إطار صافي المبلغ الإجمالي */}
+              <div className={`pt-1.5 border-t text-[11px] font-sans flex flex-wrap items-baseline gap-1.5 ${
+                isBw ? 'border-black text-black' : 'border-white/20 text-slate-100'
               }`}>
-                {tafqeetText}
-              </p>
+                <span className={`font-bold ${isBw ? 'text-black' : 'text-slate-200'}`}>
+                  {isEn ? 'Amount in Words:' : 'المبلغ كتابة:'}
+                </span>
+                <span className={`font-black ${
+                  isBw 
+                    ? 'text-black' 
+                    : 'text-amber-200'
+                }`}>
+                  ({tafqeetText})
+                </span>
+              </div>
             </div>
 
             {/* Payment Breakdown Box */}
             {data.paidAmount !== undefined && !isVoucher && (
               <div className={`p-2 rounded-lg text-[11px] font-sans border ${
-                isBw ? 'border-black bg-slate-100 text-black' : 'border-slate-200 bg-slate-50 text-slate-800'
+                isBw ? 'border border-black bg-slate-100 text-black' : 'border border-black/40 bg-slate-50 text-slate-900'
               }`}>
-                <div className="flex justify-between items-center mb-1 pb-1 border-b border-slate-300/80 font-bold">
-                  <span className="text-slate-900 font-black">
+                <div className={`flex justify-between items-center mb-1 pb-1 border-b font-bold ${
+                  isBw ? 'border-black' : 'border-slate-300/80'
+                }`}>
+                  <span className={`font-black ${isBw ? 'text-black' : 'text-slate-900'}`}>
                     {isEn ? 'Payment Status & Terms:' : 'تفاصيل السداد وطريقة الدفع:'}
                   </span>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
-                    (data.paidAmount ?? 0) >= grandAmount - 0.001 && grandAmount > 0
+                    isBw
+                      ? 'bg-slate-200 text-black border border-black'
+                      : (data.paidAmount ?? 0) >= grandAmount - 0.001 && grandAmount > 0
                       ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                       : (data.paidAmount ?? 0) > 0.001
                       ? 'bg-amber-100 text-amber-900 border border-amber-300'
@@ -1271,15 +1559,15 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
                   </span>
                 </div>
                 <div className="space-y-1 font-mono text-[10px]">
-                  <div className="flex justify-between items-center text-slate-600">
+                  <div className="flex justify-between items-center text-slate-900 font-bold">
                     <span className="font-sans">{isEn ? 'Paid Amount:' : 'المبلغ المسدد:'}</span>
-                    <span className="font-bold text-emerald-700">
+                    <span className="font-bold text-slate-950">
                       {Number(data.paidAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-slate-600">
+                  <div className="flex justify-between items-center text-slate-900 font-bold">
                     <span className="font-sans">{isEn ? 'Remaining Due:' : 'المبلغ المتبقي:'}</span>
-                    <span className="font-bold text-rose-700">
+                    <span className="font-bold text-slate-950">
                       {(data.remainingBalance ?? Math.max(0, grandAmount - (data.paidAmount || 0))).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currSymbol}
                     </span>
                   </div>
@@ -1288,47 +1576,47 @@ export const CertifiedInvoiceDocument = forwardRef<HTMLDivElement, CertifiedInvo
             )}
 
             {data.partnerBalanceImpact && (
-              <div className={`mt-2 p-2 rounded-lg text-[11px] font-sans ${
+              <div className={`mt-2 p-2 rounded-lg text-[11px] font-sans border ${
                 isBw 
-                  ? 'border-2 border-black bg-slate-100 text-black' 
-                  : 'border border-indigo-200 bg-indigo-50/80 text-slate-800 shadow-2xs'
+                  ? 'border border-black bg-slate-100 text-black' 
+                  : 'border border-black/40 bg-slate-50 text-slate-900 shadow-2xs'
               }`}>
-                <div className="flex justify-between items-center font-bold mb-1 pb-1 border-b border-slate-300/80">
-                  <span className="text-slate-900 font-black">
+                <div className="flex justify-between items-center font-bold mb-1 pb-1 border-b border-black/30">
+                  <span className="text-slate-950 font-black">
                     {isEn ? 'Account Balance Summary:' : `موقف حساب ${data.partnerType === 'VENDOR' ? 'المورد' : 'العميل'}:`}
                   </span>
-                  <span className="text-[9px] font-bold text-slate-600">
+                  <span className="text-[10px] font-bold text-slate-950">
                     {data.partnerName || ''}
                   </span>
                 </div>
                 
                 <div className="space-y-1 font-mono text-[10px]">
-                  <div className="flex justify-between items-center text-slate-600">
+                  <div className="flex justify-between items-center text-slate-950 font-bold">
                     <span className="font-sans">{isEn ? 'Previous Balance:' : 'الرصيد السابق قبل الفاتورة:'}</span>
-                    <span className="font-bold text-slate-900">
-                      {data.partnerBalanceImpact.previousBalanceFormatted} {currSymbol} ({data.partnerBalanceImpact.previousBalanceLabel})
+                    <span className="font-bold text-slate-950">
+                      {data.partnerBalanceImpact.previousBalanceFormatted} {currSymbol} ({cleanBalanceLabel(data.partnerBalanceImpact.previousBalanceLabel)})
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-slate-600">
+                  <div className="flex justify-between items-center text-slate-950 font-bold">
                     <span className="font-sans">{isEn ? 'Current Invoice:' : 'قيمة الفاتورة الحالية (+):'}</span>
-                    <span className="font-bold text-slate-900">
+                    <span className="font-bold text-slate-950">
                       +{data.partnerBalanceImpact.invoiceAmountFormatted} {currSymbol}
                     </span>
                   </div>
                   {data.partnerBalanceImpact.paidAmount > 0 && (
-                    <div className="flex justify-between items-center text-slate-600">
+                    <div className="flex justify-between items-center text-slate-950 font-bold">
                       <span className="font-sans">{isEn ? 'Immediate Payment:' : 'المسدد نقداً بالفاتورة (-):'}</span>
-                      <span className="font-bold text-emerald-700">
+                      <span className="font-bold text-slate-950">
                         -{data.partnerBalanceImpact.paidAmountFormatted} {currSymbol}
                       </span>
                     </div>
                   )}
-                  <div className={`flex justify-between items-center pt-1 border-t ${isBw ? 'border-black' : 'border-indigo-300/80'} font-bold`}>
-                    <span className="font-sans font-black text-slate-900">
+                  <div className="flex justify-between items-center pt-1 border-t border-black/30 font-bold">
+                    <span className="font-sans font-black text-slate-950">
                       {isEn ? 'Balance After Invoice:' : 'موقف الحساب بعد الفاتورة:'}
                     </span>
                     <span className="text-xs font-black text-slate-950">
-                      {data.partnerBalanceImpact.newBalanceFormatted} {currSymbol} ({data.partnerBalanceImpact.newBalanceLabel})
+                      {data.partnerBalanceImpact.newBalanceFormatted} {currSymbol} ({cleanBalanceLabel(data.partnerBalanceImpact.newBalanceLabel)})
                     </span>
                   </div>
                 </div>

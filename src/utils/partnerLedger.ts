@@ -1,14 +1,13 @@
 import { enqueueSyncRecord } from "../services/DatabaseProvider";
 import { Partner, VoucherType, JournalEntryStatus } from '../types/accounting';
 import { getCurrencyInfo } from './currency';
-import { 
-  DB_SALES_INVOICES_KEY, 
-  DB_PURCHASES_INVOICES_KEY, 
-  DB_RECEIPT_VOUCHERS_KEY, 
-  DB_PAYMENT_VOUCHERS_KEY 
-} from './sequences';
 import { notifyDataChanged } from './localFolderBackup';
-import { loadJournalEntries } from './trialBalanceStore';
+import { loadJournalEntries, loadChartOfAccounts, resolveCashOrBankAccount } from './trialBalanceStore';
+
+export const DB_SALES_INVOICES_KEY = 'alpha_sales_invoices_v1';
+export const DB_PURCHASES_INVOICES_KEY = 'alpha_purchases_invoices_v1';
+export const DB_RECEIPT_VOUCHERS_KEY = 'alpha_receipt_vouchers_v1';
+export const DB_PAYMENT_VOUCHERS_KEY = 'alpha_payment_vouchers_v1';
 
 export const CUSTOMERS_STORAGE_KEY = 'accounting_customers';
 export const VENDORS_STORAGE_KEY = 'accounting_vendors';
@@ -148,7 +147,7 @@ export function dispatchPartnerLedgerUpdated() {
 }
 
 export function loadCustomers(): Partner[] {
-  if (typeof window === 'undefined') return DEFAULT_CUSTOMERS_LIST;
+  if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(CUSTOMERS_STORAGE_KEY);
     if (raw !== null) {
@@ -158,12 +157,7 @@ export function loadCustomers(): Partner[] {
   } catch (e) {
     console.error('Failed to load customers:', e);
   }
-  try {
-    localStorage.setItem(CUSTOMERS_STORAGE_KEY, JSON.stringify(DEFAULT_CUSTOMERS_LIST));
-  } catch (e) {
-    console.error(e);
-  }
-  return DEFAULT_CUSTOMERS_LIST;
+  return [];
 }
 
 export function saveCustomers(customers: Partner[]) {
@@ -178,7 +172,7 @@ export function saveCustomers(customers: Partner[]) {
 export const saveCustomersList = saveCustomers;
 
 export function loadVendors(): Partner[] {
-  if (typeof window === 'undefined') return DEFAULT_VENDORS_LIST;
+  if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(VENDORS_STORAGE_KEY);
     if (raw !== null) {
@@ -188,12 +182,7 @@ export function loadVendors(): Partner[] {
   } catch (e) {
     console.error('Failed to load vendors:', e);
   }
-  try {
-    localStorage.setItem(VENDORS_STORAGE_KEY, JSON.stringify(DEFAULT_VENDORS_LIST));
-  } catch (e) {
-    console.error(e);
-  }
-  return DEFAULT_VENDORS_LIST;
+  return [];
 }
 
 export function saveVendors(vendors: Partner[]) {
@@ -471,6 +460,8 @@ export function getPartnerAccountStatement(partner: Partner): PartnerStatement {
     }
   });
 
+  const chartAccounts = loadChartOfAccounts();
+
   // 4. Receipt Vouchers (سندات القبض الخارجية)
   rawReceiptVouchers.forEach(v => {
     if (isPartnerMatch(v.partnerId, v.partnerName, partner)) {
@@ -478,7 +469,8 @@ export function getPartnerAccountStatement(partner: Partner): PartnerStatement {
       const isPosted = vStatus === 'POSTED';
       if (isPosted) totalReceiptCount++;
       const amount = Number(v.amount) || 0;
-      const accountLabel = v.accountId === 'bank' ? 'البنك الأهلي' : 'الصندوق الرئيسي';
+      const resolvedAcc = resolveCashOrBankAccount(chartAccounts, v.accountId, v.paymentMethod);
+      const accountLabel = resolvedAcc ? resolvedAcc.name : (v.accountId || 'الصندوق الرئيسي');
       const desc = `${v.description || 'سند قبض نقدية'} [${accountLabel}]${!isPosted ? ' (مسودة - غير مرحل)' : ''}`;
 
       // Receipt from customer -> Credit to customer (reduces receivable)
@@ -506,7 +498,8 @@ export function getPartnerAccountStatement(partner: Partner): PartnerStatement {
       const isPosted = vStatus === 'POSTED';
       if (isPosted) totalPaymentCount++;
       const amount = Number(v.amount) || 0;
-      const accountLabel = v.accountId === 'bank' ? 'البنك الأهلي' : 'الصندوق الرئيسي';
+      const resolvedAcc = resolveCashOrBankAccount(chartAccounts, v.accountId, v.paymentMethod);
+      const accountLabel = resolvedAcc ? resolvedAcc.name : (v.accountId || 'الصندوق الرئيسي');
       const desc = `${v.description || 'سند صرف نقدية'} [${accountLabel}]${!isPosted ? ' (مسودة - غير مرحل)' : ''}`;
 
       // Payment to vendor -> Debit to vendor (reduces payable)
@@ -530,11 +523,11 @@ export function getPartnerAccountStatement(partner: Partner): PartnerStatement {
   // 6. Manual Journal Entries with Sub-Ledger Partner Tags (المدرسة الثانية: قيود اليومية المرتبطة بدفتر الأستاذ المساعد)
   let totalJournalCount = 0;
   const rawJournalEntries = loadJournalEntries();
-  rawJournalEntries.forEach(entry => {
+  (rawJournalEntries || []).forEach(entry => {
     if (entry.status !== JournalEntryStatus.Posted) return;
     
     // Check all items in this entry that match the partner
-    entry.items.forEach((item, itemIdx) => {
+    (entry.items || []).forEach((item, itemIdx) => {
       const match = isPartnerMatch(item.partnerId, item.partnerName, partner);
       if (match) {
         totalJournalCount++;
@@ -848,7 +841,7 @@ export function calculateInvoicePartnerImpact(
   if (isCustomer) {
     if (newNetSigned > 0.001) {
       newType = 'DEBIT';
-      newLabel = 'مدين (مطلوب من العميل)';
+      newLabel = 'مدين';
     } else if (newNetSigned < -0.001) {
       newType = 'CREDIT';
       newLabel = 'دائن (رصيد متبقٍ للعميل)';

@@ -24,11 +24,11 @@ export default function WpsModal({
   const [selectedBankFilter, setSelectedBankFilter] = useState<string>('ALL');
 
   // Banks list
-  const banks = Array.from(new Set(payrollRecords.map(r => r.bankName || 'مصرف الراجحي')));
+  const banks = Array.from(new Set(payrollRecords.map(r => r.bankName || 'البنك المعتمد')));
 
   const filteredRecords = payrollRecords.filter(rec => {
     if (selectedBankFilter === 'ALL') return true;
-    return (rec.bankName || 'مصرف الراجحي') === selectedBankFilter;
+    return (rec.bankName || 'البنك المعتمد') === selectedBankFilter;
   });
 
   const totalEmployees = filteredRecords.length;
@@ -150,7 +150,7 @@ export default function WpsModal({
                     <td className="p-3 font-mono font-bold text-blue-700">{rec.employeeCode}</td>
                     <td className="p-3 font-medium text-slate-900">{rec.employeeName}</td>
                     <td className="p-3 font-mono text-slate-600">{rec.nationalId || '—'}</td>
-                    <td className="p-3 text-slate-600">{rec.bankName || 'مصرف الراجحي'}</td>
+                    <td className="p-3 text-slate-600">{rec.bankName || 'البنك المعتمد'}</td>
                     <td className="p-3 font-mono text-[11px] dir-ltr text-slate-600 truncate max-w-[140px]" title={rec.iban}>
                       {rec.iban || '—'}
                     </td>

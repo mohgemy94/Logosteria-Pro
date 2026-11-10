@@ -92,6 +92,14 @@ export const SYSTEM_SCREENS: SystemScreenItem[] = [
     description: 'كشف ميزان المراجعة بالمجاميع والأرصدة مع كشوفات الحساب'
   },
   {
+    id: 'accountMovements',
+    titleAr: 'حركة الحسابات (دفتر الأستاذ العام)',
+    titleEn: 'Account Movements & Ledger',
+    category: 'المحاسبة العامة',
+    keywords: ['حركة', 'حسابات', 'حركة الحسابات', 'كشف حركة', 'أستاذ', 'مدين ودائن', 'بيان الحركة', 'movements', 'ledger'],
+    description: 'كشف حركة الحسابات الشامل للعملاء والموردين والخزن والبنوك والمصروفات بالجدول الثلاثي (مدين - دائن - بيان الحركة)'
+  },
+  {
     id: 'financialReports',
     titleAr: 'التقارير المالية الختامية (قائمة الدخل والميزانية)',
     titleEn: 'Financial Statements',
@@ -162,6 +170,30 @@ export const SYSTEM_SCREENS: SystemScreenItem[] = [
     category: 'المبيعات والعملاء',
     keywords: ['أرصدة عملاء', 'أرصدة موردين', 'أعمار الديون', 'ديون', 'مستحقات', 'aging', 'balances'],
     description: 'كشف مجمع للأرصدة مع تقرير أعمار الديون وخطابات المصادقة'
+  },
+  {
+    id: 'customerStatement',
+    titleAr: 'كشف حساب عميل وتفصيلي (قائمة متصلة)',
+    titleEn: 'Customer Account Statement (Continuous Ledger)',
+    category: 'المبيعات والعملاء',
+    keywords: ['كشف حساب عميل', 'كشف عميل', 'حساب عميل', 'كشف حساب تفصيلي عميل', 'customer statement', 'ledger'],
+    description: 'كشف حساب العميل كقائمة متصلة Chronological Feed مع فواتير وسندات ورصيد تراكمي وطباعة'
+  },
+  {
+    id: 'partnerStatement',
+    titleAr: 'كشف حساب تفصيلي للعميل والمورد',
+    titleEn: 'Detailed Account Statement',
+    category: 'المبيعات والعملاء',
+    keywords: ['كشف حساب', 'كشف حساب تفصيلي', 'كشف حساب عميل', 'كشف حساب مورد', 'حركات الحساب', 'statement', 'account statement'],
+    description: 'كشف حركات تفصيلي للفواتير وسندات القبض والصرف مع فلترة التاريخ والتصدير'
+  },
+  {
+    id: 'totalSalesInvoices',
+    titleAr: 'تقرير إجمالي فواتير المبيعات',
+    titleEn: 'Total Sales Invoices Report',
+    category: 'المبيعات والعملاء',
+    keywords: ['تقرير مبيعات', 'إجمالي المبيعات', 'تقرير فواتير المبيعات', 'فواتير المبيعات', 'مبيعات', 'sales report', 'total sales'],
+    description: 'كشف تحليلي شامل لإجمالي المبيعات والضرائب والمبالغ المحصلة والآجلة'
   },
   {
     id: 'items',
@@ -527,10 +559,10 @@ export default function VoiceSearchModal({
     const matchedScreens = (!query) 
       ? SYSTEM_SCREENS.slice(0, 4)
       : SYSTEM_SCREENS.filter(screen => {
-          const matchTitleAr = screen.titleAr.toLowerCase().includes(query);
-          const matchTitleEn = screen.titleEn.toLowerCase().includes(query);
-          const matchDesc = screen.description.toLowerCase().includes(query);
-          const matchKeywords = screen.keywords.some(k => query.includes(k) || k.includes(query));
+          const matchTitleAr = (screen.titleAr || '').toLowerCase().includes(query);
+          const matchTitleEn = (screen.titleEn || '').toLowerCase().includes(query);
+          const matchDesc = (screen.description || '').toLowerCase().includes(query);
+          const matchKeywords = (screen.keywords || []).some(k => query.includes(k) || k.includes(query));
           return matchTitleAr || matchTitleEn || matchDesc || matchKeywords;
         });
 
@@ -538,8 +570,8 @@ export default function VoiceSearchModal({
     const matchedAccounts = (!query)
       ? accounts.slice(0, 4)
       : accounts.filter(acc => 
-          acc.code.toLowerCase().includes(query) || 
-          acc.name.toLowerCase().includes(query)
+          (acc.code || '').toLowerCase().includes(query) || 
+          (acc.name || '').toLowerCase().includes(query)
         );
 
     // 3. Customers Filter

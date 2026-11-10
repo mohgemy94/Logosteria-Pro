@@ -18,7 +18,8 @@ import {
   ShieldAlert,
   Building2,
   Receipt,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Scale
 } from 'lucide-react';
 import { Employee, BonusIncentive, DeductionItem, PayrollRecord, LoanAdvance } from '../types/payroll';
 import { 
@@ -29,9 +30,13 @@ import {
   getStoredLoans
 } from '../data/mockPayroll';
 import { getSystemSettings } from '../utils/settings';
+import { useIsInWindow } from './DesktopWindowManager';
 import { useSystemCurrency } from '../utils/currency';
-import { saveJournalEntry } from '../utils/trialBalanceStore';
+import { saveJournalEntry, loadChartOfAccounts } from '../utils/trialBalanceStore';
+import { isCashOrBankAccount } from '../utils/accountingIntegration';
+import { navigateToAccountMovements } from '../utils/accountMovementsStore';
 import { JournalEntry, JournalEntryStatus } from '../types/accounting';
+import { loadCostCenters } from '../utils/costCenterStore';
 import PrintDropdown from './PrintDropdown';
 import ExportButtonGroup from './ExportButtonGroup';
 
@@ -54,7 +59,8 @@ type TabType =
   | 'bonuses' 
   | 'deductions';
 
-export default function PayrollScreen() {
+export default function PayrollScreen({ isInWindow: explicitIsInWindow }: { isInWindow?: boolean } = {}) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const [systemSettings] = useState(() => getSystemSettings());
   const [employees, setEmployees] = useState<Employee[]>(() => getStoredEmployees());
   const [loans, setLoans] = useState<LoanAdvance[]>(() => getStoredLoans());
@@ -72,12 +78,19 @@ export default function PayrollScreen() {
   const [isWpsModalOpen, setIsWpsModalOpen] = useState(false);
   const [selectedPayslipEmp, setSelectedPayslipEmp] = useState<Employee | null>(null);
   const [journalGeneratedMsg, setJournalGeneratedMsg] = useState<string | null>(null);
+  const [treasuryAccounts, setTreasuryAccounts] = useState(() => {
+    const all = loadChartOfAccounts();
+    return all.filter(a => isCashOrBankAccount(a, all));
+  });
+  const [disbursementAccountId, setDisbursementAccountId] = useState<string>('acc-1102');
 
   const { symbol: currency } = useSystemCurrency();
 
   const refreshAll = () => {
     setEmployees(getStoredEmployees());
     setLoans(getStoredLoans());
+    const all = loadChartOfAccounts();
+    setTreasuryAccounts(all.filter(a => isCashOrBankAccount(a, all)));
   };
 
   useEffect(() => {
@@ -100,51 +113,93 @@ export default function PayrollScreen() {
   const [newEmpData, setNewEmpData] = useState({
     code: `EMP-${Math.floor(100 + Math.random() * 900)}`,
     name: '',
-    department: 'المبيعات والتسويق',
+    department: '',
     jobTitle: '',
     nationalId: '',
     phone: '',
     email: '',
     joinDate: new Date().toISOString().slice(0, 10),
-    bankName: 'مصرف الراجحي',
+    bankName: '',
     iban: 'SA',
-    basicSalary: 6000,
-    housingAllowance: 1500,
-    transportAllowance: 600,
-    foodAllowance: 300,
+    basicSalary: 0,
+    housingAllowance: 0,
+    transportAllowance: 0,
+    foodAllowance: 0,
     otherAllowances: 0,
     nationalityType: 'SAUDI' as 'SAUDI' | 'NON_SAUDI',
     gosiSubscription: true,
-    contractExpiryDate: '2025-12-31',
-    idExpiryDate: '2025-12-31',
-    insuranceExpiryDate: '2025-12-31'
+    contractExpiryDate: '',
+    idExpiryDate: '',
+    insuranceExpiryDate: ''
   });
 
   // Form states for adding bonus/incentive
   const [newBonusData, setNewBonusData] = useState({
     employeeId: '',
     type: 'TARGET_INCENTIVE' as BonusIncentive['type'],
-    typeName: 'حافز كسر حاجز المبيعات المستهدف',
-    amount: 1500,
+    typeName: '',
+    amount: 0,
     date: new Date().toISOString().slice(0, 10),
-    reason: 'تحقيق وتخطي التارجت الشهري بنجاح',
+    reason: '',
   });
 
   // Form states for adding deduction
   const [newDeductionData, setNewDeductionData] = useState({
     employeeId: '',
     type: 'ABSENCE' as DeductionItem['type'],
-    typeName: 'خصم غياب يوم',
-    amount: 250,
+    typeName: '',
+    amount: 0,
     date: new Date().toISOString().slice(0, 10),
-    reason: 'غياب بدون عذر مقبول',
+    reason: '',
   });
 
-  // Distinct departments
-  const departments = useMemo(() => {
-    const deps = new Set(employees.map(e => e.department));
-    return Array.from(deps);
+  // Dynamic departments and jobs from MasterDatabaseSettings, Cost Centers, and existing employees
+  const dynamicDepartmentsList = useMemo(() => {
+    const list = new Set<string>();
+    // From Master Database Settings
+    try {
+      const raw = localStorage.getItem('alpha_master_database_settings_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed?.departments)) {
+          parsed.departments.forEach((d: any) => { if (d.name) list.add(d.name.trim()); });
+        }
+      }
+    } catch {}
+    // From Cost Centers (departments)
+    try {
+      const ccs = loadCostCenters();
+      ccs.filter(c => c.type === 'DEPARTMENT' && c.name).forEach(c => list.add(c.name.trim()));
+    } catch {}
+    // From registered employees
+    employees.forEach(e => { if (e.department) list.add(e.department.trim()); });
+    // Default standard business departments if none defined yet
+    if (list.size === 0) {
+      ['المبيعات والتسويق', 'الإدارة المالية', 'إدارة المستودعات واللوجستيات', 'تقنية المعلومات والنظم', 'الموارد البشرية والشؤون الإدارية', 'العمليات التشغيلية'].forEach(d => list.add(d));
+    }
+    return Array.from(list);
   }, [employees]);
+
+  const dynamicJobsList = useMemo(() => {
+    const list = new Set<string>();
+    try {
+      const raw = localStorage.getItem('alpha_master_database_settings_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed?.jobs)) {
+          parsed.jobs.forEach((j: any) => {
+            const title = j.title || j.name;
+            if (title) list.add(title.trim());
+          });
+        }
+      }
+    } catch {}
+    employees.forEach(e => { if (e.jobTitle) list.add(e.jobTitle.trim()); });
+    return Array.from(list);
+  }, [employees]);
+
+  // Distinct departments for filtering
+  const departments = dynamicDepartmentsList;
 
   // Filtered employees
   const filteredEmployees = useMemo(() => {
@@ -321,46 +376,136 @@ export default function PayrollScreen() {
     const grossTotal = overallStats.totalBasic + overallStats.totalAllowances + overallStats.totalBonuses;
     const netTotal = overallStats.totalNet;
     const deductionsTotal = overallStats.totalDeductions;
+    const loanDeductions = overallStats.totalLoansDeducted || 0;
+    const gosiDeductions = overallStats.totalGosiDeducted || 0;
+    const otherDeductions = Math.max(0, deductionsTotal - loanDeductions - gosiDeductions);
 
     try {
+      const items = [
+        {
+          id: `ji-${Date.now()}-1`,
+          accountId: 'acc-5102',
+          debit: grossTotal,
+          credit: 0
+        },
+        {
+          id: `ji-${Date.now()}-2`,
+          accountId: 'acc-2201',
+          debit: 0,
+          credit: netTotal
+        },
+        ...(loanDeductions > 0 ? [
+          {
+            id: `ji-${Date.now()}-3`,
+            accountId: 'acc-1205',
+            debit: 0,
+            credit: loanDeductions
+          }
+        ] : []),
+        ...(otherDeductions + gosiDeductions > 0 ? [
+          {
+            id: `ji-${Date.now()}-4`,
+            accountId: 'acc-4201',
+            debit: 0,
+            credit: otherDeductions + gosiDeductions
+          }
+        ] : [])
+      ];
+
       const entry: JournalEntry = {
         id: `je-pay-${Date.now()}`,
         entryNumber: `JV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
         date: new Date().toISOString().slice(0, 10),
         status: JournalEntryStatus.Posted,
-        description: `إثبات وقيد استحقاق مسير رواتب وأجور شهر (${selectedMonth}) لعدد (${payrollRecords.length}) موظف`,
+        description: `إثبات وقيد استحقاق مسير رواتب وأجور شهر (${selectedMonth}) لعدد (${payrollRecords.length}) موظف (مع تسوية اقتطاعات السلف 1205)`,
         reference: `PAYROLL-${selectedMonth}`,
+        items
+      };
+
+      saveJournalEntry(entry);
+
+      // Auto update loan installment statuses for this month
+      if (loanDeductions > 0 && loans.length > 0) {
+        const updatedLoans = loans.map(loan => {
+          let instChanged = false;
+          const nextInsts = loan.installments.map(inst => {
+            if (inst.month === selectedMonth && inst.status === 'PENDING') {
+              instChanged = true;
+              return {
+                ...inst,
+                status: 'PAID' as const,
+                paidDate: new Date().toISOString().slice(0, 10)
+              };
+            }
+            return inst;
+          });
+
+          if (instChanged) {
+            const totalPaid = nextInsts.filter(i => i.status === 'PAID').reduce((sum, i) => sum + i.amount, 0);
+            const remaining = Math.max(0, loan.amount - totalPaid);
+            return {
+              ...loan,
+              installments: nextInsts,
+              paidAmount: totalPaid,
+              remainingAmount: remaining,
+              status: remaining === 0 ? ('PAID' as const) : ('ACTIVE' as const)
+            };
+          }
+          return loan;
+        });
+
+        saveStoredLoans(updatedLoans);
+        setLoans(updatedLoans);
+      }
+
+      setJournalGeneratedMsg(`تم إنشاء وترحيل قيد استحقاق الرواتب (${entry.entryNumber}) لمسير شهر ${selectedMonth} بنجاح (مع تسوية حـ/ السلف 1205 وحـ/ الرواتب المستحقة 2201).`);
+      setTimeout(() => setJournalGeneratedMsg(null), 7000);
+    } catch (err) {
+      console.error(err);
+      setJournalGeneratedMsg('حدث خطأ أثناء إنشاء القيد المحاسبي لاستحقاق الرواتب');
+    }
+  };
+
+  // Disburse / Pay Monthly Payroll from Selected Safe or Bank
+  const handleDisburseMonthlyPayroll = () => {
+    if (payrollRecords.length === 0 || overallStats.totalNet <= 0) return;
+
+    const netTotal = overallStats.totalNet;
+    const selectedTreasury = treasuryAccounts.find(a => a.id === disbursementAccountId || a.code === disbursementAccountId);
+    const targetAccId = selectedTreasury ? selectedTreasury.id : (disbursementAccountId || 'acc-1102');
+    const targetAccName = selectedTreasury ? `${selectedTreasury.name} (${selectedTreasury.code})` : 'البنك / الصندوق';
+
+    try {
+      const entry: JournalEntry = {
+        id: `je-pay-disb-${Date.now()}`,
+        entryNumber: `JV-PAY-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        date: new Date().toISOString().slice(0, 10),
+        status: JournalEntryStatus.Posted,
+        description: `صرف وسداد صافي رواتب وأجور شهر (${selectedMonth}) لعدد (${payrollRecords.length}) موظف من: ${targetAccName}`,
+        reference: `PAY-DISB-${selectedMonth}`,
         items: [
           {
             id: `ji-${Date.now()}-1`,
-            accountId: 'acc-5102',
-            debit: grossTotal,
+            accountId: 'acc-2201',
+            debit: netTotal,
             credit: 0
           },
           {
             id: `ji-${Date.now()}-2`,
-            accountId: 'acc-2201',
+            accountId: targetAccId,
             debit: 0,
             credit: netTotal
-          },
-          ...(deductionsTotal > 0 ? [
-            {
-              id: `ji-${Date.now()}-3`,
-              accountId: 'acc-4201',
-              debit: 0,
-              credit: deductionsTotal
-            }
-          ] : [])
+          }
         ]
       };
 
       saveJournalEntry(entry);
 
-      setJournalGeneratedMsg(`تم إنشاء وترحيل قيد اليومية المحاسبي (${entry.entryNumber}) لمسير رواتب شهر ${selectedMonth} بنجاح إلى شجرة الحسابات والتقارير المالية.`);
-      setTimeout(() => setJournalGeneratedMsg(null), 6000);
+      setJournalGeneratedMsg(`تم صرف وسداد صافي مسير رواتب شهر ${selectedMonth} بمبلغ (${netTotal.toLocaleString()} ${currency}) خصماً من (${targetAccName}) وترحيل القيد (${entry.entryNumber}) بنجاح.`);
+      setTimeout(() => setJournalGeneratedMsg(null), 7000);
     } catch (err) {
       console.error(err);
-      alert('حدث خطأ أثناء إنشاء القيد المحاسبي للرواتب');
+      setJournalGeneratedMsg('حدث خطأ أثناء ترحيل قيد صرف وسداد الرواتب');
     }
   };
 
@@ -372,6 +517,7 @@ export default function PayrollScreen() {
       {/* Top Header Card */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs relative overflow-hidden">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          {!isInWindow && (
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shadow-xs">
               <Users size={26} />
@@ -385,8 +531,19 @@ export default function PayrollScreen() {
               </p>
             </div>
           </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigateToAccountMovements('acc-5102')}
+              className="flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-b from-indigo-500 via-indigo-600 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-700/25 border-b-[3.5px] border-indigo-900 active:border-b active:translate-y-[2.5px] cursor-pointer"
+              title="فتح حركة حساب الرواتب والأجور (5102) في شاشة حركة الحسابات"
+            >
+              <Scale size={16} className="text-amber-300" />
+              <span>حركة حساب الرواتب (3 أعمدة)</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsWpsModalOpen(true)}
@@ -681,7 +838,7 @@ export default function PayrollScreen() {
                   r.loanDeduction || 0,
                   r.deductionsAmount,
                   r.netSalary,
-                  r.bankName || 'مصرف الراجحي',
+                  r.bankName || '-',
                   r.iban || '-'
                 ])}
                 filterSummary={`الشهر: ${selectedMonth} | القسم: ${selectedDepartment} | إجمالي الرواتب الصافية: ${overallStats.totalNet.toLocaleString()} ريال`}
@@ -692,10 +849,35 @@ export default function PayrollScreen() {
                 type="button"
                 onClick={handleGeneratePayrollJournalEntry}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-b from-indigo-500 via-indigo-600 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-indigo-600/25 border-b-[2.5px] border-indigo-900 active:border-b active:translate-y-[1.5px] cursor-pointer"
+                title="إثبات استحقاق الرواتب (من حـ/ مصروف الرواتب 5102 إلى حـ/ الرواتب المستحقة 2201)"
               >
                 <Receipt size={15} className="text-indigo-100" />
-                <span>ترحيل قيد استحقاق الرواتب محاسبياً</span>
+                <span>1. قيد استحقاق الرواتب</span>
               </button>
+
+              <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl p-1 gap-1.5">
+                <select
+                  value={disbursementAccountId}
+                  onChange={(e) => setDisbursementAccountId(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500"
+                  title="اختر الصندوق أو البنك لصرف الرواتب منه"
+                >
+                  {treasuryAccounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} ({acc.code})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleDisburseMonthlyPayroll}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-b from-amber-500 via-amber-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 text-white rounded-lg text-xs font-bold transition-all shadow-sm shadow-amber-600/25 border-b-[2.5px] border-amber-900 active:border-b active:translate-y-[1.5px] cursor-pointer"
+                  title="صرف وسداد صافي الرواتب من الخزينة أو البنك المختار (من حـ/ الرواتب المستحقة 2201 إلى حـ/ البنك أو الصندوق)"
+                >
+                  <CreditCard size={15} className="text-amber-100" />
+                  <span>2. صرف وسداد الرواتب</span>
+                </button>
+              </div>
 
               <button
                 type="button"
@@ -1099,29 +1281,37 @@ export default function PayrollScreen() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-slate-600 font-bold mb-1">الإدارة / القسم:</label>
-                  <select
+                  <input
+                    list="dynamic-departments-list-add"
+                    type="text"
+                    required
+                    placeholder="اختر أو اكتب القسم..."
                     value={newEmpData.department}
                     onChange={(e) => setNewEmpData({...newEmpData, department: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="المبيعات والتسويق">المبيعات والتسويق</option>
-                    <option value="الإدارة المالية">الإدارة المالية</option>
-                    <option value="إدارة المستودعات واللوجستيات">إدارة المستودعات واللوجستيات</option>
-                    <option value="تقنية المعلومات والنظم">تقنية المعلومات والنظم</option>
-                    <option value="الموارد البشرية والشؤون الإدارية">الموارد البشرية والشؤون الإدارية</option>
-                    <option value="العمليات التشغيلية">العمليات التشغيلية</option>
-                  </select>
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 bg-white"
+                  />
+                  <datalist id="dynamic-departments-list-add">
+                    {dynamicDepartmentsList.map((dep, idx) => (
+                      <option key={idx} value={dep} />
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-slate-600 font-bold mb-1">المسمى الوظيفي:</label>
                   <input
+                    list="dynamic-jobs-list-add"
                     type="text"
                     required
                     placeholder="مثال: مسؤول مبيعات وتطوير"
                     value={newEmpData.jobTitle}
                     onChange={(e) => setNewEmpData({...newEmpData, jobTitle: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 bg-white"
                   />
+                  <datalist id="dynamic-jobs-list-add">
+                    {dynamicJobsList.map((job, idx) => (
+                      <option key={idx} value={job} />
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-slate-600 font-bold mb-1">الجنسية والتأمينات:</label>
@@ -1201,15 +1391,22 @@ export default function PayrollScreen() {
                       type="number"
                       required
                       min={0}
-                      value={newEmpData.basicSalary}
+                      value={newEmpData.basicSalary ?? ''}
+                      onFocus={e => e.target.select()}
                       onChange={(e) => {
-                        const basic = Number(e.target.value);
+                        const val = e.target.value;
+                        const basic = val === '' ? ('' as any) : Number(val);
                         setNewEmpData({
                           ...newEmpData,
                           basicSalary: basic,
-                          housingAllowance: Math.round(basic * 0.25),
-                          transportAllowance: Math.round(basic * 0.1)
+                          housingAllowance: basic ? Math.round(Number(basic) * 0.25) : 0,
+                          transportAllowance: basic ? Math.round(Number(basic) * 0.1) : 0
                         });
+                      }}
+                      onBlur={() => {
+                        if ((newEmpData.basicSalary as any) === '') {
+                          setNewEmpData(prev => ({ ...prev, basicSalary: 0 }));
+                        }
                       }}
                       className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white font-mono font-bold text-slate-900"
                     />
@@ -1219,8 +1416,14 @@ export default function PayrollScreen() {
                     <input
                       type="number"
                       min={0}
-                      value={newEmpData.housingAllowance}
-                      onChange={(e) => setNewEmpData({...newEmpData, housingAllowance: Number(e.target.value)})}
+                      value={newEmpData.housingAllowance ?? ''}
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => setNewEmpData({...newEmpData, housingAllowance: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                      onBlur={() => {
+                        if ((newEmpData.housingAllowance as any) === '') {
+                          setNewEmpData(prev => ({ ...prev, housingAllowance: 0 }));
+                        }
+                      }}
                       className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white font-mono"
                     />
                   </div>
@@ -1229,8 +1432,14 @@ export default function PayrollScreen() {
                     <input
                       type="number"
                       min={0}
-                      value={newEmpData.transportAllowance}
-                      onChange={(e) => setNewEmpData({...newEmpData, transportAllowance: Number(e.target.value)})}
+                      value={newEmpData.transportAllowance ?? ''}
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => setNewEmpData({...newEmpData, transportAllowance: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                      onBlur={() => {
+                        if ((newEmpData.transportAllowance as any) === '') {
+                          setNewEmpData(prev => ({ ...prev, transportAllowance: 0 }));
+                        }
+                      }}
                       className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white font-mono"
                     />
                   </div>
@@ -1239,8 +1448,14 @@ export default function PayrollScreen() {
                     <input
                       type="number"
                       min={0}
-                      value={newEmpData.otherAllowances}
-                      onChange={(e) => setNewEmpData({...newEmpData, otherAllowances: Number(e.target.value)})}
+                      value={newEmpData.otherAllowances ?? ''}
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => setNewEmpData({...newEmpData, otherAllowances: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                      onBlur={() => {
+                        if ((newEmpData.otherAllowances as any) === '') {
+                          setNewEmpData(prev => ({ ...prev, otherAllowances: 0 }));
+                        }
+                      }}
                       className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white font-mono"
                     />
                   </div>
@@ -1323,28 +1538,37 @@ export default function PayrollScreen() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-600 font-bold mb-1">الإدارة / القسم:</label>
-                  <select
+                  <input
+                    list="dynamic-departments-list-edit"
+                    type="text"
+                    required
+                    placeholder="اختر أو اكتب القسم..."
                     value={editingEmployee.department}
                     onChange={(e) => setEditingEmployee({...editingEmployee, department: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="المبيعات والتسويق">المبيعات والتسويق</option>
-                    <option value="الإدارة المالية">الإدارة المالية</option>
-                    <option value="إدارة المستودعات واللوجستيات">إدارة المستودعات واللوجستيات</option>
-                    <option value="تقنية المعلومات والنظم">تقنية المعلومات والنظم</option>
-                    <option value="الموارد البشرية والشؤون الإدارية">الموارد البشرية والشؤون الإدارية</option>
-                    <option value="العمليات التشغيلية">العمليات التشغيلية</option>
-                  </select>
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 bg-white"
+                  />
+                  <datalist id="dynamic-departments-list-edit">
+                    {dynamicDepartmentsList.map((dep, idx) => (
+                      <option key={idx} value={dep} />
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-slate-600 font-bold mb-1">المسمى الوظيفي:</label>
                   <input
+                    list="dynamic-jobs-list-edit"
                     type="text"
                     required
+                    placeholder="المسمى الوظيفي..."
                     value={editingEmployee.jobTitle}
                     onChange={(e) => setEditingEmployee({...editingEmployee, jobTitle: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 bg-white"
                   />
+                  <datalist id="dynamic-jobs-list-edit">
+                    {dynamicJobsList.map((job, idx) => (
+                      <option key={idx} value={job} />
+                    ))}
+                  </datalist>
                 </div>
               </div>
 
@@ -1357,8 +1581,12 @@ export default function PayrollScreen() {
                       type="number"
                       required
                       min={0}
-                      value={editingEmployee.basicSalary}
-                      onChange={(e) => setEditingEmployee({...editingEmployee, basicSalary: Number(e.target.value)})}
+                      value={editingEmployee.basicSalary ?? ''}
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => setEditingEmployee({...editingEmployee, basicSalary: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                      onBlur={() => {
+                        if ((editingEmployee.basicSalary as any) === '') setEditingEmployee({...editingEmployee, basicSalary: 0});
+                      }}
                       className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white font-mono font-bold"
                     />
                   </div>
@@ -1367,8 +1595,12 @@ export default function PayrollScreen() {
                     <input
                       type="number"
                       min={0}
-                      value={editingEmployee.housingAllowance || 0}
-                      onChange={(e) => setEditingEmployee({...editingEmployee, housingAllowance: Number(e.target.value)})}
+                      value={editingEmployee.housingAllowance ?? ''}
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => setEditingEmployee({...editingEmployee, housingAllowance: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                      onBlur={() => {
+                        if ((editingEmployee.housingAllowance as any) === '') setEditingEmployee({...editingEmployee, housingAllowance: 0});
+                      }}
                       className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white font-mono"
                     />
                   </div>
@@ -1377,8 +1609,12 @@ export default function PayrollScreen() {
                     <input
                       type="number"
                       min={0}
-                      value={editingEmployee.transportAllowance || 0}
-                      onChange={(e) => setEditingEmployee({...editingEmployee, transportAllowance: Number(e.target.value)})}
+                      value={editingEmployee.transportAllowance ?? ''}
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => setEditingEmployee({...editingEmployee, transportAllowance: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                      onBlur={() => {
+                        if ((editingEmployee.transportAllowance as any) === '') setEditingEmployee({...editingEmployee, transportAllowance: 0});
+                      }}
                       className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white font-mono"
                     />
                   </div>
@@ -1387,8 +1623,12 @@ export default function PayrollScreen() {
                     <input
                       type="number"
                       min={0}
-                      value={editingEmployee.foodAllowance || 0}
-                      onChange={(e) => setEditingEmployee({...editingEmployee, foodAllowance: Number(e.target.value)})}
+                      value={editingEmployee.foodAllowance ?? ''}
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => setEditingEmployee({...editingEmployee, foodAllowance: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                      onBlur={() => {
+                        if ((editingEmployee.foodAllowance as any) === '') setEditingEmployee({...editingEmployee, foodAllowance: 0});
+                      }}
                       className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white font-mono"
                     />
                   </div>
@@ -1397,8 +1637,12 @@ export default function PayrollScreen() {
                     <input
                       type="number"
                       min={0}
-                      value={editingEmployee.otherAllowances || 0}
-                      onChange={(e) => setEditingEmployee({...editingEmployee, otherAllowances: Number(e.target.value)})}
+                      value={editingEmployee.otherAllowances ?? ''}
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => setEditingEmployee({...editingEmployee, otherAllowances: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                      onBlur={() => {
+                        if ((editingEmployee.otherAllowances as any) === '') setEditingEmployee({...editingEmployee, otherAllowances: 0});
+                      }}
                       className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white font-mono"
                     />
                   </div>
@@ -1493,8 +1737,12 @@ export default function PayrollScreen() {
                     type="number"
                     required
                     min={1}
-                    value={newBonusData.amount}
-                    onChange={(e) => setNewBonusData({...newBonusData, amount: Number(e.target.value)})}
+                    value={newBonusData.amount ?? ''}
+                    onFocus={e => e.target.select()}
+                    onChange={(e) => setNewBonusData({...newBonusData, amount: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                    onBlur={() => {
+                      if ((newBonusData.amount as any) === '') setNewBonusData(prev => ({ ...prev, amount: 0 }));
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 font-mono font-bold text-amber-700"
                   />
                 </div>
@@ -1611,8 +1859,12 @@ export default function PayrollScreen() {
                     type="number"
                     required
                     min={1}
-                    value={newDeductionData.amount}
-                    onChange={(e) => setNewDeductionData({...newDeductionData, amount: Number(e.target.value)})}
+                    value={newDeductionData.amount ?? ''}
+                    onFocus={e => e.target.select()}
+                    onChange={(e) => setNewDeductionData({...newDeductionData, amount: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                    onBlur={() => {
+                      if ((newDeductionData.amount as any) === '') setNewDeductionData(prev => ({ ...prev, amount: 0 }));
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 font-mono font-bold text-rose-600"
                   />
                 </div>

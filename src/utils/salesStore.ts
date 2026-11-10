@@ -11,6 +11,9 @@ export interface InvoiceItem {
   unit?: string;
   availableStock?: number;
   costPrice?: number;
+  itemDiscount?: number;
+  itemDiscountType?: "AMOUNT" | "PERCENT";
+  pricingTier?: 'CONSUMER' | 'SEMI_WHOLESALE' | 'WHOLESALE';
 }
 
 export interface StoredSalesInvoice {
@@ -31,12 +34,15 @@ export interface StoredSalesInvoice {
     subtotal: number;
     taxTotal: number;
     discountTotal?: number;
+    servicesTotal?: number;
     grandTotal: number;
     cashPaid?: number;
     remainingBalance?: number;
   };
   status: 'DRAFT' | 'POSTED';
-  notes?: string;
+  partnerBalanceSnapshot?: number | undefined;
+  costCenterId?: string | undefined;
+  notes?: string | undefined;
   createdAt: string;
 }
 

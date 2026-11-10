@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   RotateCcw,
   FileSpreadsheet,
+  BookOpen,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -36,6 +37,7 @@ import PartnerAgingReport from './PartnerAgingReport';
 import ExportButtonGroup from './ExportButtonGroup';
 import { getSystemSettings } from '../utils/settings';
 import { useSystemCurrency } from '../utils/currency';
+import { useIsInWindow } from './DesktopWindowManager';
 import { 
   loadAllVouchers, 
   setVoucherPostingStatus, 
@@ -44,6 +46,8 @@ import {
   loadCustomers,
   loadVendors
 } from '../utils/partnerLedger';
+import { navigateToAccountMovements } from '../utils/accountMovementsStore';
+import { loadChartOfAccounts, resolveCashOrBankAccount } from '../utils/trialBalanceStore';
 import { VoucherType } from '../types/accounting';
 import ReportPrintPreviewToolbar from './ReportPrintPreviewToolbar';
 
@@ -83,7 +87,8 @@ export interface PartnerBalanceItem {
 
 // The list is dynamically loaded from actual ledger data.
 
-export default function PartnerBalances() {
+export default function PartnerBalances({ isInWindow: explicitIsInWindow }: { isInWindow?: boolean } = {}) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { symbol: currencySymbol } = useSystemCurrency();
   const [systemSettings] = useState(() => getSystemSettings());
 
@@ -786,6 +791,8 @@ ${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 
     const isReceipt = voucher.type === VoucherType.Receipt;
     const pType = voucher.partnerType || (isReceipt ? 'CUSTOMER' : 'VENDOR');
     const isPosted = (voucher.status || 'POSTED') === 'POSTED';
+    const chartAccounts = loadChartOfAccounts();
+    const resolvedAcc = resolveCashOrBankAccount(chartAccounts, voucher.accountId, voucher.paymentMethod);
     const voucherPrintData: PrintPreviewData = {
       title: isReceipt ? 'سند قبض مالي' : 'سند صرف مالي',
       subtitle: isReceipt ? 'إشعار استلام نقدية / تحويل بنكي معتمد' : 'إشعار سداد وصرف نقدية / بنكي معتمد',
@@ -793,7 +800,7 @@ ${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 
       date: voucher.date,
       partnerName: voucher.partnerName,
       partnerType: pType,
-      paymentMethod: voucher.accountId === 'cash' ? 'نقداً (الصندوق الرئيسي)' : 'تحويل بنكي (البنك الأهلي)',
+      paymentMethod: resolvedAcc ? `${resolvedAcc.name} [${resolvedAcc.code}]` : (voucher.accountId || 'الصندوق الرئيسي'),
       notes: `${voucher.description || ''} - [حالة السند: ${isPosted ? 'مرحل ومعتمد بالحسابات' : 'مسودة غير مرحل'}] ${voucher.postedAt ? `(تاريخ الترحيل: ${formatPostingDateTime(voucher.postedAt)})` : ''}`,
       subtotal: voucher.amount,
       taxTotal: 0,
@@ -824,6 +831,7 @@ ${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 
       
       {/* Top Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 print:hidden">
+        {!isInWindow && (
         <div>
           <div className="flex items-center gap-2 mb-1 text-slate-500">
             <span className="text-xs uppercase font-bold tracking-tight">الحسابات والتقارير المالية</span>
@@ -852,6 +860,7 @@ ${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 
             </div>
           </div>
         </div>
+        )}
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2.5">
@@ -1000,7 +1009,8 @@ ${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 
                   const typeLabel = v.type === VoucherType.Receipt ? 'سند قبض' : 'سند صرف';
                   const pType = v.partnerType || (v.type === VoucherType.Receipt ? 'CUSTOMER' : 'VENDOR');
                   const partnerTypeLabel = pType === 'CUSTOMER' ? 'عميل' : 'مورد';
-                  const accountLabel = v.accountId === 'cash' ? 'الصندوق الرئيسي (نقداً)' : 'البنك الأهلي (تحويل بنكي)';
+                  const resolvedAcc = resolveCashOrBankAccount(loadChartOfAccounts(), v.accountId, v.paymentMethod);
+                  const accountLabel = resolvedAcc ? `[${resolvedAcc.code}] ${resolvedAcc.name}` : (v.accountId || 'الصندوق الرئيسي');
                   const statusLabel = isPosted ? 'مرحل بالحسابات' : 'مسودة (غير مرحل)';
                   const postingDateLabel = isPosted ? (v.postedAt ? formatPostingDateTime(v.postedAt) : `${v.date} (معتمد)`) : 'غير مرحل';
 
@@ -1109,6 +1119,30 @@ ${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 
           }`}>
             {debtorsSummary.count + creditorsSummary.count} <span className="hidden sm:inline">رصيد نشط</span>
           </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('alpha-navigate', { detail: { view: 'customerStatement' } }));
+          }}
+          className="btn-3d btn-3d-indigo flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0"
+          title="فتح شاشة كشف حساب عميل وتفصيلي (Continuous Detailed Ledger)"
+        >
+          <BookOpen size={15} className="shrink-0" />
+          <span className="whitespace-nowrap">كشف حساب عميل</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('alpha-navigate', { detail: { view: 'partnerStatement' } }));
+          }}
+          className="btn-3d btn-3d-emerald flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0"
+          title="فتح شاشة كشف الحساب التفصيلي مع فلترة التواريخ وأنواع الحركات وتصدير Excel و PDF"
+        >
+          <FileSpreadsheet size={15} className="shrink-0" />
+          <span className="whitespace-nowrap">كشف حساب تفصيلي</span>
         </button>
 
         <button
@@ -1838,6 +1872,17 @@ ${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 
                           <Eye size={12} /> كشف
                         </button>
 
+                        {/* Account Movements (3 Columns) Button */}
+                        <button
+                          type="button"
+                          onClick={() => navigateToAccountMovements(p.id)}
+                          className="btn-3d btn-3d-slate px-2 py-1 text-xs font-black flex items-center gap-1 hover:scale-105 active:scale-95 transition-all"
+                          title="فتح في شاشة حركة الحسابات (3 أعمدة: مدين - دائن - بيان الحركة)"
+                        >
+                          <Scale size={12} className="text-amber-400" />
+                          <span>حركة</span>
+                        </button>
+
                       </div>
                     </td>
                   </tr>
@@ -2194,7 +2239,10 @@ ${partner.calc.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 
                             )}
                           </div>
                           <div className="text-[10px] text-slate-400">
-                            {v.accountId === 'cash' ? 'الصندوق الرئيسي (نقداً)' : 'البنك الأهلي (تحويل بنكي)'}
+                            {(() => {
+                              const resolvedAcc = resolveCashOrBankAccount(loadChartOfAccounts(), v.accountId, v.paymentMethod);
+                              return resolvedAcc ? `[${resolvedAcc.code}] ${resolvedAcc.name}` : (v.accountId || 'الصندوق الرئيسي');
+                            })()}
                           </div>
                         </td>
 

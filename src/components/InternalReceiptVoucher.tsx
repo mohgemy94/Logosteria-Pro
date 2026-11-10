@@ -4,10 +4,11 @@ import {
   Wallet, Sparkles, UserCheck, CheckCircle2, RotateCcw, Send,
   ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft,
   Banknote, Landmark, CreditCard, Calendar, FileText,
-  Building2, Scan, FileSpreadsheet
+  Building2, Scan, FileSpreadsheet, User, Hash, Coins, AlignLeft, Printer, FileDown, MessageSquare
 } from 'lucide-react';
 import { Account, SystemSettings } from '../types/accounting';
 import { loadChartOfAccounts } from '../utils/trialBalanceStore';
+import { isCashOrBankAccount } from '../utils/accountingIntegration';
 import { 
   type CostCenter, 
   loadCostCenters, 
@@ -21,6 +22,7 @@ import VoucherScannerModal from './VoucherScannerModal';
 import VouchersExportModal from './VouchersExportModal';
 import VoucherApprovalStepper from './VoucherApprovalStepper';
 import VouchersApprovalCenterModal from './VouchersApprovalCenterModal';
+import { useIsInWindow } from './DesktopWindowManager';
 import { 
   isApprovalRequired, 
   canVoucherBePosted 
@@ -66,14 +68,7 @@ export interface StoredInternalReceiptVoucher {
   preparedBy?: string | undefined;
 }
 
-const INTERNAL_ACCOUNTS = [
-  { id: 'cash1', name: 'الخزينة الرئيسية (الصندوق العام)' },
-  { id: 'cash2', name: 'صندوق المعرض / المبيعات اليومية' },
-  { id: 'cash3', name: 'صندوق العهد والمصروفات النثرية' },
-  { id: 'bank1', name: 'البنك الأهلي التجاري' },
-  { id: 'bank2', name: 'مصرف الراجحي' },
-  { id: 'bank3', name: 'بنك الرياض' },
-];
+
 
 const RECEIPT_SOURCE_TYPES = [
   { id: 'custody_refund', label: 'استرداد / تسوية عهدة موظف' },
@@ -99,7 +94,8 @@ function loadStoredInternalReceipts(): StoredInternalReceiptVoucher[] {
   return [];
 }
 
-export default function InternalReceiptVoucher() {
+export default function InternalReceiptVoucher({ isInWindow: explicitIsInWindow }: { isInWindow?: boolean } = {}) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { symbol: currencySymbol, fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
   const [savedVouchers, setSavedVouchers] = useState<StoredInternalReceiptVoucher[]>(() => loadStoredInternalReceipts());
   const [showHistory, setShowHistory] = useState(false);
@@ -120,16 +116,29 @@ export default function InternalReceiptVoucher() {
   }, []);
 
   // List of employees from payroll
-  const [employees, setEmployees] = useState<{ id: string; name: string; jobTitle?: string }[]>([]);
+  const [employees, setEmployees] = useState<{ id: string; name: string; jobTitle?: string }[]>(() => {
+    try {
+      const primary = localStorage.getItem('alpha_accounting_employees_v1');
+      const fallback = localStorage.getItem('alpha_payroll_employees_v1');
+      const raw = primary || fallback;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.map((e: any) => ({ id: e.id, name: e.name, jobTitle: e.jobTitle }));
+      }
+    } catch {}
+    return [];
+  });
 
   useEffect(() => {
     const handleSync = () => {
       try {
-        const raw = localStorage.getItem('alpha_payroll_employees_v1');
+        const primary = localStorage.getItem('alpha_accounting_employees_v1');
+        const fallback = localStorage.getItem('alpha_payroll_employees_v1');
+        const raw = primary || fallback;
         if (raw) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
-            setEmployees(parsed.map(e => ({ id: e.id, name: e.name, jobTitle: e.jobTitle })));
+            setEmployees(parsed.map((e: any) => ({ id: e.id, name: e.name, jobTitle: e.jobTitle })));
           } else {
             setEmployees([]);
           }
@@ -180,7 +189,55 @@ export default function InternalReceiptVoucher() {
 
   const [voucherNumber, setVoucherNumber] = useState<string>(() => nextCalculatedVoucherNum);
   const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0] as string);
-  const [toAccountId, setToAccountId] = useState<string>('cash1');
+  const [chartAccounts, setChartAccounts] = useState<Account[]>(() => loadChartOfAccounts());
+
+  // Compute dynamic internal cash & bank accounts strictly from Chart of Accounts
+  const internalAccountsList = useMemo(() => {
+    return chartAccounts
+      .filter(a => isCashOrBankAccount(a, chartAccounts))
+      .map(a => ({
+        id: a.id,
+        code: a.code,
+        name: a.name
+      }));
+  }, [chartAccounts]);
+
+  // Compute dynamic revenue and receipt accounts (4xxx, 12xx) from Chart of Accounts
+  const revenueAccountsList = useMemo(() => {
+    return chartAccounts
+      .filter(a => {
+        if (a.isActive === false) return false;
+        if (a.isPosting === false) return false;
+        const code = String(a.code || '').trim();
+        return a.type === 'REVENUE' || /^4\d+/.test(code) || code.startsWith('1205');
+      })
+      .map(a => ({
+        id: a.id,
+        code: a.code,
+        name: a.name
+      }));
+  }, [chartAccounts]);
+
+  // Source accounts (other banks, cash, employees, revenues)
+  const sourceAccountsList = useMemo(() => {
+    return chartAccounts
+      .filter(a => {
+        if (a.isActive === false) return false;
+        if (a.isPosting === false) return false;
+        const code = String(a.code || '').trim();
+        return isCashOrBankAccount(a, chartAccounts) || a.type === 'REVENUE' || /^4\d+/.test(code) || code.startsWith('1205');
+      })
+      .map(a => ({
+        id: a.id,
+        code: a.code,
+        name: a.name
+      }));
+  }, [chartAccounts]);
+
+  const [toAccountId, setToAccountId] = useState<string>(() => {
+    const list = loadChartOfAccounts().filter(a => isCashOrBankAccount(a, loadChartOfAccounts()));
+    return list[0]?.id || 'cash1';
+  });
   const [fromAccountId, setFromAccountId] = useState<string>('');
   const [sourceType, setSourceType] = useState<string>('custody_refund');
   const [receivedFrom, setReceivedFrom] = useState<string>('');
@@ -189,7 +246,6 @@ export default function InternalReceiptVoucher() {
   const [referenceNo, setReferenceNo] = useState<string>('');
   const [bankName, setBankName] = useState<string>('');
   const [checkDueDate, setCheckDueDate] = useState<string>('');
-  const [chartAccounts, setChartAccounts] = useState<Account[]>(() => loadChartOfAccounts());
   const [amount, setAmount] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [voucherStatus, setVoucherStatus] = useState<'DRAFT' | 'POSTED'>('DRAFT');
@@ -211,48 +267,29 @@ export default function InternalReceiptVoucher() {
 
   // Sync with Chart of Accounts
   useEffect(() => {
-    const handleAccountsUpdate = () => setChartAccounts(loadChartOfAccounts());
-    window.addEventListener('alpha-chart-of-accounts-updated', handleAccountsUpdate);
-    return () => window.removeEventListener('alpha-chart-of-accounts-updated', handleAccountsUpdate);
-  }, []);
-
-  // Compute dynamic internal cash & bank accounts
-  const internalAccountsList = useMemo(() => {
-    const dynamicAccounts = chartAccounts.filter(a => {
-      const code = a.code || '';
-      const name = (a.name || '').toLowerCase();
-      return (
-        code.startsWith('110') ||
-        code === '1101' ||
-        code === '1102' ||
-        code === '1103' ||
-        name.includes('خزينة') ||
-        name.includes('صندوق') ||
-        name.includes('بنك') ||
-        name.includes('نقدية')
-      );
-    }).map(a => ({
-      id: a.id,
-      name: `[${a.code}] ${a.name}`
-    }));
-
-    if (dynamicAccounts.length > 0) {
-      // Merge legacy accounts for backwards compatibility if not present
-      const combined = [...dynamicAccounts];
-      INTERNAL_ACCOUNTS.forEach(legacy => {
-        if (!combined.some(c => c.id === legacy.id)) {
-          combined.push(legacy);
-        }
+    const handleAccountsUpdate = () => {
+      const fresh = loadChartOfAccounts();
+      setChartAccounts(fresh);
+      const validAccounts = fresh.filter(a => isCashOrBankAccount(a, fresh));
+      setToAccountId(prev => {
+        if (validAccounts.some(a => a.id === prev || a.code === prev)) return prev;
+        return validAccounts[0]?.id || prev;
       });
-      return combined;
-    }
-    return INTERNAL_ACCOUNTS;
-  }, [chartAccounts]);
+    };
+    window.addEventListener('alpha-chart-of-accounts-updated', handleAccountsUpdate);
+    window.addEventListener('alpha-data-changed', handleAccountsUpdate);
+    return () => {
+      window.removeEventListener('alpha-chart-of-accounts-updated', handleAccountsUpdate);
+      window.removeEventListener('alpha-data-changed', handleAccountsUpdate);
+    };
+  }, []);
 
   const getAccountName = (id: string) => {
     const chartAcc = chartAccounts.find(a => a.id === id || a.code === id);
     if (chartAcc) return `[${chartAcc.code}] ${chartAcc.name}`;
-    return INTERNAL_ACCOUNTS.find(a => a.id === id)?.name || id;
+    const srcType = RECEIPT_SOURCE_TYPES.find(s => s.id === id);
+    if (srcType) return srcType.label;
+    return id;
   };
 
   // Existing voucher matching current number
@@ -322,6 +359,35 @@ export default function InternalReceiptVoucher() {
     setDescription(v.description);
     setShowHistory(false);
   };
+
+  // Event listener & sessionStorage pickup for highlighting specific internal receipt
+  useEffect(() => {
+    const handleHighlight = (e: any) => {
+      const v = e.detail?.voucher;
+      if (v) handleEdit(v);
+    };
+    window.addEventListener('alpha-highlight-internal-receipt', handleHighlight);
+    return () => window.removeEventListener('alpha-highlight-internal-receipt', handleHighlight);
+  }, [savedVouchers]);
+
+  useEffect(() => {
+    try {
+      const targetId = sessionStorage.getItem('alpha_target_internal_receipt_id');
+      const targetNum = sessionStorage.getItem('alpha_target_internal_receipt_number');
+      if (targetId || targetNum) {
+        sessionStorage.removeItem('alpha_target_internal_receipt_id');
+        sessionStorage.removeItem('alpha_target_internal_receipt_number');
+        const cleanNum = targetNum ? targetNum.replace(/^#/, '').trim().toLowerCase() : '';
+        const found = savedVouchers.find(v => 
+          (targetId && String(v.id) === String(targetId)) ||
+          (cleanNum && v.voucherNumber && String(v.voucherNumber).replace(/^#/, '').trim().toLowerCase() === cleanNum)
+        );
+        if (found) handleEdit(found);
+      }
+    } catch (e) {
+      console.warn('Failed to load pending internal receipt from sessionStorage:', e);
+    }
+  }, [savedVouchers]);
 
   // Chronologically sorted list of vouchers (oldest to newest) for sequential ERP browsing
   const chronologicallyOrderedVouchers = useMemo(() => {
@@ -412,7 +478,7 @@ export default function InternalReceiptVoucher() {
     }
 
     const finalNumber = voucherNumber.trim() || nextCalculatedVoucherNum;
-    const toAccName = INTERNAL_ACCOUNTS.find(a => a.id === toAccountId)?.name || toAccountId;
+    const toAccName = getAccountName(toAccountId);
     const sourceLabel = RECEIPT_SOURCE_TYPES.find(s => s.id === sourceType)?.label || sourceType;
     let isPost = targetStatus === 'POSTED';
     const prevVoucher = editingVoucherId ? savedVouchers.find(v => v.id === editingVoucherId) : undefined;
@@ -496,6 +562,42 @@ export default function InternalReceiptVoucher() {
     setSavedVouchers(updated);
     try {
       localStorage.setItem(DB_INTERNAL_RECEIPT_VOUCHERS_KEY, JSON.stringify(updated));
+
+      // Auto Sync with HR & Payroll Loans if this is a posted Custody / Advance refund
+      if (isPost && (sourceType === 'custody_refund' || sourceType === 'advance_refund')) {
+        try {
+          const rawLoans = localStorage.getItem('alpha_accounting_loans_v1');
+          if (rawLoans) {
+            const existingLoans = JSON.parse(rawLoans);
+            if (Array.isArray(existingLoans)) {
+              let updatedAny = false;
+              const nextLoans = existingLoans.map((loan: any) => {
+                const isEmpMatch = (loan.employeeName && receivedFrom.trim().toLowerCase().includes(loan.employeeName.toLowerCase())) ||
+                                  (loan.employeeCode && receivedFrom.trim().toLowerCase().includes(loan.employeeCode.toLowerCase()));
+                if (isEmpMatch && loan.status === 'ACTIVE' && loan.remainingAmount > 0) {
+                  updatedAny = true;
+                  const newPaid = Math.min(loan.amount, (Number(loan.paidAmount) || 0) + numAmount);
+                  const newRem = Math.max(0, loan.amount - newPaid);
+                  return {
+                    ...loan,
+                    paidAmount: newPaid,
+                    remainingAmount: newRem,
+                    status: newRem === 0 ? 'PAID' : 'ACTIVE'
+                  };
+                }
+                return loan;
+              });
+              if (updatedAny) {
+                localStorage.setItem('alpha_accounting_loans_v1', JSON.stringify(nextLoans));
+                window.dispatchEvent(new Event('alpha-payroll-updated'));
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Failed syncing loan refund from internal receipt voucher:', e);
+        }
+      }
+
       window.dispatchEvent(new Event('alpha-chart-of-accounts-updated'));
       window.dispatchEvent(new Event('alpha-journal-entries-updated'));
       window.dispatchEvent(new Event('alpha-vouchers-updated'));
@@ -572,9 +674,36 @@ export default function InternalReceiptVoucher() {
     }
   };
 
+  const handleCurrentVoucherDelete = () => {
+    const target = savedVouchers.find(v => v.id === editingVoucherId || v.voucherNumber === voucherNumber);
+    if (target) {
+      handleDelete(target.id, target.voucherNumber);
+    } else {
+      if (confirm('هل أنت متأكد من رغبتك في مسح وإلغاء البيانات المدخلة للسند الحالي؟')) {
+        handleNewVoucher();
+      }
+    }
+  };
+
   const handleSave = (e: FormEvent) => {
     e.preventDefault();
     saveVoucherWithStatus(isCurrentVoucherPosted ? 'POSTED' : 'DRAFT');
+  };
+
+  const handleDirectPrint = () => {
+    window.print();
+  };
+
+  const handleDirectPdfExport = () => {
+    setCustomPreviewData(null);
+    setShowPrintPreview(true);
+  };
+
+  const handleOpenWhatsApp = () => {
+    const textMsg = encodeURIComponent(
+      `السلام عليكم ورحمة الله، مرفق تفاصيل سند قبض داخلي رقم #${voucherNumber} بقيمة ${Number(amount || 0).toLocaleString()} ريال - المسلّم: ${receivedFrom || 'جهة داخلية'}.`
+    );
+    window.open(`https://api.whatsapp.com/send?text=${textMsg}`, '_blank');
   };
 
   const currentPreviewObject: PrintPreviewData = {
@@ -609,37 +738,28 @@ export default function InternalReceiptVoucher() {
   return (
     <div className="flex flex-col flex-1">
       {/* Top Application Bar */}
-      <div className="flex flex-col gap-3 mb-4 print:hidden">
-        {/* Breadcrumb & Screen Title */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div>
-            <div className="flex items-center gap-2 mb-1 text-slate-500 text-xs font-bold">
-              <span>الخزينة والبنوك</span>
-              <span>/</span>
-              <span className="text-teal-900 font-extrabold">سندات داخلية</span>
-              <span>/</span>
-              <span className="text-teal-700 bg-teal-50 px-2 py-0.5 rounded font-bold border border-teal-200">
-                قبض وتوريد داخلي
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-800 flex items-center gap-2">
-                <span className="p-1 bg-teal-100 text-teal-800 rounded-lg shadow-2xs">
-                  <ArrowDownLeft size={20} />
-                </span>
-                سند قبض داخلي
-              </h2>
-              <span className="text-xs sm:text-sm font-black text-teal-950 bg-teal-50 px-2.5 py-1 rounded-lg font-mono border border-teal-300 shadow-2xs">
-                سند رقم: #{voucherNumber}
-              </span>
-              {editingVoucherId && (
-                <span className="text-xs bg-amber-50 text-amber-950 px-2.5 py-1 rounded-lg font-black border border-amber-300 flex items-center gap-1 shadow-2xs">
-                  <Edit3 size={12} className="text-amber-700" /> وضع التعديل
-                </span>
-              )}
+      <div className={`flex flex-col gap-3 ${isInWindow ? 'mb-2' : 'mb-4'} print:hidden`}>
+        {/* Screen Title (Shown ONLY in full screen mode; In multi-window mode, the top window bar is the single title) */}
+        {!isInWindow && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-800 flex items-center gap-2">
+                  <span className="p-1 bg-teal-100 text-teal-800 rounded-lg shadow-2xs">
+                    <ArrowDownLeft size={20} />
+                  </span>
+                  سند قبض داخلي
+                </h2>
+                
+                {editingVoucherId && (
+                  <span className="text-xs bg-amber-50 text-amber-950 px-2.5 py-1 rounded-lg font-black border border-amber-300 flex items-center gap-1 shadow-2xs">
+                    <Edit3 size={12} className="text-amber-700" /> وضع التعديل
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Global 3D Responsive Voucher Actions Toolbar */}
         <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
@@ -710,6 +830,8 @@ export default function InternalReceiptVoucher() {
               <span>سجل السندات ({savedVouchers.length})</span>
             </button>
 
+            
+
             {editingVoucherId && (
               <button
                 type="button"
@@ -721,87 +843,123 @@ export default function InternalReceiptVoucher() {
             )}
           </div>
 
-          {/* Cluster 2: Action Operations & Printing */}
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            {/* 3D New Voucher */}
-            <button 
-              type="button" 
-              onClick={handleNewVoucher} 
-              className="btn-3d btn-3d-teal h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black min-h-[38px]"
+          {/* Cluster 2: Action Operations & Printing (Unified Actions Toolbar) */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* New Voucher Button */}
+            <button
+              type="button"
+              onClick={handleNewVoucher}
+              className="h-8 px-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 cursor-pointer transition-all"
+              title="سند جديد"
             >
-              <Plus size={15} />
-              <span>سند جديد #{nextCalculatedVoucherNum}</span>
+              <Plus size={14} />
+              <span>جديد</span>
             </button>
 
-            {/* 3D Post / Unpost */}
-            {isCurrentVoucherDraft && (
+            {/* Primary Action (ترحيل السند) */}
+            {isCurrentVoucherDraft ? (
               <button
                 type="button"
                 onClick={handlePostCurrentVoucher}
-                className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black min-h-[38px]"
-                title="ترحيل السند في الحسابات العامة ودفتر الأستاذ وتحديث الأرصدة"
+                className="h-8 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-black shadow-sm flex items-center gap-1.5 cursor-pointer transition-all"
+                title="ترحيل السند واعتماده فوراً في الحسابات"
               >
-                <Send size={14} />
+                <CheckCircle2 size={15} />
                 <span>ترحيل السند</span>
               </button>
-            )}
-            {isCurrentVoucherPosted && (
+            ) : (
               <button
                 type="button"
                 onClick={handleUnpostCurrentVoucher}
-                className="btn-3d btn-3d-amber h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black min-h-[38px]"
-                title="إلغاء ترحيل هذا السند وإعادته كمسودة مؤقتة وإيقاف أثره المحاسبي"
+                className="h-8 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                title="إلغاء الترحيل وإعادة السند كمسودة"
               >
                 <RotateCcw size={14} />
                 <span>إلغاء الترحيل</span>
               </button>
             )}
 
-            {/* Print & Preview Group */}
-            <div className="flex items-center gap-1.5 border-r border-slate-300/80 pr-1.5 sm:pr-2 mr-0.5">
+            {/* Secondary Action (حفظ كمسودة - Outline style) */}
+            <button
+              type="button"
+              onClick={() => saveVoucherWithStatus('DRAFT')}
+              className="h-8 px-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
+              title="حفظ السند كمسودة مؤقتة"
+            >
+              <Save size={14} className="text-slate-600" />
+              <span>حفظ كمسودة</span>
+            </button>
+
+            {/* Unified Outputs Group (تجميع المخرجات بتصميم هادئ وموحد) */}
+            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-300 text-slate-700 shadow-2xs">
+              {/* Preview Button */}
               <button
                 type="button"
                 onClick={() => {
                   setCustomPreviewData(null);
                   setShowPrintPreview(true);
                 }}
-                className="btn-3d btn-3d-slate h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black min-h-[38px]"
-                title="معاينة سند القبض الداخلي قبل الطباعة"
+                className="h-8 px-3 bg-white hover:bg-indigo-50 text-indigo-700 hover:text-indigo-800 border border-indigo-200 rounded-md text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs shrink-0"
+                title="معاينة السند قبل الطباعة"
               >
-                <Eye size={14} />
-                <span className="hidden sm:inline">معاينة</span>
+                <Eye size={14} className="text-indigo-600" />
+                <span>معاينة</span>
               </button>
 
-              <PrintDropdown 
-                onPreview={() => {
-                  setCustomPreviewData(null);
-                  setShowPrintPreview(true);
-                }}
-              />
+              {/* Direct Print */}
+              <button
+                type="button"
+                onClick={handleDirectPrint}
+                className="h-8 px-2.5 hover:bg-white text-slate-700 hover:text-slate-900 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                title="طباعة مباشرة"
+              >
+                <Printer size={14} className="text-slate-600" />
+                <span>طباعة</span>
+              </button>
+
+              {/* Export PDF */}
+              <button
+                type="button"
+                onClick={handleDirectPdfExport}
+                className="h-8 px-2.5 hover:bg-white text-slate-700 hover:text-rose-700 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                title="تصدير PDF"
+              >
+                <FileDown size={14} className="text-rose-600" />
+                <span>PDF</span>
+              </button>
+
+              {/* WhatsApp */}
+              <button
+                type="button"
+                onClick={handleOpenWhatsApp}
+                className="h-8 px-2.5 hover:bg-white text-slate-700 hover:text-emerald-700 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                title="إرسال عبر واتساب"
+              >
+                <MessageSquare size={14} className="text-emerald-600" />
+                <span>واتساب</span>
+              </button>
             </div>
 
-            {/* 3D Optical Scanner Button */}
+            {/* Scanner Button */}
             <button
               type="button"
               onClick={() => setShowScannerModal(true)}
-              className="btn-3d btn-3d-purple h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black flex items-center gap-1.5 shadow-sm min-h-[38px]"
-              title="فحص السند بالماسح الضوئي وقارئ الباركود للتحقق من صحته ومطابقته لمنع التلاعب"
+              className="h-8 px-2.5 bg-slate-100 hover:bg-purple-50 text-purple-800 border border-slate-300 rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
+              title="فحص السند بالماسح الضوئي"
             >
-              <Scan size={14} className="text-purple-200 animate-pulse" />
-              <span className="hidden sm:inline">ماسح الباركود & QR</span>
-              <span className="sm:hidden">ماسح</span>
+              <Scan size={14} className="text-purple-600" />
+              <span className="hidden sm:inline">ماسح الباركود</span>
             </button>
 
-            {/* 3D Export Vouchers Button */}
+            {/* Export Vouchers Button */}
             <button
               type="button"
               onClick={() => setShowExportModal(true)}
-              className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black flex items-center gap-1.5 shadow-sm min-h-[38px]"
-              title="تصدير كشوفات السندات والعمليات إلى Excel (.xlsx) و CSV و PDF"
+              className="h-8 px-2.5 bg-slate-100 hover:bg-emerald-50 text-emerald-800 border border-slate-300 rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
+              title="تصدير الكشوفات"
             >
-              <FileSpreadsheet size={15} className="text-emerald-200" />
-              <span className="hidden sm:inline">تصدير (Excel/PDF)</span>
-              <span className="sm:hidden">تصدير</span>
+              <FileSpreadsheet size={14} className="text-emerald-600" />
+              <span className="hidden sm:inline">تصدير الكشوفات</span>
             </button>
 
             {/* Approval Center Button */}
@@ -809,10 +967,10 @@ export default function InternalReceiptVoucher() {
               <button
                 type="button"
                 onClick={() => setShowApprovalCenterModal(true)}
-                className="btn-3d btn-3d-amber h-9 sm:h-10 px-2 sm:px-2.5 text-xs font-black flex items-center gap-1.5 shadow-sm relative min-h-[38px]"
-                title="مركز اعتمادات وموافقات الإدارة المالية"
+                className="h-8 px-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5 relative cursor-pointer transition-all"
+                title="مركز الاعتمادات"
               >
-                <UserCheck size={15} className="text-amber-200" />
+                <UserCheck size={14} className="text-amber-600" />
                 <span className="hidden sm:inline">مركز الاعتماد</span>
                 {pendingApprovalsCount > 0 && (
                   <span className="px-1.5 py-0.2 bg-red-600 text-white rounded-full text-[10px] font-mono font-bold animate-bounce">
@@ -821,10 +979,20 @@ export default function InternalReceiptVoucher() {
                 )}
               </button>
             )}
+
+            {/* Delete Action Button (في آخر شريط الإجراءات) */}
+            <button
+              type="button"
+              onClick={handleCurrentVoucherDelete}
+              className="h-8 px-3 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 hover:border-rose-700 rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="حذف هذا السند أو مسح البيانات"
+            >
+              <Trash2 size={14} />
+              <span>حذف السند</span>
+            </button>
           </div>
         </div>
-      </div>
-
+        </div>
       {/* Collapsible History Drawer */}
       {showHistory && (
         <div className="mb-6 bg-white border border-slate-200 rounded-xl p-4 shadow-sm animate-in fade-in duration-150 print:hidden">
@@ -1222,539 +1390,429 @@ export default function InternalReceiptVoucher() {
           </div>
         )}
 
-        {isCurrentVoucherDraft && (
-          <div className="bg-amber-50 border-b border-amber-200 -mx-3.5 sm:-mx-5 md:-mx-6 -mt-3.5 sm:-mt-5 md:-mt-6 mb-4 sm:mb-6 px-3.5 sm:px-5 md:px-6 py-3 sm:py-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
-                <AlertTriangle size={18} />
-              </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                  <span className="font-black text-amber-950 text-xs sm:text-sm">
-                    السند في وضع المسودة (غير مرحل في الحسابات)
-                  </span>
-                  <span className="text-[10px] bg-amber-200 text-amber-900 font-bold px-2 py-0.5 rounded-full shrink-0">
-                    لا يؤثر على الأرصدة
-                  </span>
-                </div>
-                <p className="text-amber-800 text-[11px] mt-0.5">
-                  تم إلغاء الترحيل التلقائي. لن يتم إثبات أي أثر مالي في الحسابات أو الأستاذ العام إلا بعد الضغط على زر الترحيل.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handlePostCurrentVoucher}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer shrink-0 animate-pulse min-h-[38px]"
-              title="ترحيل السند في الحسابات العامة ودفتر الأستاذ"
-            >
-              <Send size={14} />
-              <span>ترحيل السند في الحسابات</span>
-            </button>
-          </div>
-        )}
+        
 
-        <form onSubmit={handleSave} className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-            {/* Voucher Number */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">رقم سند القبض الداخلي</label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={handleNavigatePrevious}
-                  disabled={!canGoPrevious}
-                  className="w-10 h-10 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
-                  title="تراجع للخلف (السابق)"
-                >
-                  <ChevronRight size={16} />
-                </button>
-                <div className="relative flex-1">
-                  <input 
-                    type="text" 
-                    value={voucherNumber}
-                    onChange={(e) => setVoucherNumber(e.target.value)}
-                    placeholder={nextCalculatedVoucherNum}
-                    required
-                    className={`w-full px-3 py-2.5 h-10 text-sm sm:text-base font-mono font-bold rounded-lg border outline-none transition-all ${
-                      isVoucherDuplicate
-                        ? 'border-red-500 bg-red-50 text-red-900 focus:ring-2 focus:ring-red-200'
-                        : 'border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500'
-                    }`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setVoucherNumber(nextCalculatedVoucherNum)}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-teal-700 hover:text-teal-900 font-bold bg-teal-100/80 px-2 py-0.5 rounded cursor-pointer"
-                    title="استعادة الرقم التسلسلي المقترح آلياً"
+        <form onSubmit={handleSave} className="space-y-4">
+          {/* Row 1: [المسلّم / مستلم من] | [رقم السند] | [تاريخ السند] */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            {/* 1. Received From */}
+            <div>
+              <label className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <User size={14} className="text-blue-600 shrink-0" />
+                  <span>المسلّم / المورد الداخلي (حساب / موظف / جهة)</span>
+                </span>
+                {fromAccountId && (
+                  <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
+                    مرتبط بحساب: {getAccountName(fromAccountId)}
+                  </span>
+                )}
+              </label>
+              <input
+                type="text"
+                value={receivedFrom}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setReceivedFrom(val);
+                  // Check if selected matches a revenue account
+                  const matchedRev = revenueAccountsList.find(a => 
+                    `[إيراد] [${a.code}] ${a.name}` === val || 
+                    `[${a.code}] ${a.name}` === val || 
+                    a.name === val
+                  );
+                  if (matchedRev) {
+                    setFromAccountId(matchedRev.id);
+                    setSourceType('internal_revenue');
+                    return;
+                  }
+                  // Check if selected matches an internal safe/bank for cash withdrawal / transfer
+                  const matchedSafe = internalAccountsList.find(a => 
+                    `[خزينة/بنك] [${a.code}] ${a.name}` === val || 
+                    `[${a.code}] ${a.name}` === val || 
+                    a.name === val
+                  );
+                  if (matchedSafe) {
+                    setFromAccountId(matchedSafe.id);
+                    setSourceType('bank_to_cash');
+                    return;
+                  }
+                  // Check if selected matches an employee
+                  const matchedEmp = employees.find(emp => 
+                    emp.name === val || 
+                    `[موظف] ${emp.name}` === val || 
+                    `${emp.name} (${emp.jobTitle})` === val
+                  );
+                  if (matchedEmp) {
+                    setSourceType('custody_refund');
+                    const empAdvanceAcc = chartAccounts.find(a => a.code === '1205' || a.code === '5102');
+                    if (empAdvanceAcc) setFromAccountId(empAdvanceAcc.id);
+                  }
+                }}
+                placeholder="اختر موظفاً (تسوية عهدة/سلفة)، حساب إيراد (4xxx)، صندوقاً، أو اكتب جهة التوريد..."
+                list="receipt-sources-list"
+                className="w-full py-2 px-3 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 outline-none transition-all"
+              />
+              <datalist id="receipt-sources-list">
+                {/* 1. موظفو المنشأة (استرداد سلف / تسوية عهد) */}
+                {employees.map(emp => (
+                  <option 
+                    key={`emp-${emp.id}`} 
+                    value={`[موظف] ${emp.name}${emp.jobTitle ? ` (${emp.jobTitle})` : ''}`}
                   >
-                    تلقائي
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleNavigateNext}
-                  disabled={!canGoNext}
-                  className="w-10 h-10 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
-                  title="تقديم للأمام (التالي)"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-              </div>
-              {isVoucherDuplicate && (
-                <p className="text-[11px] text-red-600 font-bold flex items-center gap-1 mt-1">
-                  <AlertTriangle size={12} /> هذا الرقم مستخدم بالفعل في سند آخر!
-                </p>
-              )}
+                    موظف: استرداد سلفة أو تسوية عهدة متبقية
+                  </option>
+                ))}
+
+                {/* 2. بنود وحسابات الإيرادات المتنوعة (4xxx) من شجرة الحسابات */}
+                {revenueAccountsList.map(rev => (
+                  <option 
+                    key={`rev-${rev.id}`} 
+                    value={`[إيراد] [${rev.code}] ${rev.name}`}
+                  >
+                    بند إيراد في شجرة الحسابات
+                  </option>
+                ))}
+
+                {/* 3. الخزائن والبنوك الأخرى (سحب من بنك أو تحويل وارد من فرع) */}
+                {internalAccountsList.filter(a => a.id !== toAccountId).map(acc => (
+                  <option 
+                    key={`safe-${acc.id}`} 
+                    value={`[خزينة/بنك] [${acc.code}] ${acc.name}`}
+                  >
+                    سحب من حساب بنكي أو مناقلة واردة من صندوق آخر
+                  </option>
+                ))}
+              </datalist>
             </div>
 
-            {/* Date */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">تاريخ القبض</label>
-              <input 
-                type="date" 
+            {/* 2. Voucher Number */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <Hash size={14} className="text-indigo-600 shrink-0" />
+                <span>رقم السند</span>
+              </label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={voucherNumber}
+                  onChange={(e) => setVoucherNumber(e.target.value)}
+                  className="w-full py-2 px-3 rounded-xl text-xs font-mono font-bold border border-slate-200 bg-slate-50 text-slate-900 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setVoucherNumber(nextCalculatedVoucherNum)}
+                  className="px-2.5 py-2 text-[11px] font-bold text-teal-800 bg-teal-50 border border-teal-200 rounded-xl hover:bg-teal-100 shrink-0 cursor-pointer"
+                >
+                  تلقائي
+                </button>
+              </div>
+            </div>
+
+            {/* 3. Voucher Date */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <Calendar size={14} className="text-amber-600 shrink-0" />
+                <span>تاريخ السند</span>
+              </label>
+              <input
+                type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                className="w-full py-2 px-3 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:border-teal-500 outline-none transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Row 2: [المبلغ المقبوض] | [مركز التكلفة] | [الصندوق / البنك] | [طريقة السداد/الصرف] */}
+          <div className="pt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {/* 1. Amount */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-teal-950 mb-1.5">
+                <Coins size={14} className="text-emerald-600 shrink-0" />
+                <span>المبلغ المقبوض ({currencySymbol})</span>
+                <span className="text-red-500 font-bold">*</span>
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={amount}
+                onFocus={e => e.target.select()}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
                 required
-                className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
+                className="w-full py-2 px-3 rounded-xl text-base font-mono font-black border border-teal-300 bg-teal-50/40 text-teal-950 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 outline-none transition-all text-left"
+                dir="ltr"
               />
             </div>
 
-            {/* Source Type */}
-            <div className="space-y-1 sm:col-span-2 md:col-span-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">نوع ومصدر التوريد الداخلي</label>
+            {/* 2. Cost Center */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <Building2 size={14} className="text-purple-600 shrink-0" />
+                <span>مركز التكلفة</span>
+              </label>
               <select
-                value={sourceType}
-                onChange={(e) => setSourceType(e.target.value)}
-                className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
+                value={costCenterId}
+                onChange={(e) => setCostCenterId(e.target.value)}
+                className="w-full py-2 px-3 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:border-teal-500 outline-none transition-all"
               >
-                {RECEIPT_SOURCE_TYPES.map(s => (
-                  <option key={s.id} value={s.id}>{s.label}</option>
+                <option value="">-- بدون تحديد (عام) --</option>
+                {costCenters.map(cc => (
+                  <option key={cc.id} value={cc.id}>[{cc.code}] {cc.name}</option>
                 ))}
               </select>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            {/* To Account (Deposit into) */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Wallet size={14} className="text-teal-600" />
-                  الحساب المودع فيه (الخزينة المستلمة)
-                </span>
-                <span className="text-[10px] text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded font-bold">دليل الحسابات</span>
+            {/* 3. Deposit Safe / Bank Account */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <Landmark size={14} className="text-cyan-600 shrink-0" />
+                <span>الصندوق / البنك المودع فيه</span>
               </label>
               <select
                 value={toAccountId}
                 onChange={(e) => setToAccountId(e.target.value)}
-                required
-                className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-teal-300 bg-teal-50/40 text-teal-950 font-bold focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
+                className="w-full py-2 px-3 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:border-teal-500 outline-none transition-all"
               >
                 {internalAccountsList.map(a => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
+                  <option key={a.id} value={a.id}>[{a.code}] {a.name}</option>
                 ))}
               </select>
             </div>
 
-            {/* If transfer or bank withdrawal: From Account */}
-            {(sourceType === 'bank_to_cash' || sourceType === 'transfer_in') && (
-              <div className="space-y-1 animate-fadeIn">
-                <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Landmark size={14} className="text-indigo-600" />
-                    الحساب المحول منه (المسحوب منه)
-                  </span>
-                  <span className="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded font-bold">مناقلة داخلية</span>
-                </label>
-                <select
-                  value={fromAccountId}
-                  onChange={(e) => setFromAccountId(e.target.value)}
-                  className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-indigo-300 bg-indigo-50/40 text-indigo-950 font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-                >
-                  <option value="">-- اختر الحساب المسحوب منه --</option>
-                  {internalAccountsList.map(a => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Received From (Payer) */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center gap-1.5">
-                <UserCheck size={14} className="text-slate-500" />
-                المسلّم / المورد الداخلي
+            {/* 4. Payment Method */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <CreditCard size={14} className="text-indigo-600 shrink-0" />
+                <span>طريقة السداد / القبض</span>
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={receivedFrom}
-                  onChange={(e) => setReceivedFrom(e.target.value)}
-                  placeholder="اسم الموظف / صاحب العهدة / الفرع"
-                  list="employees-list"
-                  className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
-                />
-                <datalist id="employees-list">
-                  {employees.map(emp => (
-                    <option key={emp.id} value={emp.name}>
-                      {emp.name} {emp.jobTitle ? `(${emp.jobTitle})` : ''}
-                    </option>
-                  ))}
-                  <option value="صندوق مبيعات المعرض" />
-                  <option value="أمين عهدة المشتريات" />
-                  <option value="مندوب التوزيع" />
-                </datalist>
-              </div>
-            </div>
-
-            {/* Received By (Cashier) */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">المستلم / أمين الصندوق</label>
-              <input
-                type="text"
-                value={receivedBy}
-                onChange={(e) => setReceivedBy(e.target.value)}
-                placeholder="اسم أمين الصندوق"
-                className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-            {/* Amount */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">المبلغ المقبوض ({currencyFullNameAr})</label>
-              <div className="relative">
-                <input 
-                  type="number" 
-                  step="0.01"
-                  min="0.01"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.00"
-                  required
-                  className="w-full px-3 py-2.5 h-10 text-base sm:text-lg font-mono font-bold rounded-lg border border-emerald-300 bg-emerald-50/30 text-emerald-800 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none pl-12"
-                />
-                <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">{currencySymbol}</span>
-              </div>
-              {/* Tafqeet in Words */}
-              <div className="mt-1.5 p-2 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center gap-1.5 text-xs text-slate-600">
-                <Sparkles size={13} className="text-amber-500 shrink-0" />
-                <span className="font-medium truncate font-serif">
-                  {tafqeet(Number(amount) || 0)}
-                </span>
-              </div>
-            </div>
-
-            {/* Payment Method Selector */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">طريقة القبض والاستلام</label>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('CASH')}
-                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
+                  className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-0.5 ${
                     paymentMethod === 'CASH'
-                      ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
-                  <Banknote size={15} />
-                  <span>نقداً</span>
+                  <Banknote size={13} />
+                  <span>نقد</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('BANK_TRANSFER')}
-                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
+                  className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-0.5 ${
                     paymentMethod === 'BANK_TRANSFER'
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
-                  <Landmark size={15} />
-                  <span>تحويل بنكي</span>
+                  <Landmark size={13} />
+                  <span>تحويل</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('CHECK')}
-                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
+                  className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-0.5 ${
                     paymentMethod === 'CHECK'
-                      ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
-                  <FileText size={15} />
+                  <FileText size={13} />
                   <span>شيك</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('SPAN')}
-                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
+                  className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-0.5 ${
                     paymentMethod === 'SPAN'
-                      ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
-                  <CreditCard size={15} />
-                  <span>مدى / شبكة</span>
+                  <CreditCard size={13} />
+                  <span>مدى</span>
                 </button>
               </div>
             </div>
-
-            {/* Reference No */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">
-                {paymentMethod === 'CHECK' ? 'رقم الشيك المصرفي' : paymentMethod === 'BANK_TRANSFER' ? 'رقم التحويل / العملية' : 'رقم المرجع (اختياري)'}
-              </label>
-              <input 
-                type="text" 
-                value={referenceNo}
-                onChange={(e) => setReferenceNo(e.target.value)}
-                placeholder={paymentMethod === 'CHECK' ? 'مثال: CHQ-5521' : 'رقم العملية البنكية أو الإيصال'}
-                className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none font-mono"
-              />
-            </div>
           </div>
 
-          {/* Conditional Bank & Check details */}
-          {(paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CHECK') && (
-            <div className="p-3 sm:p-3.5 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fadeIn">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                  <Landmark size={13} className="text-teal-600" />
-                  <span>{paymentMethod === 'CHECK' ? 'اسم البنك المسحوب عليه الشيك' : 'اسم البنك المحول منه'}</span>
-                </label>
-                <input
-                  type="text"
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
-                  placeholder="مثال: مصرف الراجحي / البنك الأهلي"
-                  className="w-full px-3 py-2 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
-                />
-              </div>
-
-              {paymentMethod === 'CHECK' && (
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                    <Calendar size={13} className="text-amber-600" />
-                    <span>تاريخ استحقاق وصرف الشيك</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={checkDueDate}
-                    onChange={(e) => setCheckDueDate(e.target.value)}
-                    className="w-full px-3 py-2 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none font-mono"
-                  />
+          {/* Linked Transfer / Check details strip */}
+          {(paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CHECK' || paymentMethod === 'SPAN' || sourceType === 'bank_to_cash' || sourceType === 'transfer_in') && (
+            <div className="p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs animate-fadeIn">
+              {(sourceType === 'bank_to_cash' || sourceType === 'transfer_in') && (
+                <div>
+                  <label className="block text-[11px] font-bold text-indigo-950 mb-1">الحساب المسحوب منه</label>
+                  <select
+                    value={fromAccountId}
+                    onChange={(e) => setFromAccountId(e.target.value)}
+                    className="w-full py-1.5 px-2.5 rounded-lg border border-indigo-200 bg-white text-xs font-bold"
+                  >
+                    <option value="">-- اختر الحساب المسحوب منه --</option>
+                    {internalAccountsList.map(a => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Cost Center & Description */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-            {/* Cost Center Selector */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Building2 size={13} className="text-indigo-600" />
-                  <span>مركز التكلفة (Cost Center)</span>
-                </span>
-                <span className="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded font-bold border border-indigo-200">
-                  ربط السند
-                </span>
-              </label>
-              <select
-                value={costCenterId}
-                onChange={(e) => setCostCenterId(e.target.value)}
-                className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-              >
-                <option value="">-- بدون تحديد مركز تكلفة (عام) --</option>
-                {costCenters.map(cc => (
-                  <option key={cc.id} value={cc.id}>
-                    [{cc.code}] {cc.name} - ({getCostCenterTypeLabel(cc.type)})
-                  </option>
-                ))}
-              </select>
-              {selectedCostCenter && (
-                <div className="text-[11px] text-slate-600 flex items-center justify-between bg-indigo-50/70 px-2 py-1 rounded-md border border-indigo-100">
-                  <span className="font-bold text-indigo-900">المسؤول: {selectedCostCenter.manager || 'غير محدد'}</span>
-                  <span className="font-mono text-indigo-700">الميزانية: {selectedCostCenter.budget?.toLocaleString() || 0} {currencyFullNameAr}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Description */}
-            <div className="space-y-1 md:col-span-2">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">البيان والشرح المحاسبي</label>
-              <input 
-                type="text" 
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="وذلك عن: استرداد باقي عهدة مشتريات / سداد سلفة شهرية..."
-                className="w-full px-3 py-2.5 h-10 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Live Interactive Card with Anti-Tamper Barcode & QR Code */}
-          <div className="p-3 sm:p-4 rounded-xl border border-teal-200 bg-teal-50/40 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-bold text-teal-800">
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2 size={15} className="text-teal-600 shrink-0" />
-                <span>ملخص سند القبض الداخلي والمطابقة الرقمية</span>
-              </span>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] sm:text-xs bg-purple-100 text-purple-900 border border-purple-200 px-2 py-0.5 rounded font-bold flex items-center gap-1 shrink-0">
-                  <Scan size={11} /> رمز الاستجابة والباركود مفعل
-                </span>
-                <span className="font-mono font-bold text-teal-900 bg-teal-100/90 px-2 py-0.5 rounded text-[11px] sm:text-xs shrink-0">
-                  #{voucherNumber}
-                </span>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
-              <div className="bg-white p-2.5 sm:p-3 rounded-lg border border-teal-100 shadow-2xs">
-                <span className="text-slate-400 block text-[10px]">الحساب المستلم المودع فيه:</span>
-                <span className="font-bold text-slate-800 truncate block mt-0.5">{getAccountName(toAccountId)}</span>
-              </div>
-              <div className="bg-white p-2.5 sm:p-3 rounded-lg border border-teal-100 shadow-2xs">
-                <span className="text-slate-400 block text-[10px]">المسلّم والبيان:</span>
-                <span className="font-bold text-slate-800 truncate block mt-0.5">{receivedFrom || 'جهة داخلية'}</span>
-                <span className="text-[10px] text-teal-600 block truncate mt-0.5 font-medium">
-                  {RECEIPT_SOURCE_TYPES.find(s => s.id === sourceType)?.label}
-                </span>
-              </div>
-              <div className="bg-white p-2.5 sm:p-3 rounded-lg border border-teal-100 flex flex-col justify-between shadow-2xs">
-                <span className="text-slate-400 block text-[10px]">صافي القيمة المقبوضة:</span>
-                <span className="font-mono font-black text-emerald-700 text-sm sm:text-base mt-0.5">
-                  {(Number(amount) || 0).toLocaleString()} {currencyFullNameAr}
-                </span>
-              </div>
-              <div className="bg-white p-2 sm:p-2.5 rounded-lg border border-teal-100 flex items-center justify-between gap-2 shadow-2xs overflow-hidden">
-                <div className="flex-1 overflow-hidden min-w-0">
-                  <BarcodeImage 
-                    value={voucherNumber || nextCalculatedVoucherNum} 
-                    height={30} 
-                    barWidth={1.1} 
-                    fontSize={7.5} 
-                  />
-                </div>
-                {systemSettings?.taxAndInvoice?.enableQrCode !== false && (
-                  <div className="shrink-0">
-                    <VoucherQrCodeImage data={currentPreviewObject} size={38} showVerificationHash={false} />
+              {paymentMethod === 'BANK_TRANSFER' && (
+                <>
+                  <div>
+                    <label className="block text-[11px] font-bold text-indigo-950 mb-1">اسم البنك المحول منه</label>
+                    <input
+                      type="text"
+                      value={bankName}
+                      onChange={e => setBankName(e.target.value)}
+                      placeholder="أدخل اسم البنك..."
+                      className="w-full py-1.5 px-2.5 rounded-lg border border-indigo-200 bg-white text-xs font-bold"
+                    />
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Approval Hierarchy Stepper */}
-          {systemSettings?.approvalWorkflow?.enabled && (
-            <div className="pt-2">
-              <VoucherApprovalStepper
-                voucher={activeVoucher}
-                voucherId={editingVoucherId}
-                voucherNumber={voucherNumber || nextCalculatedVoucherNum}
-                voucherType="INTERNAL_RECEIPT"
-                amount={Number(amount) || 0}
-                date={date}
-                isPosted={isCurrentVoucherPosted}
-                postedAt={activeVoucher?.postedAt}
-                approvalStatus={activeVoucher?.approvalStatus}
-                approvedBy={activeVoucher?.approvedBy}
-                approvedAt={activeVoucher?.approvedAt}
-                approvalRole={activeVoucher?.approvalRole}
-                approvalNotes={activeVoucher?.approvalNotes}
-                rejectedBy={activeVoucher?.rejectedBy}
-                rejectedAt={activeVoucher?.rejectedAt}
-                rejectionReason={activeVoucher?.rejectionReason}
-                preparedBy={activeVoucher?.preparedBy || receivedBy}
-                systemSettings={systemSettings}
-                onApprovalChanged={() => {
-                  const fresh = loadStoredInternalReceipts();
-                  setSavedVouchers(fresh);
-                }}
-                onOpenApprovalCenter={() => setShowApprovalCenterModal(true)}
-                onPost={handlePostCurrentVoucher}
-                onUnpost={handleUnpostCurrentVoucher}
-              />
+                  <div>
+                    <label className="block text-[11px] font-bold text-indigo-950 mb-1">رقم المرجع / الحوالة</label>
+                    <input
+                      type="text"
+                      value={referenceNo}
+                      onChange={e => setReferenceNo(e.target.value)}
+                      placeholder="TRX-123456"
+                      className="w-full py-1.5 px-2.5 rounded-lg border border-indigo-200 bg-white text-xs font-mono font-bold"
+                    />
+                  </div>
+                </>
+              )}
+              {paymentMethod === 'CHECK' && (
+                <>
+                  <div>
+                    <label className="block text-[11px] font-bold text-amber-950 mb-1">رقم الشيك</label>
+                    <input
+                      type="text"
+                      value={referenceNo}
+                      onChange={e => setReferenceNo(e.target.value)}
+                      placeholder="CHK-0001"
+                      className="w-full py-1.5 px-2.5 rounded-lg border border-amber-200 bg-white text-xs font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-amber-950 mb-1">تاريخ الاستحقاق</label>
+                    <input
+                      type="date"
+                      value={checkDueDate}
+                      onChange={e => setCheckDueDate(e.target.value)}
+                      className="w-full py-1.5 px-2.5 rounded-lg border border-amber-200 bg-white text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-amber-950 mb-1">البنك المسحوب عليه</label>
+                    <input
+                      type="text"
+                      value={bankName}
+                      onChange={e => setBankName(e.target.value)}
+                      placeholder="مصرف الراجحي..."
+                      className="w-full py-1.5 px-2.5 rounded-lg border border-amber-200 bg-white text-xs font-bold"
+                    />
+                  </div>
+                </>
+              )}
+              {paymentMethod === 'SPAN' && (
+                <>
+                  <div>
+                    <label className="block text-[11px] font-bold text-purple-950 mb-1">رقم عملية مدى / الجهاز</label>
+                    <input
+                      type="text"
+                      value={referenceNo}
+                      onChange={e => setReferenceNo(e.target.value)}
+                      placeholder="POS-98765"
+                      className="w-full py-1.5 px-2.5 rounded-lg border border-purple-200 bg-white text-xs font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-purple-950 mb-1">اسم البنك / البطاقة</label>
+                    <input
+                      type="text"
+                      value={bankName}
+                      onChange={e => setBankName(e.target.value)}
+                      placeholder="مدى / فيزا / ماستركارد..."
+                      className="w-full py-1.5 px-2.5 rounded-lg border border-purple-200 bg-white text-xs font-bold"
+                    />
+                  </div>
+                </>
+              )}
             </div>
           )}
 
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
-            <div>
-              {isCurrentVoucherPosted && (
-                <button
-                  type="button"
-                  onClick={handleUnpostCurrentVoucher}
-                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-amber-400 bg-amber-50 text-amber-900 font-bold text-xs sm:text-sm hover:bg-amber-100 transition-colors cursor-pointer shadow-xs min-h-[42px]"
-                  title="إلغاء ترحيل هذا السند وإعادته كمسودة"
-                >
-                  <RotateCcw size={15} />
-                  <span>إلغاء الترحيل (إعادة كمسودة)</span>
-                </button>
-              )}
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto justify-end">
-              {editingVoucherId && (
-                <button
-                  type="button"
-                  onClick={handleNewVoucher}
-                  className="w-full sm:w-auto flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs sm:text-sm hover:bg-slate-100 transition-colors cursor-pointer min-h-[42px]"
-                >
-                  إلغاء
-                </button>
-              )}
-              {!isCurrentVoucherPosted && (
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => saveVoucherWithStatus('DRAFT')}
-                    disabled={isVoucherDuplicate || !amount}
-                    className={`w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-xs cursor-pointer min-h-[42px] ${
-                      isVoucherDuplicate || !amount
-                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                        : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40'
-                    }`}
-                    title="حفظ السند كمسودة غير مرحلة في الحسابات"
-                  >
-                    <Save size={15} />
-                    <span>حفظ كمسودة (غير مرحل)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handlePostCurrentVoucher}
-                    disabled={isVoucherDuplicate || !amount}
-                    className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-md cursor-pointer min-h-[42px] ${
-                      isVoucherDuplicate || !amount
-                        ? 'bg-slate-400 cursor-not-allowed opacity-60'
-                        : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-700/20'
-                    }`}
-                    title="ترحيل السند في الحسابات العامة ودفتر الأستاذ"
-                  >
-                    <Send size={15} />
-                    <span>ترحيل السند في الحسابات</span>
-                  </button>
-                </div>
-              )}
-              {isCurrentVoucherPosted && (
-                <button
-                  type="button"
-                  onClick={() => saveVoucherWithStatus('POSTED')}
-                  disabled={isVoucherDuplicate || !amount}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-md cursor-pointer bg-teal-700 hover:bg-teal-800 shadow-teal-700/20 min-h-[42px]"
-                  title="حفظ التعديلات على السند المرحل"
-                >
-                  <Save size={15} />
-                  <span>حفظ تعديلات السند المرحل</span>
-                </button>
-              )}
-            </div>
+          {/* Row 3: [البيان والشرح المحاسبي] */}
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+              <AlignLeft size={14} className="text-slate-600 shrink-0" />
+              <span>البيان والشرح المحاسبي</span>
+            </label>
+            <textarea
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="استرداد عهدة / سلفة / الشرح المحاسبي للعملية..."
+              className="w-full py-2 px-3 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 outline-none transition-all resize-none"
+            />
           </div>
         </form>
+
+        {/* Approval Stepper if enabled */}
+        {systemSettings?.approvalWorkflow?.enabled && (
+          <div className="mt-4">
+            <VoucherApprovalStepper
+              voucher={activeVoucher}
+              voucherId={editingVoucherId}
+              voucherType="INTERNAL_RECEIPT"
+              voucherNumber={voucherNumber}
+              amount={Number(amount) || 0}
+              approvalStatus={activeVoucher?.approvalStatus || 'NOT_REQUIRED'}
+              preparedBy={activeVoucher?.preparedBy || receivedBy}
+              systemSettings={systemSettings}
+              onApprovalChanged={() => {
+                const fresh = loadStoredInternalReceipts();
+                setSavedVouchers(fresh);
+              }}
+              onOpenApprovalCenter={() => setShowApprovalCenterModal(true)}
+              onPost={handlePostCurrentVoucher}
+              onUnpost={handleUnpostCurrentVoucher}
+            />
+          </div>
+        )}
+
+        {/* Sleek, Compact Modern Summary Footer Banner */}
+        <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-sm border border-slate-800 flex flex-wrap items-center justify-between gap-4 mt-6 print:hidden">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center font-bold shrink-0">
+              <Banknote size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-300">إجمالي المبلغ المقبوض</span>
+                {isCurrentVoucherPosted ? (
+                  <span className="text-[10px] bg-emerald-900/80 text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-700/60 flex items-center gap-1">
+                    <CheckCircle2 size={10} /> مرحل بالحسابات
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-amber-900/80 text-amber-300 px-2 py-0.5 rounded-full font-bold border border-amber-700/60 flex items-center gap-1">
+                    <AlertTriangle size={10} /> مسودة
+                  </span>
+                )}
+              </div>
+              <span className="text-xs sm:text-sm font-extrabold text-amber-300 block mt-1 tracking-wide">
+                الرصيد كتابة: {tafqeet(Number(amount) || 0)}
+              </span>
+            </div>
+          </div>
+
+          <div className="text-left shrink-0">
+            <span className="text-2xl sm:text-3xl font-mono font-black text-emerald-400">
+              {amount ? Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+            </span>
+            <span className="text-xs text-slate-300 font-bold mr-1">{currencySymbol}</span>
+          </div>
+        </div>
       </div>
 
       {/* Print Preview Modal */}

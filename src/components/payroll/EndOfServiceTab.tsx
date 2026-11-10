@@ -18,6 +18,11 @@ import {
 } from '../../data/mockPayroll';
 import { getSystemSettings } from '../../utils/settings';
 
+import { loadChartOfAccounts, saveJournalEntry } from '../../utils/trialBalanceStore';
+import { isCashOrBankAccount } from '../../utils/accountingIntegration';
+import { JournalEntry, JournalEntryStatus } from '../../types/accounting';
+import { saveStoredLoans } from '../../data/mockPayroll';
+
 interface EndOfServiceTabProps {
   employees: Employee[];
   currency: string;
@@ -27,9 +32,15 @@ interface EndOfServiceTabProps {
 export default function EndOfServiceTab({ employees, currency, onRefresh }: EndOfServiceTabProps) {
   const [systemSettings] = useState(() => getSystemSettings());
   const [settlements, setSettlements] = useState<EndOfServiceSettlement[]>(() => getStoredSettlements());
-  const [loans] = useState<LoanAdvance[]>(() => getStoredLoans());
+  const [loans, setLoans] = useState<LoanAdvance[]>(() => getStoredLoans());
   const [isCalculatorModalOpen, setIsCalculatorModalOpen] = useState(false);
   const [selectedSettlementForPrint, setSelectedSettlementForPrint] = useState<EndOfServiceSettlement | null>(null);
+
+  const [treasuryAccounts] = useState(() => {
+    const all = loadChartOfAccounts();
+    return all.filter(a => isCashOrBankAccount(a, all));
+  });
+  const [disbursementAccountId, setDisbursementAccountId] = useState<string>(() => treasuryAccounts[0]?.id || 'acc-1102');
 
   // Form State
   const [selectedEmpId, setSelectedEmpId] = useState('');
@@ -106,6 +117,65 @@ export default function EndOfServiceTab({ employees, currency, onRefresh }: EndO
     const updated = [newSettlement, ...settlements];
     saveStoredSettlements(updated);
     setSettlements(updated);
+
+    // Auto Settle Employee Outstanding Loans if any
+    if (totalOutstandingLoanAmount > 0) {
+      const nextLoans = loans.map(l => {
+        if (l.employeeId === selectedEmp.id && l.status === 'ACTIVE') {
+          return {
+            ...l,
+            paidAmount: l.amount,
+            remainingAmount: 0,
+            status: 'PAID' as const,
+            notes: `${l.notes || ''} (تمت تسوية واقتطاع السلفة بالكامل في مخالصة نهاية الخدمة #${newSettlement.settlementNumber})`
+          };
+        }
+        return l;
+      });
+      saveStoredLoans(nextLoans);
+      setLoans(nextLoans);
+    }
+
+    // Post Accounting Journal Entry
+    try {
+      const targetTreasury = treasuryAccounts.find(a => a.id === disbursementAccountId || a.code === disbursementAccountId);
+      const targetTreasuryId = targetTreasury ? targetTreasury.id : (disbursementAccountId || 'acc-1102');
+      const targetTreasuryName = targetTreasury ? `${targetTreasury.name} (${targetTreasury.code})` : 'البنك / الصندوق';
+      const totalGrossEOS = netPayable + totalOutstandingLoanAmount;
+
+      const entry: JournalEntry = {
+        id: `je-eos-${Date.now()}`,
+        entryNumber: `JV-EOS-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        date: new Date().toISOString().slice(0, 10),
+        status: JournalEntryStatus.Posted,
+        description: `صرف وتصفية نهاية الخدمة للموظف (${selectedEmp.name}) بموجب مخالصة (${newSettlement.settlementNumber}) من ${targetTreasuryName}`,
+        reference: newSettlement.settlementNumber,
+        items: [
+          {
+            id: `ji-${Date.now()}-1`,
+            accountId: 'acc-5102',
+            debit: totalGrossEOS,
+            credit: 0
+          },
+          {
+            id: `ji-${Date.now()}-2`,
+            accountId: targetTreasuryId,
+            debit: 0,
+            credit: netPayable
+          },
+          ...(totalOutstandingLoanAmount > 0 ? [{
+            id: `ji-${Date.now()}-3`,
+            accountId: 'acc-1205',
+            debit: 0,
+            credit: totalOutstandingLoanAmount
+          }] : [])
+        ]
+      };
+      saveJournalEntry(entry);
+    } catch (err) {
+      console.error('Error posting EOS journal entry:', err);
+    }
+
     setIsCalculatorModalOpen(false);
     setSelectedSettlementForPrint(newSettlement);
     onRefresh();
@@ -350,8 +420,12 @@ export default function EndOfServiceTab({ employees, currency, onRefresh }: EndO
                       <input
                         type="number"
                         min={0}
-                        value={unusedVacationDays}
-                        onChange={(e) => setUnusedVacationDays(Number(e.target.value))}
+                        value={unusedVacationDays ?? ''}
+                        onFocus={e => e.target.select()}
+                        onChange={(e) => setUnusedVacationDays(e.target.value === '' ? ('' as any) : Number(e.target.value))}
+                        onBlur={() => {
+                          if ((unusedVacationDays as any) === '') setUnusedVacationDays(0);
+                        }}
                         className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white font-mono"
                       />
                     </div>
@@ -361,8 +435,12 @@ export default function EndOfServiceTab({ employees, currency, onRefresh }: EndO
                       <input
                         type="number"
                         min={0}
-                        value={otherBenefits}
-                        onChange={(e) => setOtherBenefits(Number(e.target.value))}
+                        value={otherBenefits ?? ''}
+                        onFocus={e => e.target.select()}
+                        onChange={(e) => setOtherBenefits(e.target.value === '' ? ('' as any) : Number(e.target.value))}
+                        onBlur={() => {
+                          if ((otherBenefits as any) === '') setOtherBenefits(0);
+                        }}
                         className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white font-mono"
                       />
                     </div>
@@ -372,10 +450,28 @@ export default function EndOfServiceTab({ employees, currency, onRefresh }: EndO
                       <input
                         type="number"
                         min={0}
-                        value={otherDeductions}
-                        onChange={(e) => setOtherDeductions(Number(e.target.value))}
+                        value={otherDeductions ?? ''}
+                        onFocus={e => e.target.select()}
+                        onChange={(e) => setOtherDeductions(e.target.value === '' ? ('' as any) : Number(e.target.value))}
+                        onBlur={() => {
+                          if ((otherDeductions as any) === '') setOtherDeductions(0);
+                        }}
                         className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white font-mono"
                       />
+                    </div>
+                    <div>
+                      <label className="block text-slate-600 font-bold mb-1">الخزينة / البنك المنصرف منه مبلغ التصفية:</label>
+                      <select
+                        value={disbursementAccountId}
+                        onChange={(e) => setDisbursementAccountId(e.target.value)}
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white font-bold text-slate-800"
+                      >
+                        {treasuryAccounts.map(acc => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.name} ({acc.code})
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 

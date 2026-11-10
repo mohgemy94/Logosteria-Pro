@@ -395,21 +395,15 @@ export function evaluateFinancialQA(
     };
   }
 
-  // 3. Treasury & Bank Balance Query (e.g. "كم رصيد الصندوق؟", "رصيد الخزينة", "رصيد بنك الراجحي", "رصيد البنك الأهلي", "كم نقدية الصندوق؟")
-  if (norm.includes('صندوق') || norm.includes('خزينه') || norm.includes('خزنة') || norm.includes('كاش') || norm.includes('راجحي') || norm.includes('اهلي') || norm.includes('بنك')) {
+  // 3. Treasury & Bank Balance Query (e.g. "كم رصيد الصندوق؟", "رصيد الخزينة", "رصيد البنك", "كم نقدية الصندوق؟")
+  if (norm.includes('صندوق') || norm.includes('خزينه') || norm.includes('خزنة') || norm.includes('كاش') || norm.includes('بنك') || norm.includes('مصرف')) {
     const tb = calculateTrialBalance();
-    let targetAccCode = '1101'; // Default Cash
-    let accTitle = 'النقدية بالصندوق الرئيسي (1101)';
-
-    if (norm.includes('راجحي')) {
-      targetAccCode = '1103';
-      accTitle = 'حساب بنك الراجحي (1103)';
-    } else if (norm.includes('اهلي') || norm.includes('الأهلي')) {
-      targetAccCode = '1102';
-      accTitle = 'حساب البنك الأهلي التجاري (1102)';
-    }
-
-    const row = tb.rows.find(r => r.account?.code === targetAccCode);
+    const matchedBankRow = norm.includes('بنك') || norm.includes('مصرف')
+      ? tb.rows.find(r => r.account?.code === '1102' || r.account?.name?.includes('بنك') || r.account?.name?.includes('مصرف'))
+      : tb.rows.find(r => r.account?.code === '1101' || r.account?.name?.includes('صندوق') || r.account?.name?.includes('خزينة'));
+    const row = matchedBankRow || tb.rows.find(r => r.account?.code === '1101');
+    const targetAccCode = row?.account?.code || (norm.includes('بنك') ? '1102' : '1101');
+    const accTitle = row?.account ? `${row.account.name} (${row.account.code})` : (norm.includes('بنك') ? 'الحساب البنكي (1102)' : 'النقدية بالصندوق الرئيسي (1101)');
     const balance = row ? (row.endingDebit - row.endingCredit) : 0;
     const spoken = `الرصيد الدفتري الحالي لـ ${accTitle} هو ${balance.toLocaleString()} ${context.currencySymbol}.`;
 

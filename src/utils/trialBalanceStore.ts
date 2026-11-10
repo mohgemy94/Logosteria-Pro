@@ -7,7 +7,8 @@ import {
   DB_PAYMENT_VOUCHERS_KEY,
   DB_INTERNAL_RECEIPT_VOUCHERS_KEY,
   DB_INTERNAL_PAYMENT_VOUCHERS_KEY,
-  DB_INTERNAL_VOUCHERS_KEY
+  DB_INTERNAL_VOUCHERS_KEY,
+  DB_ITEMS_KEY
 } from './sequences';
 
 export const JOURNAL_ENTRIES_STORAGE_KEY = 'alpha_journal_entries_v1';
@@ -17,10 +18,10 @@ export const ACCOUNTS_STORAGE_KEY = 'alpha_chart_of_accounts_v1';
 export const DEFAULT_ACCOUNTS: Account[] = [
   // 1000 - Assets (الأصول)
   { id: 'acc-1101', code: '1101', name: 'النقدية بالصندوق (الصندوق الرئيسي)', type: AccountType.Asset, balanceType: BalanceType.Debit },
-  { id: 'acc-1102', code: '1102', name: 'حساب البنك الأهلي التجاري', type: AccountType.Asset, balanceType: BalanceType.Debit },
-  { id: 'acc-1103', code: '1103', name: 'حساب بنك الراجحي', type: AccountType.Asset, balanceType: BalanceType.Debit },
+  { id: 'acc-1102', code: '1102', name: 'النقدية بالبنك (الحساب البنكي الجاري)', type: AccountType.Asset, balanceType: BalanceType.Debit },
   { id: 'acc-1104', code: '1104', name: 'شيكات تحت التحصيل (أوراق قبض برسم التحصيل)', type: AccountType.Asset, balanceType: BalanceType.Debit },
   { id: 'acc-1201', code: '1201', name: 'ذمم العملاء (حساب مراقبة المدينين - Sub-Ledger AR)', type: AccountType.Asset, balanceType: BalanceType.Debit, isControlAccount: true, controlType: 'CUSTOMER' },
+  { id: 'acc-1205', code: '1205', name: 'سلف وعهد الموظفين (حساب مراقبة شؤون الموظفين)', type: AccountType.Asset, balanceType: BalanceType.Debit, isControlAccount: true, controlType: 'EMPLOYEE' },
   { id: 'acc-1209', code: '1209', name: 'مخصص ديون مشكوك في تحصيلها (خسائر ائتمانية متوقعة - IFRS 9)', type: AccountType.Asset, balanceType: BalanceType.Credit },
   { id: 'acc-1301', code: '1301', name: 'المخزون السلعي والمواد الخام (المستودع الرئيسي)', type: AccountType.Asset, balanceType: BalanceType.Debit },
   { id: 'acc-1302', code: '1302', name: 'مخزون إنتاج تحت التشغيل (WIP - حساب مراقبة التشغيل)', type: AccountType.Asset, balanceType: BalanceType.Debit },
@@ -75,8 +76,23 @@ export function loadChartOfAccounts(): Account[] {
     if (Array.isArray(parsed)) {
       const existingIds = new Set(parsed.map((a: Account) => a.id));
       const existingCodes = new Set(parsed.map((a: Account) => a.code));
-      const missingAccounts = DEFAULT_ACCOUNTS.filter(a => !existingIds.has(a.id) && !existingCodes.has(a.code));
-      const combined = [...parsed, ...missingAccounts];
+      let deletedIds = new Set<string>();
+      try {
+        const deletedRaw = localStorage.getItem('alpha_deleted_accounts_v1');
+        if (deletedRaw) {
+          const list = JSON.parse(deletedRaw);
+          if (Array.isArray(list)) deletedIds = new Set(list);
+        }
+      } catch {}
+      const missingAccounts = DEFAULT_ACCOUNTS.filter(a => 
+        !existingIds.has(a.id) && 
+        !existingCodes.has(a.code) && 
+        !deletedIds.has(a.id) && 
+        !deletedIds.has(a.code)
+      );
+      const combined = [...parsed, ...missingAccounts].filter(
+        (acc: Account) => !(acc.code === '1103' && (acc.name === 'حساب بنك الراجحي' || acc.name === 'مصرف الراجحي'))
+      );
 
       // Ensure control account flags for 1201 and 2101 if missing in stored data
       return combined.map((acc: Account) => {
@@ -110,6 +126,7 @@ export function saveChartOfAccounts(accounts: Account[]): void {
   try {
     localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
     window.dispatchEvent(new Event('alpha-chart-of-accounts-updated'));
+    window.dispatchEvent(new Event('alpha-data-changed'));
   } catch (e) {
     console.error("Failed saving COA:", e);
   }
@@ -140,6 +157,7 @@ export function saveJournalEntry(entry: JournalEntry): void {
     const updated = [entry, ...existing.filter(e => e.id !== entry.id)];
     localStorage.setItem(JOURNAL_ENTRIES_STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new Event('alpha-journal-entries-updated'));
+    window.dispatchEvent(new Event('alpha-data-changed'));
   } catch (e) {
     console.error("Failed saving journal entry:", e);
   }
@@ -153,6 +171,7 @@ export function deleteJournalEntry(id: string): void {
     const updated = existing.filter(e => e.id !== id);
     localStorage.setItem(JOURNAL_ENTRIES_STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new Event('alpha-journal-entries-updated'));
+    window.dispatchEvent(new Event('alpha-data-changed'));
   } catch (e) {
     console.error("Failed deleting journal entry:", e);
   }
@@ -195,6 +214,119 @@ export const STORAGE_KEY_WORK_ORDERS = 'alpha_accounting_work_orders_v1';
 export const STORAGE_KEY_PROMISSORY_NOTES = 'alpha_accounting_promissory_notes_v1';
 
 /**
+ * Resolves the actual Cashbox or Bank account from the Chart of Accounts
+ * based on the invoice/voucher's saved safe/account ID or payment method.
+ */
+export function resolveCashOrBankAccount(
+  accounts: Account[],
+  rawSafeOrAccountId?: string,
+  paymentMethod?: string
+): Account {
+  const defaultSafe: Account = accounts.find(a => a.code === '1101') || accounts[0] || {
+    id: 'acc-1101',
+    code: '1101',
+    name: 'النقدية بالصندوق (الصندوق الرئيسي)',
+    type: AccountType.Asset,
+    balanceType: BalanceType.Debit
+  };
+
+  const idStr = String(rawSafeOrAccountId || '').trim();
+  if (idStr) {
+    const direct = accounts.find(a => a.id === idStr || a.code === idStr || a.name === idStr);
+    if (direct) return direct;
+
+    const lower = idStr.toLowerCase();
+    const byName = accounts.find(a => a.name.toLowerCase().includes(lower));
+    if (byName) return byName;
+
+    if (lower.includes('bank') || lower.includes('بنك') || lower === 'bank1' || lower === 'bank2') {
+      const bank = accounts.find(a => a.code === '1102' || a.name.includes('بنك') || a.name.includes('مصرف'));
+      if (bank) return bank;
+    }
+    if (lower === 'main_safe' || lower === 'cash' || lower === 'cash1' || lower.includes('صندوق') || lower.includes('خزينة')) {
+      const safe = accounts.find(a => a.code === '1101' || a.name.includes('صندوق') || a.name.includes('خزينة'));
+      if (safe) return safe;
+    }
+  }
+
+  const mStr = String(paymentMethod || '').toUpperCase();
+  if (mStr === 'BANK' || mStr === 'BANK_TRANSFER' || mStr === 'TRANSFER' || mStr === 'SPAN' || mStr === 'CARD') {
+    return accounts.find(a => a.code === '1102' || a.name.includes('بنك')) || defaultSafe;
+  }
+  return defaultSafe;
+}
+
+/**
+ * Computes exact payment breakdown (cash paid vs remaining credit) and return flag for an invoice
+ */
+export function getInvoicePaymentBreakdown(inv: any): {
+  isReturn: boolean;
+  isCashInvoice: boolean;
+  grandTotal: number;
+  subtotal: number;
+  taxTotal: number;
+  discountTotal: number;
+  servicesTotal: number;
+  paidCashAmount: number;
+  remainingCreditAmount: number;
+} {
+  const grandTotal = Math.max(0, Number(inv.totals?.grandTotal ?? inv.grandTotal) || 0);
+  const subtotal = Math.max(0, Number(inv.totals?.subtotal ?? inv.subtotal) || 0);
+  const taxTotal = Math.max(0, Number(inv.totals?.taxTotal ?? inv.taxTotal) || 0);
+  const discountTotal = Math.max(0, Number(inv.totals?.discountTotal ?? inv.discountTotal) || 0);
+  const servicesTotal = Math.max(0, Number(inv.totals?.servicesTotal ?? inv.servicesTotal) || 0);
+  const typeStr = String(inv.invoiceType || '').toUpperCase();
+  const isReturn = typeStr.includes('RETURN') || Boolean(inv.isReturn);
+  const isCashInvoice =
+    inv.paymentType === 'CASH' ||
+    inv.paymentType === 'كاش' ||
+    typeStr === 'CASH_SALES' ||
+    typeStr === 'CASH_PURCHASE' ||
+    typeStr === 'CASH_PURCHASES' ||
+    typeStr === 'SIMPLE_TAX_INVOICE' ||
+    typeStr === 'CASH';
+
+  let paidCashAmount = 0;
+  if (inv.totals?.cashPaid !== undefined && inv.totals?.cashPaid !== null) {
+    paidCashAmount = Math.min(grandTotal, Math.max(0, Number(inv.totals.cashPaid) || 0));
+  } else if (isCashInvoice) {
+    paidCashAmount = grandTotal;
+  }
+
+  const remainingCreditAmount = Math.max(0, Number((grandTotal - paidCashAmount).toFixed(2)));
+  return {
+    isReturn,
+    isCashInvoice,
+    grandTotal,
+    subtotal,
+    taxTotal,
+    discountTotal,
+    servicesTotal,
+    paidCashAmount,
+    remainingCreditAmount
+  };
+}
+
+/**
+ * Calculates total Cost of Goods Sold (COGS) for a sales invoice's items
+ */
+export function calculateInvoiceCogs(inv: any, catalogMap?: Map<string, any>): number {
+  if (!Array.isArray(inv?.items)) return 0;
+  return inv.items.reduce((sum: number, item: any) => {
+    const qty = Math.max(0, Number(item.quantity) || 0);
+    let unitCost = Number(item.costPrice ?? item.purchasePrice) || 0;
+    if (unitCost <= 0 && catalogMap) {
+      const key = item.itemId || item.itemCode || item.description;
+      if (key && catalogMap.has(String(key))) {
+        const entry = catalogMap.get(String(key));
+        unitCost = typeof entry === 'number' ? entry : (Number(entry?.costPrice ?? entry?.purchasePrice) || 0);
+      }
+    }
+    return sum + qty * unitCost;
+  }, 0);
+}
+
+/**
  * Calculates complete Trial Balance dynamically by aggregating:
  * 1. Posted Manual Journal Entries
  * 2. Operational Invoices & Vouchers (Sales, Purchases, Receipts, Payments, Internal)
@@ -227,46 +359,85 @@ export function calculateTrialBalance(
 
   // Create an aggregation map per account ID and Code
   interface MovementRecord {
+    openingDebit: number;
+    openingCredit: number;
     debitMovement: number;
     creditMovement: number;
   }
   const map = new Map<string, MovementRecord>();
   
   accounts.forEach(acc => {
-    const rec: MovementRecord = { debitMovement: 0, creditMovement: 0 };
+    const rec: MovementRecord = { openingDebit: 0, openingCredit: 0, debitMovement: 0, creditMovement: 0 };
     map.set(acc.id, rec);
     map.set(acc.code, rec);
   });
 
-  const addMovement = (accIdOrCode: string | undefined, debit: number, credit: number) => {
+  const addMovement = (
+    accIdOrCode: string | undefined,
+    debit: number,
+    credit: number,
+    txDate?: string,
+    forceOpening: boolean = false
+  ) => {
     if (!accIdOrCode) return;
+    if (endDate && txDate && txDate > endDate) return;
     const rec = map.get(accIdOrCode);
-    if (rec) {
+    if (!rec) return;
+
+    const isBeforeStart = Boolean(startDate && txDate && txDate < startDate);
+    if (forceOpening || isBeforeStart) {
+      rec.openingDebit += (Number(debit) || 0);
+      rec.openingCredit += (Number(credit) || 0);
+    } else {
       rec.debitMovement += (Number(debit) || 0);
       rec.creditMovement += (Number(credit) || 0);
     }
   };
 
-  // Helper to test if date is within range
-  const isInRange = (dStr: string) => {
+  // Helper to test if date is not after endDate (movements before startDate go to opening)
+  const isUpToEndDate = (dStr: string) => {
     if (!dStr) return true;
-    if (startDate && dStr < startDate) return false;
     if (endDate && dStr > endDate) return false;
     return true;
   };
 
   // 1. Process Manual Journal Entries
-  entries.forEach(entry => {
+  (entries || []).forEach(entry => {
     if (entry.status !== JournalEntryStatus.Posted) return;
-    if (!isInRange(entry.date)) return;
+    if (!isUpToEndDate(entry.date)) return;
 
-    entry.items.forEach(item => {
+    const isOpeningEntry =
+      entry.reference === 'OP-2026' ||
+      entry.entryNumber === 'JE-2026-0001' ||
+      String(entry.description || '').includes('القيد الافتتاحي') ||
+      String(entry.description || '').includes('الرصيد الافتتاحي');
+
+    (entry.items || []).forEach(item => {
       const acc = accounts.find(a => a.id === item.accountId || a.code === item.accountId);
       if (acc) {
-        addMovement(acc.id, Number(item.debit) || 0, Number(item.credit) || 0);
+        addMovement(acc.id, Number(item.debit) || 0, Number(item.credit) || 0, entry.date, isOpeningEntry);
       }
     });
   });
+
+  // Build catalog cost map for COGS calculation
+  const itemCostMap = new Map<string, number>();
+  try {
+    const itemsRaw = localStorage.getItem(DB_ITEMS_KEY);
+    if (itemsRaw) {
+      const itemsList = JSON.parse(itemsRaw);
+      if (Array.isArray(itemsList)) {
+        itemsList.forEach((it: any) => {
+          const cost = Number(it.costPrice ?? it.purchasePrice) || 0;
+          if (cost > 0) {
+            if (it.id) itemCostMap.set(String(it.id), cost);
+            if (it.code) itemCostMap.set(String(it.code), cost);
+            if (it.name) itemCostMap.set(String(it.name), cost);
+          }
+        });
+      }
+    }
+  } catch {}
 
   // 2. Process Sales Invoices
   try {
@@ -275,39 +446,76 @@ export function calculateTrialBalance(
       const salesInvoices = JSON.parse(salesRaw);
       if (Array.isArray(salesInvoices)) {
         salesInvoices.forEach(inv => {
-          if (inv.status === 'POSTED' && isInRange(inv.date)) {
-            const grandTotal = Number(inv.totals?.grandTotal ?? inv.grandTotal) || 0;
-            const subtotal = Number(inv.totals?.subtotal ?? inv.subtotal) || 0;
-            const taxTotal = Number(inv.totals?.taxTotal ?? inv.taxTotal) || 0;
-            const discountTotal = Number(inv.totals?.discountTotal ?? inv.discountTotal) || 0;
+          const isPosted = inv.status === 'POSTED' || (!inv.status && Number(inv.totals?.grandTotal ?? inv.grandTotal) > 0);
+          if (isPosted && isUpToEndDate(inv.date)) {
+            const {
+              isReturn,
+              subtotal,
+              taxTotal,
+              discountTotal,
+              servicesTotal,
+              paidCashAmount,
+              remainingCreditAmount
+            } = getInvoicePaymentBreakdown(inv);
 
-            // Debit Customer (1201) or Cash (1101) if cash invoice
-            const isCashInvoice = inv.paymentType === 'CASH' || inv.paymentType === 'كاش' || inv.paymentMethod === 'CASH';
-            const debitAccountCode = isCashInvoice ? '1101' : '1201';
-            const targetAcc = accounts.find(a => a.code === debitAccountCode) || accounts.find(a => a.code === '1201');
-            if (targetAcc) addMovement(targetAcc.id, grandTotal, 0);
+            const addSalesLeg = (accId: string | undefined, normalDebit: number, normalCredit: number) => {
+              if (!accId) return;
+              if (isReturn) {
+                addMovement(accId, normalCredit, normalDebit, inv.date);
+              } else {
+                addMovement(accId, normalDebit, normalCredit, inv.date);
+              }
+            };
 
-            // Debit Discount Allowed (4103) if discount was granted
-            const discountAllowedAcc = accounts.find(a => a.code === '4103');
-            if (discountAllowedAcc && discountTotal > 0) {
-              addMovement(discountAllowedAcc.id, discountTotal, 0);
+            const safeAcc = resolveCashOrBankAccount(accounts, inv.safe || inv.treasuryId || inv.accountId, inv.paymentMethod);
+            const customerAcc = accounts.find(a => a.code === '1201');
+
+            if (paidCashAmount > 0 && safeAcc) {
+              addSalesLeg(safeAcc.id, paidCashAmount, 0);
+            }
+            if (remainingCreditAmount > 0 && customerAcc) {
+              addSalesLeg(customerAcc.id, remainingCreditAmount, 0);
             }
 
-            // Credit Sales Revenue (4101)
-            // If separate discount allowed account exists, credit gross subtotal; otherwise credit net (subtotal - discountTotal)
+            // Discount Allowed (4103)
+            const discountAllowedAcc = accounts.find(a => a.code === '4103');
+            if (discountAllowedAcc && discountTotal > 0) {
+              addSalesLeg(discountAllowedAcc.id, discountTotal, 0);
+            }
+
+            // Sales Revenue (4101)
             const revAcc = accounts.find(a => a.code === '4101');
             if (revAcc) {
               if (discountAllowedAcc && discountTotal > 0) {
-                addMovement(revAcc.id, 0, subtotal);
+                addSalesLeg(revAcc.id, 0, subtotal);
               } else {
-                addMovement(revAcc.id, 0, subtotal - discountTotal);
+                addSalesLeg(revAcc.id, 0, Math.max(0, subtotal - discountTotal));
               }
             }
 
-            // Credit VAT Payable (2102)
+            // Service Revenue (4102)
+            if (servicesTotal > 0) {
+              const serviceRevAcc = accounts.find(a => a.code === '4102') || revAcc;
+              if (serviceRevAcc) {
+                addSalesLeg(serviceRevAcc.id, 0, servicesTotal);
+              }
+            }
+
+            // Output VAT Payable (2102)
             if (taxTotal > 0) {
               const vatAcc = accounts.find(a => a.code === '2102');
-              if (vatAcc) addMovement(vatAcc.id, 0, taxTotal);
+              if (vatAcc) addSalesLeg(vatAcc.id, 0, taxTotal);
+            }
+
+            // Perpetual Inventory COGS (5101 Dr / 1301 Cr)
+            const cogsAmount = calculateInvoiceCogs(inv, itemCostMap);
+            if (cogsAmount > 0) {
+              const cogsAcc = accounts.find(a => a.code === '5101');
+              const invAcc = accounts.find(a => a.code === '1301');
+              if (cogsAcc && invAcc) {
+                addSalesLeg(cogsAcc.id, cogsAmount, 0);
+                addSalesLeg(invAcc.id, 0, cogsAmount);
+              }
             }
           }
         });
@@ -324,33 +532,59 @@ export function calculateTrialBalance(
       const purchInvoices = JSON.parse(purchRaw);
       if (Array.isArray(purchInvoices)) {
         purchInvoices.forEach(inv => {
-          if (inv.status === 'POSTED' && isInRange(inv.date)) {
-            const grandTotal = Number(inv.totals?.grandTotal ?? inv.grandTotal) || 0;
-            const subtotal = Number(inv.totals?.subtotal ?? inv.subtotal) || 0;
-            const taxTotal = Number(inv.totals?.taxTotal ?? inv.taxTotal) || 0;
-            const discountTotal = Number(inv.totals?.discountTotal ?? inv.discountTotal) || 0;
+          const isPosted = inv.status === 'POSTED' || (!inv.status && Number(inv.totals?.grandTotal ?? inv.grandTotal) > 0);
+          if (isPosted && isUpToEndDate(inv.date)) {
+            const {
+              isReturn,
+              subtotal,
+              taxTotal,
+              discountTotal,
+              paidCashAmount,
+              remainingCreditAmount
+            } = getInvoicePaymentBreakdown(inv);
 
-            // Debit Inventory (1301)
+            const addPurchLeg = (accId: string | undefined, normalDebit: number, normalCredit: number) => {
+              if (!accId) return;
+              if (isReturn) {
+                addMovement(accId, normalCredit, normalDebit, inv.date);
+              } else {
+                addMovement(accId, normalDebit, normalCredit, inv.date);
+              }
+            };
+
             const invAcc = accounts.find(a => a.code === '1301');
+            const vatAcc = accounts.find(a => a.code === '2102');
             const discountReceivedAcc = accounts.find(a => a.code === '4203');
 
+            // Debit Inventory (1301) for net cost (excluding recoverable VAT if VAT account exists)
             if (invAcc) {
+              const vatIncludedInInv = vatAcc ? 0 : taxTotal;
               if (discountReceivedAcc && discountTotal > 0) {
-                addMovement(invAcc.id, subtotal + taxTotal, 0);
+                addPurchLeg(invAcc.id, subtotal + vatIncludedInInv, 0);
               } else {
-                addMovement(invAcc.id, (subtotal + taxTotal) - discountTotal, 0);
+                addPurchLeg(invAcc.id, Math.max(0, subtotal + vatIncludedInInv - discountTotal), 0);
               }
             }
 
-            // Credit Vendor (2101) or Cash (1101)
-            const isCashInvoice = inv.paymentType === 'CASH' || inv.paymentType === 'كاش';
-            const creditAccountCode = isCashInvoice ? '1101' : '2101';
-            const vendorAcc = accounts.find(a => a.code === creditAccountCode) || accounts.find(a => a.code === '2101');
-            if (vendorAcc) addMovement(vendorAcc.id, 0, grandTotal);
+            // Debit Input VAT (2102)
+            if (vatAcc && taxTotal > 0) {
+              addPurchLeg(vatAcc.id, taxTotal, 0);
+            }
+
+            // Credit Safe/Bank for paidCashAmount & Credit Vendor (2101) for remainingCreditAmount
+            const safeAcc = resolveCashOrBankAccount(accounts, inv.safe || inv.treasuryId || inv.accountId, inv.paymentMethod);
+            const vendorAcc = accounts.find(a => a.code === '2101');
+
+            if (paidCashAmount > 0 && safeAcc) {
+              addPurchLeg(safeAcc.id, 0, paidCashAmount);
+            }
+            if (remainingCreditAmount > 0 && vendorAcc) {
+              addPurchLeg(vendorAcc.id, 0, remainingCreditAmount);
+            }
 
             // Credit Earned Discount (4203)
             if (discountReceivedAcc && discountTotal > 0) {
-              addMovement(discountReceivedAcc.id, 0, discountTotal);
+              addPurchLeg(discountReceivedAcc.id, 0, discountTotal);
             }
           }
         });
@@ -367,7 +601,7 @@ export function calculateTrialBalance(
       const recVouchers = JSON.parse(recRaw);
       if (Array.isArray(recVouchers)) {
         recVouchers.forEach(v => {
-          if (v.status === 'POSTED' && isInRange(v.date)) {
+          if (v.status === 'POSTED' && isUpToEndDate(v.date)) {
             const amt = Number(v.amount) || 0;
             if (amt > 0) {
               const isCheck = v.paymentMethod === 'CHECK';
@@ -375,11 +609,11 @@ export function calculateTrialBalance(
               const isBank = v.accountId === 'bank' || v.accountId === 'bank1' || v.accountId === 'acc-1102' || v.paymentMethod === 'BANK' || v.paymentMethod === 'BANK_TRANSFER' || v.paymentMethod === 'TRANSFER';
               const chqAcc = accounts.find(a => a.code === '1104');
               const cashOrBank = isCheck ? (chqAcc || accounts.find(a => a.code === '1101')) : (matchedAcc || accounts.find(a => a.code === (isBank ? '1102' : '1101')));
-              if (cashOrBank) addMovement(cashOrBank.id, amt, 0);
+              if (cashOrBank) addMovement(cashOrBank.id, amt, 0, v.date);
 
               const isVendor = v.partnerType === 'VENDOR';
               const partnerAcc = accounts.find(a => a.code === (isVendor ? '2101' : '1201'));
-              if (partnerAcc) addMovement(partnerAcc.id, 0, amt);
+              if (partnerAcc) addMovement(partnerAcc.id, 0, amt, v.date);
             }
           }
         });
@@ -396,19 +630,19 @@ export function calculateTrialBalance(
       const payVouchers = JSON.parse(payRaw);
       if (Array.isArray(payVouchers)) {
         payVouchers.forEach(v => {
-          if (v.status === 'POSTED' && isInRange(v.date)) {
+          if (v.status === 'POSTED' && isUpToEndDate(v.date)) {
             const amt = Number(v.amount) || 0;
             if (amt > 0) {
               const isCustomer = v.partnerType === 'CUSTOMER';
               const partnerAcc = accounts.find(a => a.code === (isCustomer ? '1201' : '2101'));
-              if (partnerAcc) addMovement(partnerAcc.id, amt, 0);
+              if (partnerAcc) addMovement(partnerAcc.id, amt, 0, v.date);
 
               const isCheck = v.paymentMethod === 'CHECK';
               const matchedAcc = accounts.find(a => a.id === v.accountId || a.code === v.accountId);
               const isBank = v.accountId === 'bank' || v.accountId === 'bank1' || v.accountId === 'acc-1102' || v.paymentMethod === 'BANK' || v.paymentMethod === 'BANK_TRANSFER' || v.paymentMethod === 'TRANSFER';
               const chqPayAcc = accounts.find(a => a.code === '2104');
               const cashOrBank = isCheck ? (chqPayAcc || accounts.find(a => a.code === '1101')) : (matchedAcc || accounts.find(a => a.code === (isBank ? '1102' : '1101')));
-              if (cashOrBank) addMovement(cashOrBank.id, 0, amt);
+              if (cashOrBank) addMovement(cashOrBank.id, 0, amt, v.date);
             }
           }
         });
@@ -425,23 +659,36 @@ export function calculateTrialBalance(
       const intRecVouchers = JSON.parse(intRecRaw);
       if (Array.isArray(intRecVouchers)) {
         intRecVouchers.forEach(v => {
-          if (v.status === 'POSTED' && isInRange(v.date)) {
+          if (v.status === 'POSTED' && isUpToEndDate(v.date)) {
             const amt = Number(v.amount) || 0;
             if (amt > 0) {
               const isBank = v.toAccountId && (v.toAccountId.includes('bank') || v.toAccountId === 'acc-1102');
               const targetAcc = accounts.find(a => a.id === v.toAccountId || a.code === v.toAccountId)
                 || accounts.find(a => a.code === (isBank ? '1102' : '1101'));
-              if (targetAcc) addMovement(targetAcc.id, amt, 0);
+              if (targetAcc) addMovement(targetAcc.id, amt, 0, v.date);
 
-              // If internal transfer between two accounts
-              if (v.fromAccountId && (v.sourceType === 'bank_to_cash' || v.sourceType === 'transfer_in')) {
-                const isFromBank = v.fromAccountId.includes('bank') || v.fromAccountId === 'acc-1102';
+              // If an explicit source account was selected (e.g. from cash/bank, revenue, employee, or other account)
+              if (v.fromAccountId) {
+                const sourceAcc = accounts.find(a => a.id === v.fromAccountId || a.code === v.fromAccountId);
+                if (sourceAcc) {
+                  addMovement(sourceAcc.id, 0, amt, v.date);
+                  return;
+                }
+              }
+
+              // Otherwise check sourceType
+              if (v.sourceType === 'bank_to_cash' || v.sourceType === 'transfer_in') {
+                const isFromBank = v.fromAccountId && (v.fromAccountId.includes('bank') || v.fromAccountId === 'acc-1102');
                 const fromAcc = accounts.find(a => a.id === v.fromAccountId || a.code === v.fromAccountId)
                   || accounts.find(a => a.code === (isFromBank ? '1102' : '1101'));
-                if (fromAcc) addMovement(fromAcc.id, 0, amt);
+                if (fromAcc) addMovement(fromAcc.id, 0, amt, v.date);
+              } else if (v.sourceType === 'custody_refund' || v.sourceType === 'advance_refund') {
+                // Employee advance / custody refund -> credit employee advances or salary account
+                const empAcc = accounts.find(a => a.code === '1205') || accounts.find(a => a.code === '5102') || accounts.find(a => a.code === '4201');
+                if (empAcc) addMovement(empAcc.id, 0, amt, v.date);
               } else {
                 const otherRev = accounts.find(a => a.code === '4201') || accounts.find(a => a.code === '4101');
-                if (otherRev) addMovement(otherRev.id, 0, amt);
+                if (otherRev) addMovement(otherRev.id, 0, amt, v.date);
               }
             }
           }
@@ -459,20 +706,29 @@ export function calculateTrialBalance(
       const intPayVouchers = JSON.parse(intPayRaw);
       if (Array.isArray(intPayVouchers)) {
         intPayVouchers.forEach(v => {
-          if (v.status === 'POSTED' && isInRange(v.date)) {
+          if (v.status === 'POSTED' && isUpToEndDate(v.date)) {
             const amt = Number(v.amount) || 0;
             if (amt > 0) {
               const isBank = v.fromAccountId && (v.fromAccountId.includes('bank') || v.fromAccountId === 'acc-1102');
               const sourceAcc = accounts.find(a => a.id === v.fromAccountId || a.code === v.fromAccountId)
                 || accounts.find(a => a.code === (isBank ? '1102' : '1101'));
-              if (sourceAcc) addMovement(sourceAcc.id, 0, amt);
+              if (sourceAcc) addMovement(sourceAcc.id, 0, amt, v.date);
 
-              // If internal transfer between accounts (e.g. deposit cash to bank)
-              if (v.toAccountId && (v.expenseType === 'cash_to_bank' || v.expenseType === 'branch_feed')) {
-                const isToBank = v.toAccountId.includes('bank') || v.toAccountId === 'acc-1102';
+              // If an explicit target account was selected (e.g. specific expense account, employee advances, branch safe, etc.)
+              if (v.toAccountId) {
+                const targetAcc = accounts.find(a => a.id === v.toAccountId || a.code === v.toAccountId);
+                if (targetAcc) {
+                  addMovement(targetAcc.id, amt, 0, v.date);
+                  return;
+                }
+              }
+
+              // Otherwise resolve based on expenseType
+              if (v.expenseType === 'cash_to_bank' || v.expenseType === 'branch_feed') {
+                const isToBank = v.toAccountId && (v.toAccountId.includes('bank') || v.toAccountId === 'acc-1102');
                 const toAcc = accounts.find(a => a.id === v.toAccountId || a.code === v.toAccountId)
                   || accounts.find(a => a.code === (isToBank ? '1102' : '1101'));
-                if (toAcc) addMovement(toAcc.id, amt, 0);
+                if (toAcc) addMovement(toAcc.id, amt, 0, v.date);
               } else {
                 let expCode = '5104';
                 if (v.expenseType === 'advance_salary' || v.expenseType === 'salary') expCode = '5102';
@@ -481,7 +737,7 @@ export function calculateTrialBalance(
                 else if (v.expenseType === 'marketing') expCode = '5106';
 
                 const expAcc = accounts.find(a => a.code === expCode) || accounts.find(a => a.code === '5104');
-                if (expAcc) addMovement(expAcc.id, amt, 0);
+                if (expAcc) addMovement(expAcc.id, amt, 0, v.date);
               }
             }
           }
@@ -499,18 +755,18 @@ export function calculateTrialBalance(
       const intVouchers = JSON.parse(intVouchRaw);
       if (Array.isArray(intVouchers)) {
         intVouchers.forEach(v => {
-          if (v.status === 'POSTED' && isInRange(v.date)) {
+          if (v.status === 'POSTED' && isUpToEndDate(v.date)) {
             const amt = Number(v.amount) || 0;
             if (amt > 0) {
               const isToBank = v.toAccountId && (v.toAccountId.includes('bank') || v.toAccountId === 'acc-1102');
               const toAcc = accounts.find(a => a.id === v.toAccountId || a.code === v.toAccountId)
                 || accounts.find(a => a.code === (isToBank ? '1102' : '1101'));
-              if (toAcc) addMovement(toAcc.id, amt, 0);
+              if (toAcc) addMovement(toAcc.id, amt, 0, v.date);
 
               const isFromBank = v.fromAccountId && (v.fromAccountId.includes('bank') || v.fromAccountId === 'acc-1102');
               const fromAcc = accounts.find(a => a.id === v.fromAccountId || a.code === v.fromAccountId)
                 || accounts.find(a => a.code === (isFromBank ? '1102' : '1101'));
-              if (fromAcc) addMovement(fromAcc.id, 0, amt);
+              if (fromAcc) addMovement(fromAcc.id, 0, amt, v.date);
             }
           }
         });
@@ -527,7 +783,7 @@ export function calculateTrialBalance(
       const audits = JSON.parse(auditRaw);
       if (Array.isArray(audits)) {
         audits.forEach(audit => {
-          if (audit.status === 'APPROVED' && isInRange(audit.auditDate)) {
+          if (audit.status === 'APPROVED' && !audit.journalEntryId && isUpToEndDate(audit.auditDate || audit.date)) {
             const invAcc = accounts.find(a => a.code === '1301');
             const gainAcc = accounts.find(a => a.code === '4202');
             const lossAcc = accounts.find(a => a.code === '5107');
@@ -536,13 +792,13 @@ export function calculateTrialBalance(
               const varianceVal = Number(item.varianceValue) || 0;
               if (varianceVal > 0) {
                 // Surplus: Debit Inventory 1301, Credit Inventory Gain 4202
-                if (invAcc) addMovement(invAcc.id, varianceVal, 0);
-                if (gainAcc) addMovement(gainAcc.id, 0, varianceVal);
+                if (invAcc) addMovement(invAcc.id, varianceVal, 0, audit.auditDate);
+                if (gainAcc) addMovement(gainAcc.id, 0, varianceVal, audit.auditDate);
               } else if (varianceVal < 0) {
                 // Deficit: Debit Inventory Loss 5107, Credit Inventory 1301
                 const absLoss = Math.abs(varianceVal);
-                if (lossAcc) addMovement(lossAcc.id, absLoss, 0);
-                if (invAcc) addMovement(invAcc.id, 0, absLoss);
+                if (lossAcc) addMovement(lossAcc.id, absLoss, 0, audit.auditDate);
+                if (invAcc) addMovement(invAcc.id, 0, absLoss, audit.auditDate);
               }
             });
           }
@@ -561,8 +817,10 @@ export function calculateTrialBalance(
     // find parent
     const parent = accounts.find(a => a.id === acc.parentId || (acc.code.length > 1 && a.code === acc.code.substring(0, acc.code.length - (acc.code.length % 2 === 0 ? 2 : 1)))); // Fallback for code-based hierarchy
     if (parent && parent.id !== acc.id) {
-      const childRec = map.get(acc.id) || { debitMovement: 0, creditMovement: 0 };
-      const parentRec = map.get(parent.id) || { debitMovement: 0, creditMovement: 0 };
+      const childRec = map.get(acc.id) || { openingDebit: 0, openingCredit: 0, debitMovement: 0, creditMovement: 0 };
+      const parentRec = map.get(parent.id) || { openingDebit: 0, openingCredit: 0, debitMovement: 0, creditMovement: 0 };
+      parentRec.openingDebit += childRec.openingDebit;
+      parentRec.openingCredit += childRec.openingCredit;
       parentRec.debitMovement += childRec.debitMovement;
       parentRec.creditMovement += childRec.creditMovement;
       map.set(parent.id, parentRec);
@@ -572,11 +830,15 @@ export function calculateTrialBalance(
 
   // Build rows per account
   let rows: TrialBalanceRow[] = accounts.map(account => {
-    const mov = map.get(account.id) || { debitMovement: 0, creditMovement: 0 };
+    const mov = map.get(account.id) || { openingDebit: 0, openingCredit: 0, debitMovement: 0, creditMovement: 0 };
     
+    const netOpening = mov.openingDebit - mov.openingCredit;
+    const openDr = netOpening > 0 ? netOpening : 0;
+    const openCr = netOpening < 0 ? Math.abs(netOpening) : 0;
+
     // Calculate total debit & credit
-    const totalDebit = mov.debitMovement;
-    const totalCredit = mov.creditMovement;
+    const totalDebit = openDr + mov.debitMovement;
+    const totalCredit = openCr + mov.creditMovement;
     const net = totalDebit - totalCredit;
 
     let endingDebit = 0;
@@ -590,8 +852,8 @@ export function calculateTrialBalance(
 
     return {
       account,
-      openingDebit: 0,
-      openingCredit: 0,
+      openingDebit: Math.round(openDr * 100) / 100,
+      openingCredit: Math.round(openCr * 100) / 100,
       debitMovement: Math.round(mov.debitMovement * 100) / 100,
       creditMovement: Math.round(mov.creditMovement * 100) / 100,
       totalDebit: Math.round(totalDebit * 100) / 100,
@@ -612,6 +874,8 @@ export function calculateTrialBalance(
   // Apply Hide Zero Balances Filter
   if (hideZeroBalances) {
     rows = rows.filter(r => 
+      r.openingDebit > 0 ||
+      r.openingCredit > 0 ||
       r.debitMovement > 0 || 
       r.creditMovement > 0 || 
       r.endingDebit > 0 || 
@@ -689,11 +953,11 @@ export function getAccountLedgerMovements(
 
   // 1. Manual Journal Entries
   const entries = loadJournalEntries();
-  entries.forEach(entry => {
+  (entries || []).forEach(entry => {
     if (entry.status !== JournalEntryStatus.Posted) return;
     if (!isInRange(entry.date)) return;
 
-    entry.items.forEach(ji => {
+    (entry.items || []).forEach(ji => {
       if (ji.accountId === account.id || ji.accountId === code) {
         const d = Number(ji.debit) || 0;
         const c = Number(ji.credit) || 0;
@@ -724,43 +988,72 @@ export function getAccountLedgerMovements(
       const invoices = JSON.parse(salesRaw);
       if (Array.isArray(invoices)) {
         invoices.forEach(inv => {
-          if (inv.status === 'POSTED' && isInRange(inv.date)) {
-            const grandTotal = Number(inv.totals?.grandTotal ?? inv.grandTotal) || 0;
-            const subtotal = Number(inv.totals?.subtotal ?? inv.subtotal) || 0;
-            const taxTotal = Number(inv.totals?.taxTotal ?? inv.taxTotal) || 0;
-            const discountTotal = Number(inv.totals?.discountTotal ?? inv.discountTotal) || 0;
-            const isCash = inv.paymentType === 'CASH' || inv.paymentType === 'كاش' || inv.paymentMethod === 'CASH';
+          const isPosted = inv.status === 'POSTED' || (!inv.status && Number(inv.totals?.grandTotal ?? inv.grandTotal) > 0);
+          if (isPosted && isInRange(inv.date)) {
+            const {
+              isReturn,
+              subtotal,
+              taxTotal,
+              discountTotal,
+              servicesTotal,
+              paidCashAmount,
+              remainingCreditAmount
+            } = getInvoicePaymentBreakdown(inv);
 
-            // Customer AR (1201) or Cash (1101)
-            if ((code === '1201' && !isCash) || (code === '1101' && isCash)) {
+            const custName = inv.partnerName || inv.customerName || 'عميل نقدي';
+            const safeAcc = resolveCashOrBankAccount(accounts, inv.safe || inv.treasuryId || inv.accountId, inv.paymentMethod);
+
+            // Safe / Bank movement for cash paid
+            if (paidCashAmount > 0 && safeAcc && (safeAcc.id === account.id || safeAcc.code === code)) {
+              items.push({
+                id: `sales-cash-${inv.id}`,
+                date: inv.date,
+                entryNumber: inv.invoiceNumber || inv.id,
+                reference: custName,
+                description: `${isReturn ? 'رد نقدية مرتجع مبيعات' : 'تحصيل فاتورة مبيعات'} ${inv.invoiceNumber} - ${custName}`,
+                debit: isReturn ? 0 : paidCashAmount,
+                credit: isReturn ? paidCashAmount : 0,
+                runningBalance: 0,
+                balanceType: isReturn ? 'CREDIT' : 'DEBIT',
+                source: 'SALES',
+                sourceLabel: isReturn ? 'مرتجع مبيعات' : 'فاتورة مبيعات',
+                sourceView: 'sales',
+                sourceModule: 'فواتير المبيعات'
+              });
+            }
+
+            // Customer AR (1201) for remaining credit
+            if (remainingCreditAmount > 0 && code === '1201') {
               items.push({
                 id: `sales-ar-${inv.id}`,
                 date: inv.date,
                 entryNumber: inv.invoiceNumber || inv.id,
-                reference: inv.customerName || 'عميل نقدي',
-                description: `فاتورة مبيعات ${inv.invoiceNumber} للعميل: ${inv.customerName || 'نقدي'}`,
-                debit: grandTotal,
-                credit: 0,
+                reference: custName,
+                description: `${isReturn ? 'مرتجع مبيعات آجل' : 'استحقاق فاتورة مبيعات'} ${inv.invoiceNumber} للعميل: ${custName}`,
+                debit: isReturn ? 0 : remainingCreditAmount,
+                credit: isReturn ? remainingCreditAmount : 0,
                 runningBalance: 0,
-                balanceType: 'DEBIT',
+                balanceType: isReturn ? 'CREDIT' : 'DEBIT',
                 source: 'SALES',
-                sourceLabel: 'فاتورة مبيعات',
-                sourceView: 'sales'
+                sourceLabel: isReturn ? 'مرتجع مبيعات' : 'فاتورة مبيعات',
+                sourceView: 'sales',
+                sourceModule: 'فواتير المبيعات'
               });
             }
 
             // Sales Revenue (4101)
             if (code === '4101') {
+              const revVal = discountTotal > 0 ? subtotal : Math.max(0, subtotal - discountTotal);
               items.push({
                 id: `sales-rev-${inv.id}`,
                 date: inv.date,
                 entryNumber: inv.invoiceNumber || inv.id,
-                reference: inv.customerName || '-',
-                description: `إيراد مبيعات فاتورة رقم ${inv.invoiceNumber}${discountTotal > 0 ? ' (إجمالي قبل الخصم)' : ''}`,
-                debit: 0,
-                credit: discountTotal > 0 ? subtotal : (subtotal - discountTotal),
+                reference: custName,
+                description: `${isReturn ? 'مرتجع إيراد مبيعات' : 'إيراد مبيعات'} فاتورة رقم ${inv.invoiceNumber}`,
+                debit: isReturn ? revVal : 0,
+                credit: isReturn ? 0 : revVal,
                 runningBalance: 0,
-                balanceType: 'CREDIT',
+                balanceType: isReturn ? 'DEBIT' : 'CREDIT',
                 source: 'SALES',
                 sourceLabel: 'إيرادات مبيعات',
                 sourceView: 'sales',
@@ -768,18 +1061,37 @@ export function getAccountLedgerMovements(
               });
             }
 
-            // Discount Allowed (4103) - الخصم المسموح به (مدين)
+            // Services Revenue (4102)
+            if (code === '4102' && servicesTotal > 0) {
+              items.push({
+                id: `sales-srv-${inv.id}`,
+                date: inv.date,
+                entryNumber: inv.invoiceNumber || inv.id,
+                reference: custName,
+                description: `إيراد خدمات فاتورة مبيعات رقم ${inv.invoiceNumber}`,
+                debit: isReturn ? servicesTotal : 0,
+                credit: isReturn ? 0 : servicesTotal,
+                runningBalance: 0,
+                balanceType: isReturn ? 'DEBIT' : 'CREDIT',
+                source: 'SALES',
+                sourceLabel: 'إيرادات خدمات',
+                sourceView: 'sales',
+                sourceModule: 'فواتير المبيعات'
+              });
+            }
+
+            // Discount Allowed (4103)
             if (code === '4103' && discountTotal > 0) {
               items.push({
                 id: `sales-disc-${inv.id}`,
                 date: inv.date,
                 entryNumber: inv.invoiceNumber || inv.id,
-                reference: inv.customerName || '-',
-                description: `خصم مسموح به (ممنوح للعميل) فاتورة مبيعات ${inv.invoiceNumber} - ${inv.customerName || 'نقدي'}`,
-                debit: discountTotal,
-                credit: 0,
+                reference: custName,
+                description: `خصم مسموح به فاتورة مبيعات ${inv.invoiceNumber} - ${custName}`,
+                debit: isReturn ? 0 : discountTotal,
+                credit: isReturn ? discountTotal : 0,
                 runningBalance: 0,
-                balanceType: 'DEBIT',
+                balanceType: isReturn ? 'CREDIT' : 'DEBIT',
                 source: 'SALES',
                 sourceLabel: 'خصم مسموح به',
                 sourceView: 'sales',
@@ -794,12 +1106,12 @@ export function getAccountLedgerMovements(
                 id: `sales-vat-${inv.id}`,
                 date: inv.date,
                 entryNumber: inv.invoiceNumber || inv.id,
-                reference: inv.customerName || '-',
+                reference: custName,
                 description: `ضريبة مخرجات ${rateLabel ? `(${rateLabel}) ` : ''}لفاتورة مبيعات ${inv.invoiceNumber}`,
-                debit: 0,
-                credit: taxTotal,
+                debit: isReturn ? taxTotal : 0,
+                credit: isReturn ? 0 : taxTotal,
                 runningBalance: 0,
-                balanceType: 'CREDIT',
+                balanceType: isReturn ? 'DEBIT' : 'CREDIT',
                 source: 'SALES',
                 sourceLabel: 'ضريبة مبيعات',
                 sourceView: 'sales',
@@ -821,25 +1133,71 @@ export function getAccountLedgerMovements(
       const invoices = JSON.parse(purchRaw);
       if (Array.isArray(invoices)) {
         invoices.forEach(inv => {
-          if (inv.status === 'POSTED' && isInRange(inv.date)) {
-            const grandTotal = Number(inv.totals?.grandTotal ?? inv.grandTotal) || 0;
-            const subtotal = Number(inv.totals?.subtotal ?? inv.subtotal) || 0;
-            const taxTotal = Number(inv.totals?.taxTotal ?? inv.taxTotal) || 0;
-            const discountTotal = Number(inv.totals?.discountTotal ?? inv.discountTotal) || 0;
-            const isCash = inv.paymentType === 'CASH' || inv.paymentType === 'كاش';
+          const isPosted = inv.status === 'POSTED' || (!inv.status && Number(inv.totals?.grandTotal ?? inv.grandTotal) > 0);
+          if (isPosted && isInRange(inv.date)) {
+            const {
+              isReturn,
+              subtotal,
+              taxTotal,
+              discountTotal,
+              paidCashAmount,
+              remainingCreditAmount
+            } = getInvoicePaymentBreakdown(inv);
+
+            const vendName = inv.partnerName || inv.vendorName || 'مورد';
+            const safeAcc = resolveCashOrBankAccount(accounts, inv.safe || inv.treasuryId || inv.accountId, inv.paymentMethod);
 
             // Inventory (1301)
             if (code === '1301') {
+              const invCost = discountTotal > 0 ? subtotal : Math.max(0, subtotal - discountTotal);
               items.push({
                 id: `purch-inv-${inv.id}`,
                 date: inv.date,
                 entryNumber: inv.invoiceNumber || inv.id,
-                reference: inv.vendorName || '-',
-                description: `إضافة مخزون مشتريات فاتورة ${inv.invoiceNumber} من ${inv.vendorName || 'مورد'}`,
-                debit: discountTotal > 0 ? (subtotal + taxTotal) : ((subtotal + taxTotal) - discountTotal),
-                credit: 0,
+                reference: vendName,
+                description: `${isReturn ? 'مرتجع مخزون مشتريات' : 'إضافة مخزون مشتريات'} فاتورة ${inv.invoiceNumber} من ${vendName}`,
+                debit: isReturn ? 0 : invCost,
+                credit: isReturn ? invCost : 0,
                 runningBalance: 0,
-                balanceType: 'DEBIT',
+                balanceType: isReturn ? 'CREDIT' : 'DEBIT',
+                source: 'PURCHASE',
+                sourceLabel: isReturn ? 'مرتجع مشتريات' : 'فاتورة مشتريات',
+                sourceView: 'purchases',
+                sourceModule: 'فواتير المشتريات'
+              });
+            }
+
+            // Input VAT (2102)
+            if (code === '2102' && taxTotal > 0) {
+              items.push({
+                id: `purch-vat-${inv.id}`,
+                date: inv.date,
+                entryNumber: inv.invoiceNumber || inv.id,
+                reference: vendName,
+                description: `ضريبة مدخلات مشتريات فاتورة ${inv.invoiceNumber} - ${vendName}`,
+                debit: isReturn ? 0 : taxTotal,
+                credit: isReturn ? taxTotal : 0,
+                runningBalance: 0,
+                balanceType: isReturn ? 'CREDIT' : 'DEBIT',
+                source: 'PURCHASE',
+                sourceLabel: 'ضريبة مدخلات',
+                sourceView: 'purchases',
+                sourceModule: 'فواتير المشتريات'
+              });
+            }
+
+            // Safe / Bank movement for cash paid
+            if (paidCashAmount > 0 && safeAcc && (safeAcc.id === account.id || safeAcc.code === code)) {
+              items.push({
+                id: `purch-cash-${inv.id}`,
+                date: inv.date,
+                entryNumber: inv.invoiceNumber || inv.id,
+                reference: vendName,
+                description: `${isReturn ? 'استرداد نقدية مرتجع مشتريات' : 'سداد فاتورة مشتريات'} ${inv.invoiceNumber} للمورد ${vendName}`,
+                debit: isReturn ? paidCashAmount : 0,
+                credit: isReturn ? 0 : paidCashAmount,
+                runningBalance: 0,
+                balanceType: isReturn ? 'DEBIT' : 'CREDIT',
                 source: 'PURCHASE',
                 sourceLabel: 'فاتورة مشتريات',
                 sourceView: 'purchases',
@@ -847,18 +1205,18 @@ export function getAccountLedgerMovements(
               });
             }
 
-            // Vendor AP (2101) or Cash (1101)
-            if ((code === '2101' && !isCash) || (code === '1101' && isCash)) {
+            // Vendor AP (2101) for remaining credit
+            if (remainingCreditAmount > 0 && code === '2101') {
               items.push({
                 id: `purch-ap-${inv.id}`,
                 date: inv.date,
                 entryNumber: inv.invoiceNumber || inv.id,
-                reference: inv.vendorName || '-',
-                description: `استحقاق فاتورة مشتريات ${inv.invoiceNumber} للمورد ${inv.vendorName || ''}`,
-                debit: 0,
-                credit: grandTotal,
+                reference: vendName,
+                description: `${isReturn ? 'تخفيض ذمة مورد (مرتجع)' : 'استحقاق فاتورة مشتريات'} ${inv.invoiceNumber} للمورد ${vendName}`,
+                debit: isReturn ? remainingCreditAmount : 0,
+                credit: isReturn ? 0 : remainingCreditAmount,
                 runningBalance: 0,
-                balanceType: 'CREDIT',
+                balanceType: isReturn ? 'DEBIT' : 'CREDIT',
                 source: 'PURCHASE',
                 sourceLabel: 'فاتورة مشتريات',
                 sourceView: 'purchases',
@@ -866,18 +1224,18 @@ export function getAccountLedgerMovements(
               });
             }
 
-            // Discount Received / Earned (4203) - الخصم المكتسب (دائن)
+            // Discount Received / Earned (4203)
             if (code === '4203' && discountTotal > 0) {
               items.push({
                 id: `purch-disc-${inv.id}`,
                 date: inv.date,
                 entryNumber: inv.invoiceNumber || inv.id,
-                reference: inv.vendorName || '-',
-                description: `خصم مكتسب من المورد لفاتورة مشتريات ${inv.invoiceNumber} - ${inv.vendorName || 'مورد'}`,
-                debit: 0,
-                credit: discountTotal,
+                reference: vendName,
+                description: `خصم مكتسب من المورد لفاتورة مشتريات ${inv.invoiceNumber} - ${vendName}`,
+                debit: isReturn ? discountTotal : 0,
+                credit: isReturn ? 0 : discountTotal,
                 runningBalance: 0,
-                balanceType: 'CREDIT',
+                balanceType: isReturn ? 'DEBIT' : 'CREDIT',
                 source: 'PURCHASE',
                 sourceLabel: 'خصم مكتسب',
                 sourceView: 'purchases',
@@ -1252,7 +1610,7 @@ export function getCrossModuleReconciliation() {
   // Calculate Customers sub-ledger balance
   let customersSubLedgerTotal = 0;
   try {
-    const rawCust = localStorage.getItem('alpha_customers_v1') || localStorage.getItem('customers');
+    const rawCust = localStorage.getItem('accounting_customers') || localStorage.getItem('alpha_customers_v1') || localStorage.getItem('customers');
     if (rawCust) {
       const custs = JSON.parse(rawCust);
       if (Array.isArray(custs)) {
@@ -1269,7 +1627,7 @@ export function getCrossModuleReconciliation() {
 
   let vendorsSubLedgerTotal = 0;
   try {
-    const rawVend = localStorage.getItem('alpha_vendors_v1') || localStorage.getItem('vendors');
+    const rawVend = localStorage.getItem('accounting_vendors') || localStorage.getItem('alpha_vendors_v1') || localStorage.getItem('vendors');
     if (rawVend) {
       const vends = JSON.parse(rawVend);
       if (Array.isArray(vends)) {
@@ -1308,6 +1666,26 @@ export function getCrossModuleReconciliation() {
   const bankRow = tb.rows.find(r => r.account.code === '1102');
   const bankBalance = bankRow ? (bankRow.endingDebit - bankRow.endingCredit) : 0;
 
+  // 5. Checks under Collection (1104) & Issued Checks (2104)
+  const chqRecRow = tb.rows.find(r => r.account.code === '1104');
+  const chqRecBalance = chqRecRow ? (chqRecRow.endingDebit - chqRecRow.endingCredit) : 0;
+
+  const chqPayRow = tb.rows.find(r => r.account.code === '2104');
+  const chqPayBalance = chqPayRow ? (chqPayRow.endingCredit - chqPayRow.endingDebit) : 0;
+
+  let checksPortfolioTotal = 0;
+  try {
+    const rawChqs = localStorage.getItem('alpha_bank_checks_v1');
+    if (rawChqs) {
+      const chqs = JSON.parse(rawChqs);
+      if (Array.isArray(chqs)) {
+        checksPortfolioTotal = chqs.filter(c => c.status === 'UNDER_COLLECTION' || c.status === 'PENDING').reduce((s, c) => s + (Number(c.amount) || 0), 0);
+      }
+    }
+  } catch (e) {
+    console.error("Failed calculating checks portfolio:", e);
+  }
+
   return {
     isBalanced: tb.totals.isBalanced,
     difference: tb.totals.difference,
@@ -1338,6 +1716,11 @@ export function getCrossModuleReconciliation() {
     },
     bank: {
       balance: bankBalance
+    },
+    checks: {
+      inCollectionBalance: chqRecBalance,
+      issuedBalance: chqPayBalance,
+      portfolioTotal: checksPortfolioTotal
     }
   };
 }
@@ -1449,8 +1832,13 @@ export function computeDashboardKPIsLocally(selectedYear: number): DashboardKPIs
     } catch {}
   }
 
-  // Cash and Bank (1101 & 1102)
-  const cashBankRows = tb.rows.filter(r => r.account.code.startsWith('1101') || r.account.code.startsWith('1102'));
+  // Cash and Bank (1101, 1102, 1103 & custom bank/safe accounts)
+  const cashBankRows = tb.rows.filter(r => 
+    r.account.code.startsWith('1101') || 
+    r.account.code.startsWith('1102') || 
+    r.account.code.startsWith('1103') || 
+    (r.account.type === AccountType.Asset && (r.account.name.includes('بنك') || r.account.name.includes('صندوق') || r.account.name.includes('خزينة')))
+  );
   const cashAndBank = cashBankRows.reduce((sum, r) => sum + (r.endingDebit - r.endingCredit), 0);
 
   // AR (1201)
@@ -1473,44 +1861,81 @@ export function computeDashboardKPIsLocally(selectedYear: number): DashboardKPIs
 }
 
 export function closeYearLocally(selectedYear: number): void {
-  const kpis = computeDashboardKPIsLocally(selectedYear);
+  const startDate = `${selectedYear}-01-01`;
+  const endDate = `${selectedYear}-12-31`;
+  const tb = calculateTrialBalance(startDate, endDate);
   const accounts = loadChartOfAccounts();
   const retainedAcc = accounts.find(a => a.code === '3201') || accounts.find(a => a.type === AccountType.Equity);
 
   const items: JournalItem[] = [];
-  // Zero out revenues (debit revenue accounts)
-  if (kpis.sales > 0) {
-    const revAcc = accounts.find(a => a.code === '4101') || accounts.find(a => a.type === AccountType.Revenue);
-    if (revAcc) {
-      items.push({
-        id: 'close_rev_' + Date.now(),
-        accountId: revAcc.id,
-        debit: kpis.sales,
-        credit: 0
-      });
-    }
-  }
+  let totalRevenueClosed = 0;
+  let totalExpenseClosed = 0;
 
-  // Zero out expenses (credit expense accounts)
-  if (kpis.expenses > 0) {
-    const expAcc = accounts.find(a => a.code === '5101') || accounts.find(a => a.type === AccountType.Expense);
-    if (expAcc) {
-      items.push({
-        id: 'close_exp_' + Date.now(),
-        accountId: expAcc.id,
-        debit: 0,
-        credit: kpis.expenses
-      });
-    }
-  }
+  // Find all leaf revenue & expense sub-accounts
+  const leafRows = tb.rows.filter(r => 
+    !accounts.some(a => a.parentId === r.account.id || (a.code.length > r.account.code.length && a.code.startsWith(r.account.code)))
+  );
 
-  // Net Profit to Retained Earnings
-  if (retainedAcc && kpis.netProfit !== 0) {
+  // Zero out each individual revenue account (code starting with '4')
+  leafRows.filter(r => r.account.code.startsWith('4') || r.account.type === AccountType.Revenue).forEach(r => {
+    const netCredit = r.totalCredit - r.totalDebit;
+    if (Math.abs(netCredit) > 0.001) {
+      if (netCredit > 0) {
+        // Normal revenue: Debit account to zero out
+        items.push({
+          id: `close_rev_${r.account.id}_${Date.now()}`,
+          accountId: r.account.id,
+          debit: Math.round(netCredit * 100) / 100,
+          credit: 0
+        });
+        totalRevenueClosed += netCredit;
+      } else {
+        // Contra-revenue / discount: Credit account to zero out
+        items.push({
+          id: `close_rev_${r.account.id}_${Date.now()}`,
+          accountId: r.account.id,
+          debit: 0,
+          credit: Math.round(Math.abs(netCredit) * 100) / 100
+        });
+        totalRevenueClosed += netCredit;
+      }
+    }
+  });
+
+  // Zero out each individual expense account (code starting with '5')
+  leafRows.filter(r => r.account.code.startsWith('5') || r.account.type === AccountType.Expense).forEach(r => {
+    const netDebit = r.totalDebit - r.totalCredit;
+    if (Math.abs(netDebit) > 0.001) {
+      if (netDebit > 0) {
+        // Normal expense: Credit account to zero out
+        items.push({
+          id: `close_exp_${r.account.id}_${Date.now()}`,
+          accountId: r.account.id,
+          debit: 0,
+          credit: Math.round(netDebit * 100) / 100
+        });
+        totalExpenseClosed += netDebit;
+      } else {
+        items.push({
+          id: `close_exp_${r.account.id}_${Date.now()}`,
+          accountId: r.account.id,
+          debit: Math.round(Math.abs(netDebit) * 100) / 100,
+          credit: 0
+        });
+        totalExpenseClosed += netDebit;
+      }
+    }
+  });
+
+  const netProfit = Math.round((totalRevenueClosed - totalExpenseClosed) * 100) / 100;
+
+  // Net Profit to Retained Earnings (3201)
+  if (retainedAcc && Math.abs(netProfit) > 0) {
     items.push({
-      id: 'close_ret_' + Date.now(),
+      id: `close_ret_${Date.now()}`,
       accountId: retainedAcc.id,
-      debit: kpis.netProfit < 0 ? Math.abs(kpis.netProfit) : 0,
-      credit: kpis.netProfit > 0 ? kpis.netProfit : 0
+      debit: netProfit < 0 ? Math.abs(netProfit) : 0,
+      credit: netProfit > 0 ? netProfit : 0
     });
   }
 
@@ -1520,7 +1945,7 @@ export function closeYearLocally(selectedYear: number): void {
       entryNumber: `YE-${selectedYear}`,
       date: `${selectedYear}-12-31`,
       reference: `YE-CLOSE-${selectedYear}`,
-      description: `قيد إقفال السنة المالية ${selectedYear}`,
+      description: `قيد إقفال السنة المالية الشامل لعام ${selectedYear}`,
       items,
       status: JournalEntryStatus.Posted
     };

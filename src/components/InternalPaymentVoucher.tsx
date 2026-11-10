@@ -4,10 +4,11 @@ import {
   Wallet, Sparkles, UserCheck, CheckCircle2, RotateCcw, Send,
   ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft,
   Banknote, Landmark, CreditCard, Calendar, FileText,
-  Building2, Scan, FileSpreadsheet
+  Building2, Scan, FileSpreadsheet, User, Hash, Coins, AlignLeft, Printer, FileDown, MessageSquare
 } from 'lucide-react';
 import { Account, SystemSettings } from '../types/accounting';
 import { loadChartOfAccounts } from '../utils/trialBalanceStore';
+import { isCashOrBankAccount } from '../utils/accountingIntegration';
 import { 
   type CostCenter, 
   loadCostCenters, 
@@ -21,6 +22,7 @@ import VoucherScannerModal from './VoucherScannerModal';
 import VouchersExportModal from './VouchersExportModal';
 import VoucherApprovalStepper from './VoucherApprovalStepper';
 import VouchersApprovalCenterModal from './VouchersApprovalCenterModal';
+import { useIsInWindow } from './DesktopWindowManager';
 import { 
   isApprovalRequired, 
   canVoucherBePosted 
@@ -66,14 +68,7 @@ export interface StoredInternalPaymentVoucher {
   preparedBy?: string | undefined;
 }
 
-const INTERNAL_ACCOUNTS = [
-  { id: 'cash1', name: 'الخزينة الرئيسية (الصندوق العام)' },
-  { id: 'cash2', name: 'صندوق المعرض / المبيعات اليومية' },
-  { id: 'cash3', name: 'صندوق العهد والمصروفات النثرية' },
-  { id: 'bank1', name: 'البنك الأهلي التجاري' },
-  { id: 'bank2', name: 'مصرف الراجحي' },
-  { id: 'bank3', name: 'بنك الرياض' },
-];
+
 
 const PAYMENT_EXPENSE_TYPES = [
   { id: 'custody_issue', label: 'صرف عهدة مالية لموظف' },
@@ -99,7 +94,8 @@ function loadStoredInternalPayments(): StoredInternalPaymentVoucher[] {
   return [];
 }
 
-export default function InternalPaymentVoucher() {
+export default function InternalPaymentVoucher({ isInWindow: explicitIsInWindow }: { isInWindow?: boolean } = {}) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { symbol: currencySymbol, fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
   const [savedVouchers, setSavedVouchers] = useState<StoredInternalPaymentVoucher[]>(() => loadStoredInternalPayments());
   const [showHistory, setShowHistory] = useState(false);
@@ -120,16 +116,29 @@ export default function InternalPaymentVoucher() {
   }, []);
 
   // List of employees from payroll
-  const [employees, setEmployees] = useState<{ id: string; name: string; jobTitle?: string }[]>([]);
+  const [employees, setEmployees] = useState<{ id: string; name: string; jobTitle?: string }[]>(() => {
+    try {
+      const primary = localStorage.getItem('alpha_accounting_employees_v1');
+      const fallback = localStorage.getItem('alpha_payroll_employees_v1');
+      const raw = primary || fallback;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.map((e: any) => ({ id: e.id, name: e.name, jobTitle: e.jobTitle }));
+      }
+    } catch {}
+    return [];
+  });
 
   useEffect(() => {
     const handleSync = () => {
       try {
-        const raw = localStorage.getItem('alpha_payroll_employees_v1');
+        const primary = localStorage.getItem('alpha_accounting_employees_v1');
+        const fallback = localStorage.getItem('alpha_payroll_employees_v1');
+        const raw = primary || fallback;
         if (raw) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
-            setEmployees(parsed.map(e => ({ id: e.id, name: e.name, jobTitle: e.jobTitle })));
+            setEmployees(parsed.map((e: any) => ({ id: e.id, name: e.name, jobTitle: e.jobTitle })));
           } else {
             setEmployees([]);
           }
@@ -180,7 +189,57 @@ export default function InternalPaymentVoucher() {
 
   const [voucherNumber, setVoucherNumber] = useState<string>(() => nextCalculatedVoucherNum);
   const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0] as string);
-  const [fromAccountId, setFromAccountId] = useState<string>('cash1');
+  const [chartAccounts, setChartAccounts] = useState<Account[]>(() => loadChartOfAccounts());
+
+  // Compute dynamic internal cash & bank accounts strictly from Chart of Accounts
+  const internalAccountsList = useMemo(() => {
+    return chartAccounts
+      .filter(a => isCashOrBankAccount(a, chartAccounts))
+      .map(a => ({
+        id: a.id,
+        code: a.code,
+        name: a.name
+      }));
+  }, [chartAccounts]);
+
+  // Compute dynamic expense accounts (5xxx) strictly from Chart of Accounts
+  const expenseAccountsList = useMemo(() => {
+    return chartAccounts
+      .filter(a => {
+        if (a.isActive === false) return false;
+        if (a.isPosting === false) return false;
+        const code = String(a.code || '').trim();
+        // Exclude COGS 5101 from internal operational payment suggestions unless desired, but include all operational 5xxx
+        return a.type === 'EXPENSE' || /^5\d+/.test(code);
+      })
+      .map(a => ({
+        id: a.id,
+        code: a.code,
+        name: a.name
+      }));
+  }, [chartAccounts]);
+
+  // Destination / Beneficiary accounts for transfers & settlements
+  const destinationAccountsList = useMemo(() => {
+    return chartAccounts
+      .filter(a => {
+        if (a.isActive === false) return false;
+        if (a.isPosting === false) return false;
+        const code = String(a.code || '').trim();
+        // Allow other cash/banks (11xx), employee advances/receivables (1205/12xx), or expenses (5xxx)
+        return isCashOrBankAccount(a, chartAccounts) || /^5\d+/.test(code) || code.startsWith('1205') || code.startsWith('2201');
+      })
+      .map(a => ({
+        id: a.id,
+        code: a.code,
+        name: a.name
+      }));
+  }, [chartAccounts]);
+
+  const [fromAccountId, setFromAccountId] = useState<string>(() => {
+    const list = loadChartOfAccounts().filter(a => isCashOrBankAccount(a, loadChartOfAccounts()));
+    return list[0]?.id || 'cash1';
+  });
   const [toAccountId, setToAccountId] = useState<string>('');
   const [expenseType, setExpenseType] = useState<string>('custody_issue');
   const [paidTo, setPaidTo] = useState<string>('');
@@ -189,7 +248,6 @@ export default function InternalPaymentVoucher() {
   const [referenceNo, setReferenceNo] = useState<string>('');
   const [bankName, setBankName] = useState<string>('');
   const [checkDueDate, setCheckDueDate] = useState<string>('');
-  const [chartAccounts, setChartAccounts] = useState<Account[]>(() => loadChartOfAccounts());
   const [amount, setAmount] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [voucherStatus, setVoucherStatus] = useState<'DRAFT' | 'POSTED'>('DRAFT');
@@ -211,47 +269,29 @@ export default function InternalPaymentVoucher() {
 
   // Sync with Chart of Accounts
   useEffect(() => {
-    const handleAccountsUpdate = () => setChartAccounts(loadChartOfAccounts());
-    window.addEventListener('alpha-chart-of-accounts-updated', handleAccountsUpdate);
-    return () => window.removeEventListener('alpha-chart-of-accounts-updated', handleAccountsUpdate);
-  }, []);
-
-  // Compute dynamic internal cash & bank accounts
-  const internalAccountsList = useMemo(() => {
-    const dynamicAccounts = chartAccounts.filter(a => {
-      const code = a.code || '';
-      const name = (a.name || '').toLowerCase();
-      return (
-        code.startsWith('110') ||
-        code === '1101' ||
-        code === '1102' ||
-        code === '1103' ||
-        name.includes('خزينة') ||
-        name.includes('صندوق') ||
-        name.includes('بنك') ||
-        name.includes('نقدية')
-      );
-    }).map(a => ({
-      id: a.id,
-      name: `[${a.code}] ${a.name}`
-    }));
-
-    if (dynamicAccounts.length > 0) {
-      const combined = [...dynamicAccounts];
-      INTERNAL_ACCOUNTS.forEach(legacy => {
-        if (!combined.some(c => c.id === legacy.id)) {
-          combined.push(legacy);
-        }
+    const handleAccountsUpdate = () => {
+      const fresh = loadChartOfAccounts();
+      setChartAccounts(fresh);
+      const validAccounts = fresh.filter(a => isCashOrBankAccount(a, fresh));
+      setFromAccountId(prev => {
+        if (validAccounts.some(a => a.id === prev || a.code === prev)) return prev;
+        return validAccounts[0]?.id || prev;
       });
-      return combined;
-    }
-    return INTERNAL_ACCOUNTS;
-  }, [chartAccounts]);
+    };
+    window.addEventListener('alpha-chart-of-accounts-updated', handleAccountsUpdate);
+    window.addEventListener('alpha-data-changed', handleAccountsUpdate);
+    return () => {
+      window.removeEventListener('alpha-chart-of-accounts-updated', handleAccountsUpdate);
+      window.removeEventListener('alpha-data-changed', handleAccountsUpdate);
+    };
+  }, []);
 
   const getAccountName = (id: string) => {
     const chartAcc = chartAccounts.find(a => a.id === id || a.code === id);
     if (chartAcc) return `[${chartAcc.code}] ${chartAcc.name}`;
-    return INTERNAL_ACCOUNTS.find(a => a.id === id)?.name || id;
+    const expType = PAYMENT_EXPENSE_TYPES.find(s => s.id === id);
+    if (expType) return expType.label;
+    return id;
   };
 
   // Existing voucher matching current number
@@ -321,6 +361,35 @@ export default function InternalPaymentVoucher() {
     setDescription(v.description);
     setShowHistory(false);
   };
+
+  // Event listener & sessionStorage pickup for highlighting specific internal payment
+  useEffect(() => {
+    const handleHighlight = (e: any) => {
+      const v = e.detail?.voucher;
+      if (v) handleEdit(v);
+    };
+    window.addEventListener('alpha-highlight-internal-payment', handleHighlight);
+    return () => window.removeEventListener('alpha-highlight-internal-payment', handleHighlight);
+  }, [savedVouchers]);
+
+  useEffect(() => {
+    try {
+      const targetId = sessionStorage.getItem('alpha_target_internal_payment_id');
+      const targetNum = sessionStorage.getItem('alpha_target_internal_payment_number');
+      if (targetId || targetNum) {
+        sessionStorage.removeItem('alpha_target_internal_payment_id');
+        sessionStorage.removeItem('alpha_target_internal_payment_number');
+        const cleanNum = targetNum ? targetNum.replace(/^#/, '').trim().toLowerCase() : '';
+        const found = savedVouchers.find(v => 
+          (targetId && String(v.id) === String(targetId)) ||
+          (cleanNum && v.voucherNumber && String(v.voucherNumber).replace(/^#/, '').trim().toLowerCase() === cleanNum)
+        );
+        if (found) handleEdit(found);
+      }
+    } catch (e) {
+      console.warn('Failed to load pending internal payment from sessionStorage:', e);
+    }
+  }, [savedVouchers]);
 
   // Chronologically sorted list of vouchers (oldest to newest) for sequential ERP browsing
   const chronologicallyOrderedVouchers = useMemo(() => {
@@ -411,7 +480,7 @@ export default function InternalPaymentVoucher() {
     }
 
     const finalNumber = voucherNumber.trim() || nextCalculatedVoucherNum;
-    const fromAccName = INTERNAL_ACCOUNTS.find(a => a.id === fromAccountId)?.name || fromAccountId;
+    const fromAccName = getAccountName(fromAccountId);
     const expenseLabel = PAYMENT_EXPENSE_TYPES.find(s => s.id === expenseType)?.label || expenseType;
     let isPost = targetStatus === 'POSTED';
     const prevVoucher = editingVoucherId ? savedVouchers.find(v => v.id === editingVoucherId) : undefined;
@@ -495,6 +564,60 @@ export default function InternalPaymentVoucher() {
     setSavedVouchers(updated);
     try {
       localStorage.setItem(DB_INTERNAL_PAYMENT_VOUCHERS_KEY, JSON.stringify(updated));
+      
+      // Auto Sync with HR & Payroll Loans if this is a posted Salary Advance / Custody
+      if (isPost && (expenseType === 'advance_salary' || expenseType === 'custody_issue')) {
+        try {
+          const rawEmps = localStorage.getItem('alpha_accounting_employees_v1') || localStorage.getItem('alpha_payroll_employees_v1');
+          const emps = rawEmps ? JSON.parse(rawEmps) : [];
+          const matched = Array.isArray(emps) ? emps.find((e: any) => 
+            (e.name && paidTo.trim().toLowerCase().includes(e.name.toLowerCase())) ||
+            (e.code && paidTo.trim().toLowerCase().includes(e.code.toLowerCase()))
+          ) : undefined;
+
+          if (matched) {
+            const rawLoans = localStorage.getItem('alpha_accounting_loans_v1');
+            const existingLoans = rawLoans ? JSON.parse(rawLoans) : [];
+            const alreadySynced = Array.isArray(existingLoans) && existingLoans.some((l: any) => l.notes?.includes(finalNumber) || l.loanNumber === finalNumber);
+            if (!alreadySynced) {
+              const loanId = `loan-v-${Date.now()}`;
+              const count = 1;
+              const monthly = numAmount;
+              const newLoan = {
+                id: loanId,
+                loanNumber: finalNumber,
+                employeeId: matched.id,
+                employeeName: matched.name,
+                employeeCode: matched.code || 'EMP',
+                amount: numAmount,
+                disbursementDate: date,
+                installmentsCount: count,
+                monthlyInstallment: monthly,
+                startMonth: date.slice(0, 7),
+                paidAmount: 0,
+                remainingAmount: numAmount,
+                status: 'ACTIVE',
+                reason: description.trim() || 'سلفة موظف بموجب سند صرف داخلي',
+                disbursementAccount: fromAccName,
+                installments: [{
+                  id: `inst-${loanId}-1`,
+                  installmentNumber: 1,
+                  month: date.slice(0, 7),
+                  amount: numAmount,
+                  status: 'PENDING'
+                }],
+                notes: `تم إنشاء السلفة آلياً من سند الصرف الداخلي رقم #${finalNumber}`
+              };
+              const nextLoans = [newLoan, ...(Array.isArray(existingLoans) ? existingLoans : [])];
+              localStorage.setItem('alpha_accounting_loans_v1', JSON.stringify(nextLoans));
+              window.dispatchEvent(new Event('alpha-payroll-updated'));
+            }
+          }
+        } catch (e) {
+          console.error('Failed syncing loan from internal payment voucher:', e);
+        }
+      }
+
       window.dispatchEvent(new Event('alpha-chart-of-accounts-updated'));
       window.dispatchEvent(new Event('alpha-journal-entries-updated'));
       window.dispatchEvent(new Event('alpha-vouchers-updated'));
@@ -571,9 +694,36 @@ export default function InternalPaymentVoucher() {
     }
   };
 
+  const handleCurrentVoucherDelete = () => {
+    const target = savedVouchers.find(v => v.id === editingVoucherId || v.voucherNumber === voucherNumber);
+    if (target) {
+      handleDelete(target.id, target.voucherNumber);
+    } else {
+      if (confirm('هل أنت متأكد من رغبتك في مسح وإلغاء البيانات المدخلة للسند الحالي؟')) {
+        handleNewVoucher();
+      }
+    }
+  };
+
   const handleSave = (e: FormEvent) => {
     e.preventDefault();
     saveVoucherWithStatus(isCurrentVoucherPosted ? 'POSTED' : 'DRAFT');
+  };
+
+  const handleDirectPrint = () => {
+    window.print();
+  };
+
+  const handleDirectPdfExport = () => {
+    setCustomPreviewData(null);
+    setShowPrintPreview(true);
+  };
+
+  const handleOpenWhatsApp = () => {
+    const textMsg = encodeURIComponent(
+      `السلام عليكم ورحمة الله، مرفق تفاصيل سند صرف داخلي رقم #${voucherNumber} بقيمة ${Number(amount || 0).toLocaleString()} ريال - يصرف إلى: ${paidTo || 'جهة داخلية'}.`
+    );
+    window.open(`https://api.whatsapp.com/send?text=${textMsg}`, '_blank');
   };
 
   const currentPreviewObject: PrintPreviewData = {
@@ -608,37 +758,28 @@ export default function InternalPaymentVoucher() {
     <div className="flex flex-col flex-1">
       {/* Page Header */}
       {/* Top Application Bar */}
-      <div className="flex flex-col gap-3 mb-4 print:hidden">
-        {/* Breadcrumb & Screen Title */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div>
-            <div className="flex items-center gap-2 mb-1 text-slate-500 text-xs font-bold">
-              <span>الخزينة والبنوك</span>
-              <span>/</span>
-              <span className="text-rose-900 font-extrabold">سندات داخلية</span>
-              <span>/</span>
-              <span className="text-rose-700 bg-rose-50 px-2 py-0.5 rounded font-bold border border-rose-200">
-                صرف ودفع داخلي
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-800 flex items-center gap-2">
-                <span className="p-1 bg-rose-100 text-rose-800 rounded-lg shadow-2xs">
-                  <ArrowUpRight size={20} />
-                </span>
-                سند صرف داخلي
-              </h2>
-              <span className="text-xs sm:text-sm font-black text-rose-950 bg-rose-50 px-2.5 py-1 rounded-lg font-mono border border-rose-300 shadow-2xs">
-                سند رقم: #{voucherNumber}
-              </span>
-              {editingVoucherId && (
-                <span className="text-xs bg-amber-50 text-amber-950 px-2.5 py-1 rounded-lg font-black border border-amber-300 flex items-center gap-1 shadow-2xs">
-                  <Edit3 size={12} className="text-amber-700" /> وضع التعديل
-                </span>
-              )}
+      <div className={`flex flex-col gap-3 ${isInWindow ? 'mb-2' : 'mb-4'} print:hidden`}>
+        {/* Screen Title (Shown ONLY in full screen mode; In multi-window mode, the top window bar is the single title) */}
+        {!isInWindow && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-800 flex items-center gap-2">
+                  <span className="p-1 bg-rose-100 text-rose-800 rounded-lg shadow-2xs">
+                    <ArrowUpRight size={20} />
+                  </span>
+                  سند صرف داخلي
+                </h2>
+                
+                {editingVoucherId && (
+                  <span className="text-xs bg-amber-50 text-amber-950 px-2.5 py-1 rounded-lg font-black border border-amber-300 flex items-center gap-1 shadow-2xs">
+                    <Edit3 size={12} className="text-amber-700" /> وضع التعديل
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Global 3D Responsive Voucher Actions Toolbar */}
         <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
@@ -709,6 +850,8 @@ export default function InternalPaymentVoucher() {
               <span>سجل السندات ({savedVouchers.length})</span>
             </button>
 
+            
+
             {editingVoucherId && (
               <button
                 type="button"
@@ -720,88 +863,123 @@ export default function InternalPaymentVoucher() {
             )}
           </div>
 
-          {/* Cluster 2: Action Operations & Printing */}
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            {/* 3D New Voucher */}
-            <button 
-              type="button" 
-              onClick={handleNewVoucher} 
-              className="btn-3d btn-3d-rose h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black"
+          {/* Cluster 2: Action Operations & Printing (Unified Actions Toolbar) */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* New Voucher Button */}
+            <button
+              type="button"
+              onClick={handleNewVoucher}
+              className="h-8 px-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 cursor-pointer transition-all"
+              title="سند جديد"
             >
-              <Plus size={15} />
-              <span>سند جديد #{nextCalculatedVoucherNum}</span>
+              <Plus size={14} />
+              <span>جديد</span>
             </button>
 
-            {/* 3D Post / Unpost */}
-            {isCurrentVoucherDraft && (
+            {/* Primary Action (ترحيل السند) */}
+            {isCurrentVoucherDraft ? (
               <button
                 type="button"
                 onClick={handlePostCurrentVoucher}
-                className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2.5 sm:px-3.5 text-xs font-black"
-                title="ترحيل السند في الحسابات العامة ودفتر الأستاذ وتحديث الأرصدة"
+                className="h-8 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-black shadow-sm flex items-center gap-1.5 cursor-pointer transition-all"
+                title="ترحيل السند واعتماده فوراً في الحسابات"
               >
-                <Send size={14} />
+                <CheckCircle2 size={15} />
                 <span>ترحيل السند</span>
               </button>
-            )}
-            {isCurrentVoucherPosted && (
+            ) : (
               <button
                 type="button"
                 onClick={handleUnpostCurrentVoucher}
-                className="btn-3d btn-3d-amber h-9 sm:h-10 px-3 sm:px-4 text-xs font-black"
-                title="إلغاء ترحيل هذا السند وإعادته كمسودة مؤقتة وإيقاف أثره المحاسبي"
+                className="h-8 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                title="إلغاء الترحيل وإعادة السند كمسودة"
               >
                 <RotateCcw size={14} />
                 <span>إلغاء الترحيل</span>
               </button>
             )}
 
-            {/* Print & Preview Group */}
-            <div className="flex items-center gap-1.5 border-r border-slate-300/80 pr-2 mr-0.5">
+            {/* Secondary Action (حفظ كمسودة - Outline style) */}
+            <button
+              type="button"
+              onClick={() => saveVoucherWithStatus('DRAFT')}
+              className="h-8 px-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
+              title="حفظ السند كمسودة مؤقتة"
+            >
+              <Save size={14} className="text-slate-600" />
+              <span>حفظ كمسودة</span>
+            </button>
+
+            {/* Unified Outputs Group (تجميع المخرجات بتصميم هادئ وموحد) */}
+            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-300 text-slate-700 shadow-2xs">
+              {/* Preview Button */}
               <button
                 type="button"
                 onClick={() => {
                   setCustomPreviewData(null);
                   setShowPrintPreview(true);
                 }}
-                className="btn-3d btn-3d-slate h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black"
-                title="معاينة سند الصرف الداخلي قبل الطباعة"
+                className="h-8 px-3 bg-white hover:bg-indigo-50 text-indigo-700 hover:text-indigo-800 border border-indigo-200 rounded-md text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs shrink-0"
+                title="معاينة السند قبل الطباعة"
               >
-                <Eye size={14} />
-                <span className="hidden sm:inline">معاينة قبل الطباعة</span>
-                <span className="sm:hidden">معاينة</span>
+                <Eye size={14} className="text-indigo-600" />
+                <span>معاينة</span>
               </button>
 
-              <PrintDropdown 
-                onPreview={() => {
-                  setCustomPreviewData(null);
-                  setShowPrintPreview(true);
-                }}
-              />
+              {/* Direct Print */}
+              <button
+                type="button"
+                onClick={handleDirectPrint}
+                className="h-8 px-2.5 hover:bg-white text-slate-700 hover:text-slate-900 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                title="طباعة مباشرة"
+              >
+                <Printer size={14} className="text-slate-600" />
+                <span>طباعة</span>
+              </button>
+
+              {/* Export PDF */}
+              <button
+                type="button"
+                onClick={handleDirectPdfExport}
+                className="h-8 px-2.5 hover:bg-white text-slate-700 hover:text-rose-700 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                title="تصدير PDF"
+              >
+                <FileDown size={14} className="text-rose-600" />
+                <span>PDF</span>
+              </button>
+
+              {/* WhatsApp */}
+              <button
+                type="button"
+                onClick={handleOpenWhatsApp}
+                className="h-8 px-2.5 hover:bg-white text-slate-700 hover:text-emerald-700 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                title="إرسال عبر واتساب"
+              >
+                <MessageSquare size={14} className="text-emerald-600" />
+                <span>واتساب</span>
+              </button>
             </div>
 
-            {/* 3D Optical Scanner Button */}
+            {/* Scanner Button */}
             <button
               type="button"
               onClick={() => setShowScannerModal(true)}
-              className="btn-3d btn-3d-purple h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black flex items-center gap-1.5 shadow-sm"
-              title="فحص السند بالماسح الضوئي وقارئ الباركود للتحقق من صحته ومطابقته لمنع التلاعب"
+              className="h-8 px-2.5 bg-slate-100 hover:bg-purple-50 text-purple-800 border border-slate-300 rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
+              title="فحص السند بالماسح الضوئي"
             >
-              <Scan size={14} className="text-purple-200 animate-pulse" />
-              <span className="hidden sm:inline">ماسح الباركود & QR</span>
-              <span className="sm:hidden">ماسح</span>
+              <Scan size={14} className="text-purple-600" />
+              <span className="hidden sm:inline">ماسح الباركود</span>
             </button>
 
-            {/* 3D Export Vouchers Button */}
+            {/* Export Vouchers Button */}
             <button
               type="button"
               onClick={() => setShowExportModal(true)}
-              className="btn-3d btn-3d-emerald h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black flex items-center gap-1.5 shadow-sm"
-              title="تصدير كشوفات السندات والعمليات إلى Excel (.xlsx) و CSV و PDF"
+              className="h-8 px-2.5 bg-slate-100 hover:bg-emerald-50 text-emerald-800 border border-slate-300 rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
+              title="تصدير الكشوفات"
             >
-              <FileSpreadsheet size={15} className="text-emerald-200" />
-              <span className="hidden sm:inline">تصدير الكشوفات (Excel/PDF)</span>
-              <span className="sm:hidden">تصدير</span>
+              <FileSpreadsheet size={14} className="text-emerald-600" />
+              <span className="hidden sm:inline">تصدير الكشوفات</span>
             </button>
 
             {/* Approval Center Button */}
@@ -809,10 +987,10 @@ export default function InternalPaymentVoucher() {
               <button
                 type="button"
                 onClick={() => setShowApprovalCenterModal(true)}
-                className="btn-3d btn-3d-amber h-9 sm:h-10 px-2.5 sm:px-3 text-xs font-black flex items-center gap-1.5 shadow-sm relative"
-                title="مركز اعتمادات وموافقات الإدارة المالية"
+                className="h-8 px-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5 relative cursor-pointer transition-all"
+                title="مركز الاعتمادات"
               >
-                <UserCheck size={15} className="text-amber-200" />
+                <UserCheck size={14} className="text-amber-600" />
                 <span className="hidden sm:inline">مركز الاعتماد</span>
                 {pendingApprovalsCount > 0 && (
                   <span className="px-1.5 py-0.2 bg-red-600 text-white rounded-full text-[10px] font-mono font-bold animate-bounce">
@@ -821,10 +999,20 @@ export default function InternalPaymentVoucher() {
                 )}
               </button>
             )}
+
+            {/* Delete Action Button (في آخر شريط الإجراءات) */}
+            <button
+              type="button"
+              onClick={handleCurrentVoucherDelete}
+              className="h-8 px-3 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 hover:border-rose-700 rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="حذف هذا السند أو مسح البيانات"
+            >
+              <Trash2 size={14} />
+              <span>حذف السند</span>
+            </button>
           </div>
         </div>
-      </div>
-
+        </div>
       {/* Collapsible History Drawer */}
       {showHistory && (
         <div className="mb-6 bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 md:p-5 shadow-sm animate-in fade-in duration-150 print:hidden">
@@ -1188,266 +1376,236 @@ export default function InternalPaymentVoucher() {
           </div>
         )}
 
-        {isCurrentVoucherDraft && (
-          <div className="bg-amber-50 border-b border-amber-200 -mx-3.5 -mt-3.5 sm:-mx-5 sm:-mt-5 md:-mx-6 md:-mt-6 mb-4 sm:mb-6 px-3.5 sm:px-5 md:px-6 py-3 sm:py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
-                <AlertTriangle size={18} />
-              </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-black text-amber-950 text-xs sm:text-sm">
-                    السند في وضع المسودة (غير مرحل في الحسابات)
-                  </span>
-                  <span className="text-[10px] bg-amber-200 text-amber-900 font-bold px-2.5 py-0.5 rounded-full">
-                    لا يؤثر على الأرصدة أو الحسابات
-                  </span>
-                </div>
-                <p className="text-amber-800 text-[11px] mt-0.5">
-                  تم إلغاء الترحيل التلقائي. لن يتم إثبات أي أثر مالي في الحسابات أو الأستاذ العام إلا بعد الضغط على زر الترحيل.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handlePostCurrentVoucher}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer shrink-0 animate-pulse min-h-[38px]"
-              title="ترحيل السند في الحسابات العامة ودفتر الأستاذ"
-            >
-              <Send size={14} />
-              <span>ترحيل السند في الحسابات</span>
-            </button>
-          </div>
-        )}
+        
 
-        <form onSubmit={handleSave} className="space-y-4 sm:space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-            {/* Voucher Number */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">رقم سند الصرف الداخلي</label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={handleNavigatePrevious}
-                  disabled={!canGoPrevious}
-                  className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0 min-h-[42px] min-w-[40px] flex items-center justify-center"
-                  title="تراجع للخلف (السابق)"
-                >
-                  <ChevronRight size={14} />
-                </button>
-                <div className="relative flex-1">
-                  <input 
-                    type="text" 
-                    value={voucherNumber}
-                    onChange={(e) => setVoucherNumber(e.target.value)}
-                    placeholder={nextCalculatedVoucherNum}
-                    required
-                    className={`w-full px-3 py-2 text-sm sm:text-base font-mono font-bold rounded-lg border outline-none transition-all min-h-[42px] ${
-                      isVoucherDuplicate
-                        ? 'border-red-500 bg-red-50 text-red-900 focus:ring-2 focus:ring-red-200'
-                        : 'border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500'
-                    }`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setVoucherNumber(nextCalculatedVoucherNum)}
-                    className="absolute left-2 top-2.5 text-[10px] text-rose-600 hover:text-rose-800 font-bold bg-rose-50 px-1.5 py-0.5 rounded cursor-pointer"
-                    title="استعادة الرقم التسلسلي المقترح آلياً"
+        <form onSubmit={handleSave} className="space-y-4">
+          {/* Row 1: [يصرف إلى / المستلم] | [رقم السند] | [تاريخ السند] */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            {/* 1. Payee / Recipient */}
+            <div>
+              <label className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <User size={14} className="text-blue-600 shrink-0" />
+                  <span>المستلم / يصرف إلى (حساب / موظف / جهة)</span>
+                </span>
+                {toAccountId && (
+                  <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                    مرتبط بحساب: {getAccountName(toAccountId)}
+                  </span>
+                )}
+              </label>
+              <input
+                type="text"
+                value={paidTo}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPaidTo(val);
+                  // Check if selected matches an expense account
+                  const matchedExp = expenseAccountsList.find(a => 
+                    `[مصروف] [${a.code}] ${a.name}` === val || 
+                    `[${a.code}] ${a.name}` === val || 
+                    a.name === val
+                  );
+                  if (matchedExp) {
+                    setToAccountId(matchedExp.id);
+                    setExpenseType('internal_expense');
+                    return;
+                  }
+                  // Check if selected matches an internal safe/bank for feeding
+                  const matchedSafe = internalAccountsList.find(a => 
+                    `[خزينة/بنك] [${a.code}] ${a.name}` === val || 
+                    `[${a.code}] ${a.name}` === val || 
+                    a.name === val
+                  );
+                  if (matchedSafe) {
+                    setToAccountId(matchedSafe.id);
+                    setExpenseType('branch_feed');
+                    return;
+                  }
+                  // Check if selected matches an employee
+                  const matchedEmp = employees.find(emp => 
+                    emp.name === val || 
+                    `[موظف] ${emp.name}` === val || 
+                    `${emp.name} (${emp.jobTitle})` === val
+                  );
+                  if (matchedEmp) {
+                    // Employee custody or advance
+                    setExpenseType('custody_issue');
+                    const empAdvanceAcc = chartAccounts.find(a => a.code === '1205' || a.code === '5102');
+                    if (empAdvanceAcc) setToAccountId(empAdvanceAcc.id);
+                  }
+                }}
+                placeholder="اختر موظفاً، حساب مصروف (5xxx)، صندوقاً، أو اكتب جهة الصرف..."
+                list="payment-recipients-list"
+                className="w-full py-2 px-3 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:border-rose-500 focus:ring-2 focus:ring-rose-500/10 outline-none transition-all"
+              />
+              <datalist id="payment-recipients-list">
+                {/* 1. موظفو المنشأة (شؤون الموظفين والرواتب) */}
+                {employees.map(emp => (
+                  <option 
+                    key={`emp-${emp.id}`} 
+                    value={`[موظف] ${emp.name}${emp.jobTitle ? ` (${emp.jobTitle})` : ''}`}
                   >
-                    تلقائي
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleNavigateNext}
-                  disabled={!canGoNext}
-                  className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0 min-h-[42px] min-w-[40px] flex items-center justify-center"
-                  title="تقديم للأمام (التالي)"
-                >
-                  <ChevronLeft size={14} />
-                </button>
-              </div>
-              {isVoucherDuplicate && (
-                <p className="text-[11px] text-red-600 font-bold flex items-center gap-1 mt-1">
-                  <AlertTriangle size={12} /> هذا الرقم مستخدم بالفعل في سند آخر!
-                </p>
-              )}
+                    موظف: صرف عهدة أو سلفة على الراتب
+                  </option>
+                ))}
+
+                {/* 2. بنود وحسابات المصروفات التشغيلية والعمومية (5xxx) من شجرة الحسابات */}
+                {expenseAccountsList.map(exp => (
+                  <option 
+                    key={`exp-${exp.id}`} 
+                    value={`[مصروف] [${exp.code}] ${exp.name}`}
+                  >
+                    بند مصروف في شجرة الحسابات
+                  </option>
+                ))}
+
+                {/* 3. الخزائن والبنوك الأخرى (لمناقلات وتغذية الصناديق) */}
+                {internalAccountsList.filter(a => a.id !== fromAccountId).map(acc => (
+                  <option 
+                    key={`safe-${acc.id}`} 
+                    value={`[خزينة/بنك] [${acc.code}] ${acc.name}`}
+                  >
+                    تغذية صندوق فرع أو تحويل بين حسابين
+                  </option>
+                ))}
+              </datalist>
             </div>
 
-            {/* Date */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">تاريخ الصرف</label>
-              <input 
-                type="date" 
+            {/* 2. Voucher Number */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <Hash size={14} className="text-indigo-600 shrink-0" />
+                <span>رقم السند</span>
+              </label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={voucherNumber}
+                  onChange={(e) => setVoucherNumber(e.target.value)}
+                  className="w-full py-2 px-3 rounded-xl text-xs font-mono font-bold border border-slate-200 bg-slate-50 text-slate-900 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setVoucherNumber(nextCalculatedVoucherNum)}
+                  className="px-2.5 py-2 text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-200 rounded-xl hover:bg-rose-100 shrink-0 cursor-pointer"
+                >
+                  تلقائي
+                </button>
+              </div>
+            </div>
+
+            {/* 3. Voucher Date */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <Calendar size={14} className="text-amber-600 shrink-0" />
+                <span>تاريخ السند</span>
+              </label>
+              <input
+                type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                className="w-full py-2 px-3 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:border-rose-500 outline-none transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Row 2: [المبلغ المصروف] | [مركز التكلفة] | [الصندوق / البنك] | [طريقة السداد/الصرف] */}
+          <div className="pt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {/* 1. Amount */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-rose-950 mb-1.5">
+                <Coins size={14} className="text-rose-600 shrink-0" />
+                <span>المبلغ المصروف ({currencySymbol})</span>
+                <span className="text-red-500 font-bold">*</span>
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={amount}
+                onFocus={e => e.target.select()}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
                 required
-                className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none min-h-[42px]"
+                className="w-full py-2 px-3 rounded-xl text-base font-mono font-black border border-rose-300 bg-rose-50/40 text-rose-950 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/10 outline-none transition-all text-left"
+                dir="ltr"
               />
             </div>
 
-            {/* Expense Type */}
-            <div className="space-y-1 sm:col-span-2 md:col-span-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">نوع وجهة الصرف الداخلي</label>
+            {/* 2. Cost Center */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <Building2 size={14} className="text-purple-600 shrink-0" />
+                <span>مركز التكلفة</span>
+              </label>
               <select
-                value={expenseType}
-                onChange={(e) => setExpenseType(e.target.value)}
-                className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none min-h-[42px]"
+                value={costCenterId}
+                onChange={(e) => setCostCenterId(e.target.value)}
+                className="w-full py-2 px-3 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:border-rose-500 outline-none transition-all"
               >
-                {PAYMENT_EXPENSE_TYPES.map(s => (
-                  <option key={s.id} value={s.id}>{s.label}</option>
+                <option value="">-- بدون تحديد (عام) --</option>
+                {costCenters.map(cc => (
+                  <option key={cc.id} value={cc.id}>[{cc.code}] {cc.name}</option>
                 ))}
               </select>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-            {/* From Account (Disbursed from) */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Wallet size={14} className="text-rose-600" />
-                  الحساب المصروف منه
-                </span>
-                <span className="text-[10px] text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded font-bold">دليل الحسابات</span>
+            {/* 3. Disbursing Safe / Bank Account */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <Landmark size={14} className="text-cyan-600 shrink-0" />
+                <span>الصندوق / البنك المصروف منه</span>
               </label>
               <select
                 value={fromAccountId}
                 onChange={(e) => setFromAccountId(e.target.value)}
-                required
-                className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-rose-300 bg-rose-50/40 text-rose-950 font-bold focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none min-h-[42px]"
+                className="w-full py-2 px-3 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:border-rose-500 outline-none transition-all"
               >
                 {internalAccountsList.map(a => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
+                  <option key={a.id} value={a.id}>[{a.code}] {a.name}</option>
                 ))}
               </select>
             </div>
 
-            {/* If cash deposit to bank or branch feed: To Account */}
-            {(expenseType === 'cash_to_bank' || expenseType === 'branch_feed') && (
-              <div className="space-y-1 animate-fadeIn">
-                <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Landmark size={14} className="text-indigo-600" />
-                    الحساب المودع فيه (المستفيد)
-                  </span>
-                  <span className="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded font-bold">مناقلة داخلية</span>
-                </label>
-                <select
-                  value={toAccountId}
-                  onChange={(e) => setToAccountId(e.target.value)}
-                  className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-indigo-300 bg-indigo-50/40 text-indigo-950 font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none min-h-[42px]"
-                >
-                  <option value="">-- اختر الحساب المودع فيه --</option>
-                  {internalAccountsList.map(a => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Paid To (Beneficiary) */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center gap-1.5">
-                <UserCheck size={14} className="text-slate-500" />
-                المستلم / المستفيد الداخلي
+            {/* 4. Payment Method */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                <CreditCard size={14} className="text-indigo-600 shrink-0" />
+                <span>طريقة السداد / الصرف</span>
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={paidTo}
-                  onChange={(e) => setPaidTo(e.target.value)}
-                  placeholder="اسم الموظف / صاحب العهدة / المستلم"
-                  list="employees-payment-list"
-                  className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none min-h-[42px]"
-                />
-                <datalist id="employees-payment-list">
-                  {employees.map(emp => (
-                    <option key={emp.id} value={emp.name}>
-                      {emp.name} {emp.jobTitle ? `(${emp.jobTitle})` : ''}
-                    </option>
-                  ))}
-                  <option value="صندوق مبيعات المعرض" />
-                  <option value="مسؤول المشتريات النثرية" />
-                  <option value="أمين عهدة النظافة والصيانة" />
-                </datalist>
-              </div>
-            </div>
-
-            {/* Disbursed By (Cashier) */}
-            <div className="space-y-1 sm:col-span-2 md:col-span-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">الصارف / أمين الصندوق</label>
-              <input
-                type="text"
-                value={disbursedBy}
-                onChange={(e) => setDisbursedBy(e.target.value)}
-                placeholder="اسم أمين الصندوق"
-                className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none min-h-[42px]"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-            {/* Amount */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">المبلغ المصروف ({currencyFullNameAr})</label>
-              <div className="relative">
-                <input 
-                  type="number" 
-                  step="0.01" 
-                  min="0.01" 
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.00" 
-                  required
-                  className="w-full px-3 py-2 text-base font-mono font-bold rounded-lg border border-rose-300 bg-rose-50/30 text-rose-800 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none pl-12 min-h-[42px]"
-                />
-                <span className="absolute left-3 top-3 text-xs font-bold text-slate-400">{currencySymbol}</span>
-              </div>
-              {/* Tafqeet in Words */}
-              <div className="mt-1.5 p-2 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center gap-1.5 text-xs text-slate-600">
-                <Sparkles size={13} className="text-amber-500 shrink-0" />
-                <span className="font-medium truncate font-serif">
-                  {tafqeet(Number(amount) || 0)}
-                </span>
-              </div>
-            </div>
-
-            {/* Payment Method Selector */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">طريقة الصرف والدفع</label>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('CASH')}
-                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
+                  className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-0.5 ${
                     paymentMethod === 'CASH'
-                      ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
                   <Banknote size={13} />
-                  <span>نقداً</span>
+                  <span>نقد</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('BANK_TRANSFER')}
-                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
+                  className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-0.5 ${
                     paymentMethod === 'BANK_TRANSFER'
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
                   <Landmark size={13} />
-                  <span>تحويل بنكي</span>
+                  <span>تحويل</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('CHECK')}
-                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
+                  className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-0.5 ${
                     paymentMethod === 'CHECK'
-                      ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
                   <FileText size={13} />
@@ -1456,269 +1614,127 @@ export default function InternalPaymentVoucher() {
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('SPAN')}
-                  className={`flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs font-bold border transition-all cursor-pointer min-h-[38px] ${
+                  className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-0.5 ${
                     paymentMethod === 'SPAN'
-                      ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
                   <CreditCard size={13} />
-                  <span>مدى / بطاقة</span>
+                  <span>مدى</span>
                 </button>
               </div>
             </div>
-
-            {/* Reference No */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">
-                {paymentMethod === 'CHECK' ? 'رقم الشيك المصرفي' : paymentMethod === 'BANK_TRANSFER' ? 'رقم التحويل / العملية' : 'رقم المرجع (اختياري)'}
-              </label>
-              <input 
-                type="text" 
-                value={referenceNo}
-                onChange={(e) => setReferenceNo(e.target.value)}
-                placeholder={paymentMethod === 'CHECK' ? 'مثال: CHQ-8840' : 'رقم الحوالة أو الشيك'}
-                className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none font-mono min-h-[42px]"
-              />
-            </div>
           </div>
 
-          {/* Conditional Bank & Check details */}
-          {(paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CHECK') && (
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fadeIn">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                  <Landmark size={13} className="text-rose-600" />
-                  <span>{paymentMethod === 'CHECK' ? 'اسم البنك المسحوب عليه الشيك' : 'اسم البنك المصروف منه'}</span>
-                </label>
+          {/* Linked Transfer / Check details strip */}
+          {(paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CHECK' || paymentMethod === 'SPAN') && (
+            <div className="p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs animate-fadeIn">
+              <div>
+                <label className="block text-[11px] font-bold text-indigo-950 mb-1">اسم البنك المحول منه / المسحوب عليه</label>
                 <input
                   type="text"
                   value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
-                  placeholder="مثال: مصرف الراجحي / البنك الأهلي"
-                  className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none min-h-[42px]"
+                  onChange={e => setBankName(e.target.value)}
+                  placeholder="أدخل اسم البنك..."
+                  className="w-full py-1.5 px-2.5 rounded-lg border border-indigo-200 bg-white text-xs font-bold"
                 />
               </div>
-
+              <div>
+                <label className="block text-[11px] font-bold text-indigo-950 mb-1">رقم المرجع / الحوالة / الشيك</label>
+                <input
+                  type="text"
+                  value={referenceNo}
+                  onChange={e => setReferenceNo(e.target.value)}
+                  placeholder="TRX / CHK..."
+                  className="w-full py-1.5 px-2.5 rounded-lg border border-indigo-200 bg-white text-xs font-mono font-bold"
+                />
+              </div>
               {paymentMethod === 'CHECK' && (
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                    <Calendar size={13} className="text-amber-600" />
-                    <span>تاريخ استحقاق وصرف الشيك</span>
-                  </label>
+                <div>
+                  <label className="block text-[11px] font-bold text-amber-950 mb-1">تاريخ استحقاق الشيك</label>
                   <input
                     type="date"
                     value={checkDueDate}
-                    onChange={(e) => setCheckDueDate(e.target.value)}
-                    className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none font-mono min-h-[42px]"
+                    onChange={e => setCheckDueDate(e.target.value)}
+                    className="w-full py-1.5 px-2.5 rounded-lg border border-amber-200 bg-white text-xs font-bold"
                   />
                 </div>
               )}
             </div>
           )}
 
-          {/* Cost Center & Description */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-            {/* Cost Center Selector */}
-            <div className="space-y-1">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Building2 size={13} className="text-indigo-600" />
-                  <span>مركز التكلفة (Cost Center)</span>
-                </span>
-                <span className="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded font-bold border border-indigo-200">
-                  ربط السند
-                </span>
-              </label>
-              <select
-                value={costCenterId}
-                onChange={(e) => setCostCenterId(e.target.value)}
-                className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-indigo-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none min-h-[42px]"
-              >
-                <option value="">-- بدون تحديد مركز تكلفة (عام) --</option>
-                {costCenters.map(cc => (
-                  <option key={cc.id} value={cc.id}>
-                    [{cc.code}] {cc.name} - ({getCostCenterTypeLabel(cc.type)})
-                  </option>
-                ))}
-              </select>
-              {selectedCostCenter && (
-                <div className="text-[11px] text-slate-600 flex flex-wrap items-center justify-between gap-1 bg-indigo-50/70 px-2.5 py-1.5 rounded-md border border-indigo-100">
-                  <span className="font-bold text-indigo-900">المسؤول: {selectedCostCenter.manager || 'غير محدد'}</span>
-                  <span className="font-mono text-indigo-700">الميزانية: {selectedCostCenter.budget?.toLocaleString() || 0} {currencyFullNameAr}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Description */}
-            <div className="space-y-1 md:col-span-2">
-              <label className="text-xs font-black uppercase text-slate-800 tracking-wide">البيان والشرح المحاسبي</label>
-              <input 
-                type="text" 
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="وذلك عن: صرف عهدة مشتريات / سداد مصاريف صيانة ونثرية..."
-                className="w-full px-3 py-2 text-sm sm:text-base rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none min-h-[42px]"
-              />
-            </div>
-          </div>
-
-          {/* Live Interactive Card with Anti-Tamper Barcode & QR Code */}
-          <div className="p-3 sm:p-4 rounded-xl border border-rose-200 bg-rose-50/40 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-bold text-rose-800">
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2 size={14} className="text-rose-600" />
-                ملخص سند الصرف الداخلي والمطابقة الرقمية
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] bg-purple-100 text-purple-900 border border-purple-200 px-2 py-0.5 rounded font-bold flex items-center gap-1">
-                  <Scan size={11} /> رمز QR والباركود مفعل
-                </span>
-                <span className="font-mono font-bold text-rose-900 bg-rose-100/80 px-2 py-0.5 rounded">
-                  #{voucherNumber}
-                </span>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
-              <div className="bg-white p-2.5 rounded-lg border border-rose-100">
-                <span className="text-slate-400 block text-[10px]">الحساب المصروف منه:</span>
-                <span className="font-bold text-slate-800 text-xs sm:text-sm">{getAccountName(fromAccountId)}</span>
-              </div>
-              <div className="bg-white p-2.5 rounded-lg border border-rose-100">
-                <span className="text-slate-400 block text-[10px]">المستفيد والبيان:</span>
-                <span className="font-bold text-slate-800 text-xs sm:text-sm">{paidTo || 'جهة داخلية'}</span>
-                <span className="text-[10px] text-rose-600 block truncate">
-                  {PAYMENT_EXPENSE_TYPES.find(s => s.id === expenseType)?.label}
-                </span>
-              </div>
-              <div className="bg-white p-2.5 rounded-lg border border-rose-100 flex flex-col justify-between">
-                <span className="text-slate-400 block text-[10px]">صافي القيمة المصروفة:</span>
-                <span className="font-mono font-black text-rose-700 text-sm sm:text-base">
-                  {(Number(amount) || 0).toLocaleString()} {currencyFullNameAr}
-                </span>
-              </div>
-              <div className="bg-white p-2 rounded-lg border border-rose-100 flex items-center justify-between gap-2">
-                <div className="flex-1 overflow-hidden">
-                  <BarcodeImage 
-                    value={voucherNumber || nextCalculatedVoucherNum} 
-                    height={30} 
-                    barWidth={1.1} 
-                    fontSize={7.5} 
-                  />
-                </div>
-                {systemSettings?.taxAndInvoice?.enableQrCode !== false && (
-                  <VoucherQrCodeImage data={currentPreviewObject} size={38} showVerificationHash={false} />
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Approval Hierarchy Stepper */}
-          {systemSettings?.approvalWorkflow?.enabled && (
-            <div className="pt-2">
-              <VoucherApprovalStepper
-                voucher={activeVoucher}
-                voucherId={editingVoucherId}
-                voucherNumber={voucherNumber || nextCalculatedVoucherNum}
-                voucherType="INTERNAL_PAYMENT"
-                amount={Number(amount) || 0}
-                date={date}
-                isPosted={isCurrentVoucherPosted}
-                postedAt={activeVoucher?.postedAt}
-                approvalStatus={activeVoucher?.approvalStatus}
-                approvedBy={activeVoucher?.approvedBy}
-                approvedAt={activeVoucher?.approvedAt}
-                approvalRole={activeVoucher?.approvalRole}
-                approvalNotes={activeVoucher?.approvalNotes}
-                rejectedBy={activeVoucher?.rejectedBy}
-                rejectedAt={activeVoucher?.rejectedAt}
-                rejectionReason={activeVoucher?.rejectionReason}
-                preparedBy={activeVoucher?.preparedBy || disbursedBy}
-                systemSettings={systemSettings}
-                onApprovalChanged={() => {
-                  const fresh = loadStoredInternalPayments();
-                  setSavedVouchers(fresh);
-                }}
-                onOpenApprovalCenter={() => setShowApprovalCenterModal(true)}
-                onPost={handlePostCurrentVoucher}
-                onUnpost={handleUnpostCurrentVoucher}
-              />
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100">
-            <div className="w-full sm:w-auto">
-              {isCurrentVoucherPosted && (
-                <button
-                  type="button"
-                  onClick={handleUnpostCurrentVoucher}
-                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-amber-400 bg-amber-50 text-amber-900 font-bold text-xs hover:bg-amber-100 transition-colors cursor-pointer shadow-xs min-h-[42px]"
-                  title="إلغاء ترحيل هذا السند وإعادته كمسودة"
-                >
-                  <RotateCcw size={15} />
-                  <span>إلغاء الترحيل (إعادة كمسودة)</span>
-                </button>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto justify-stretch sm:justify-end">
-              {editingVoucherId && (
-                <button
-                  type="button"
-                  onClick={handleNewVoucher}
-                  className="flex-1 sm:flex-none flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors cursor-pointer min-h-[42px]"
-                >
-                  إلغاء
-                </button>
-              )}
-              {!isCurrentVoucherPosted && (
-                <button
-                  type="button"
-                  onClick={() => saveVoucherWithStatus('DRAFT')}
-                  disabled={isVoucherDuplicate || !amount}
-                  className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer min-h-[42px] ${
-                    isVoucherDuplicate || !amount
-                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                      : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40'
-                  }`}
-                  title="حفظ السند كمسودة غير مرحلة في الحسابات"
-                >
-                  <Save size={15} />
-                  <span>حفظ كمسودة (غير مرحل)</span>
-                </button>
-              )}
-              {!isCurrentVoucherPosted && (
-                <button
-                  type="button"
-                  onClick={handlePostCurrentVoucher}
-                  disabled={isVoucherDuplicate || !amount}
-                  className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs text-white transition-all shadow-md cursor-pointer min-h-[42px] ${
-                    isVoucherDuplicate || !amount
-                      ? 'bg-slate-400 cursor-not-allowed opacity-60'
-                      : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-700/20'
-                  }`}
-                  title="ترحيل السند في الحسابات العامة ودفتر الأستاذ"
-                >
-                  <Send size={15} />
-                  <span>ترحيل السند في الحسابات</span>
-                </button>
-              )}
-              {isCurrentVoucherPosted && (
-                <button
-                  type="button"
-                  onClick={() => saveVoucherWithStatus('POSTED')}
-                  disabled={isVoucherDuplicate || !amount}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs text-white transition-all shadow-md cursor-pointer bg-rose-700 hover:bg-rose-800 shadow-rose-700/20 min-h-[42px]"
-                  title="حفظ التعديلات على السند المرحل"
-                >
-                  <Save size={15} />
-                  <span>حفظ تعديلات السند المرحل</span>
-                </button>
-              )}
-            </div>
+          {/* Row 3: [البيان والشرح المحاسبي] */}
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+              <AlignLeft size={14} className="text-slate-600 shrink-0" />
+              <span>البيان والشرح المحاسبي</span>
+            </label>
+            <textarea
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="مصروفات نثرية / صيانة / الشرح المحاسبي للعملية..."
+              className="w-full py-2 px-3 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:border-rose-500 focus:ring-2 focus:ring-rose-500/10 outline-none transition-all resize-none"
+            />
           </div>
         </form>
+
+        {/* Approval Stepper if enabled */}
+        {systemSettings?.approvalWorkflow?.enabled && (
+          <div className="mt-4">
+            <VoucherApprovalStepper
+              voucher={activeVoucher}
+              voucherId={editingVoucherId}
+              voucherType="INTERNAL_PAYMENT"
+              voucherNumber={voucherNumber}
+              amount={Number(amount) || 0}
+              approvalStatus={activeVoucher?.approvalStatus || 'NOT_REQUIRED'}
+              preparedBy={activeVoucher?.preparedBy || disbursedBy}
+              systemSettings={systemSettings}
+              onApprovalChanged={() => {
+                const fresh = loadStoredInternalPayments();
+                setSavedVouchers(fresh);
+              }}
+              onOpenApprovalCenter={() => setShowApprovalCenterModal(true)}
+              onPost={handlePostCurrentVoucher}
+              onUnpost={handleUnpostCurrentVoucher}
+            />
+          </div>
+        )}
+
+        {/* Sleek, Compact Modern Summary Footer Banner */}
+        <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-sm border border-slate-800 flex flex-wrap items-center justify-between gap-4 mt-6 print:hidden">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center font-bold shrink-0">
+              <Banknote size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-300">إجمالي المبلغ المصروف</span>
+                {isCurrentVoucherPosted ? (
+                  <span className="text-[10px] bg-emerald-900/80 text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-700/60 flex items-center gap-1">
+                    <CheckCircle2 size={10} /> مرحل بالحسابات
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-amber-900/80 text-amber-300 px-2 py-0.5 rounded-full font-bold border border-amber-700/60 flex items-center gap-1">
+                    <AlertTriangle size={10} /> مسودة
+                  </span>
+                )}
+              </div>
+              <span className="text-xs sm:text-sm font-extrabold text-amber-300 block mt-1 tracking-wide">
+                الرصيد كتابة: {tafqeet(Number(amount) || 0)}
+              </span>
+            </div>
+          </div>
+
+          <div className="text-left shrink-0">
+            <span className="text-2xl sm:text-3xl font-mono font-black text-rose-400">
+              {amount ? Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+            </span>
+            <span className="text-xs text-slate-300 font-bold mr-1">{currencySymbol}</span>
+          </div>
+        </div>
       </div>
 
       {/* Print Preview Modal */}

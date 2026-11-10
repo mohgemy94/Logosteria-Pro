@@ -14,6 +14,8 @@ export type {
   CostCenterTransaction 
 };
 import { 
+  DB_SALES_INVOICES_KEY,
+  DB_PURCHASES_INVOICES_KEY,
   DB_PAYMENT_VOUCHERS_KEY, 
   DB_RECEIPT_VOUCHERS_KEY,
   DB_INTERNAL_PAYMENT_VOUCHERS_KEY,
@@ -24,104 +26,55 @@ import { JournalEntry, JournalEntryStatus } from '../types/accounting';
 
 export const COST_CENTERS_STORAGE_KEY = 'alpha_cost_centers_v1';
 
-export const DEFAULT_COST_CENTERS: CostCenter[] = [
-  {
-    id: 'cc-branch-riyadh',
-    code: 'CC-101',
-    name: 'الفرع الرئيسي - الرياض',
-    type: 'BRANCH',
-    manager: 'م. أحمد الشهري',
-    budget: 150000,
-    description: 'المركز الرئيسي للإدارة والمعرض المركزي والمبيعات',
-    status: 'ACTIVE',
-    createdAt: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    id: 'cc-branch-jeddah',
-    code: 'CC-102',
-    name: 'فرع جدة والمنطقة الغربية',
-    type: 'BRANCH',
-    manager: 'أ. خالد العمودي',
-    budget: 100000,
-    description: 'معرض ومستودع توزيع المنطقة الغربية وميناء جدة',
-    status: 'ACTIVE',
-    createdAt: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    id: 'cc-proj-capital-towers',
-    code: 'CC-201',
-    name: 'مشروع أبراج العاصمة والتشييد',
-    type: 'PROJECT',
-    manager: 'م. سلطان المنصور',
-    budget: 350000,
-    description: 'مشروع توريد وتركيب المقاولات للمباني الذكية والأبراج',
-    status: 'ACTIVE',
-    createdAt: '2026-01-05T00:00:00.000Z'
-  },
-  {
-    id: 'cc-proj-modern-mall',
-    code: 'CC-202',
-    name: 'مشروع مجمع المعارض والتجزئة',
-    type: 'PROJECT',
-    manager: 'م. عمر فاروق',
-    budget: 200000,
-    description: 'مشروع تجهيز المنافذ التجارية ومراكز التسوق',
-    status: 'ACTIVE',
-    createdAt: '2026-01-10T00:00:00.000Z'
-  },
-  {
-    id: 'cc-fleet-transport',
-    code: 'CC-301',
-    name: 'أسطول النقليات والتوزيع اللوجستي',
-    type: 'FLEET',
-    manager: 'أ. فهد الدوسري',
-    budget: 85000,
-    description: 'شاحنات التوزيع وسيارات النقل الخفيف، الوقود والصيانة',
-    status: 'ACTIVE',
-    createdAt: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    id: 'cc-dept-it-systems',
-    code: 'CC-401',
-    name: 'قسم تقنية المعلومات وتطوير الأنظمة',
-    type: 'DEPARTMENT',
-    manager: 'م. ياسر القحطاني',
-    budget: 45000,
-    description: 'الخوادم، الرخص البرمجية، الدعم الفني وتحديث البنية التحتية',
-    status: 'ACTIVE',
-    createdAt: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    id: 'cc-dept-marketing',
-    code: 'CC-402',
-    name: 'إدارة التسويق والحملات الرقمية',
-    type: 'DEPARTMENT',
-    manager: 'أ. سارة التميمي',
-    budget: 60000,
-    description: 'الإعلانات الممولة، المعارض التجارية، والهوية التسويقية',
-    status: 'ACTIVE',
-    createdAt: '2026-01-01T00:00:00.000Z'
-  }
-];
+export const DEFAULT_COST_CENTERS: CostCenter[] = [];
+
+const LEGACY_SEEDED_COST_CENTER_IDS = new Set([
+  'cc-101',
+  'cc-102',
+  'cc-103',
+  'cc-104',
+  'cc-105'
+]);
+
+const LEGACY_SEEDED_COST_CENTER_NAMES = new Set([
+  'الفرع الرئيسي - الرياض',
+  'فرع جدة الإقليمي',
+  'فرع الدمام والمنطقة الشرقية',
+  'مشروع توريد وتجهيز المجمع التجاري',
+  'أسطول النقليات والتوزيع اللوجستي'
+]);
 
 export function loadCostCenters(): CostCenter[] {
   if (typeof window === 'undefined') return DEFAULT_COST_CENTERS;
   try {
     const raw = localStorage.getItem(COST_CENTERS_STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(COST_CENTERS_STORAGE_KEY, JSON.stringify(DEFAULT_COST_CENTERS));
       return DEFAULT_COST_CENTERS;
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
+    if (Array.isArray(parsed)) {
+      const cleaned = parsed.filter((item: any) => {
+        if (!item || typeof item !== 'object') return false;
+        if (LEGACY_SEEDED_COST_CENTER_IDS.has(String(item.id))) return false;
+        if (item.createdAt === '2025-01-01' && LEGACY_SEEDED_COST_CENTER_NAMES.has(String(item.name))) {
+          return false;
+        }
+        return true;
+      });
+      if (cleaned.length !== parsed.length) {
+        localStorage.setItem(COST_CENTERS_STORAGE_KEY, JSON.stringify(cleaned));
+      }
+      return cleaned;
     }
-    localStorage.setItem(COST_CENTERS_STORAGE_KEY, JSON.stringify(DEFAULT_COST_CENTERS));
     return DEFAULT_COST_CENTERS;
   } catch (err) {
     console.error('Failed to load cost centers:', err);
     return DEFAULT_COST_CENTERS;
   }
+}
+
+export function getFlatCostCenters(): CostCenter[] {
+  return loadCostCenters().filter(c => c.status === 'ACTIVE');
 }
 
 export function saveCostCenters(centers: CostCenter[]): void {
@@ -278,6 +231,33 @@ export function calculateCostCenterAnalytics(
     console.error('Error loading journal entries for cost center:', e);
   }
 
+  // 6. Load Sales Invoices
+  let salesInvoices: any[] = [];
+  try {
+    const raw = localStorage.getItem(DB_SALES_INVOICES_KEY);
+    if (raw) salesInvoices = JSON.parse(raw);
+  } catch (e) {
+    console.error('Error loading sales invoices for cost center:', e);
+  }
+
+  // 7. Load Purchase Invoices
+  let purchaseInvoices: any[] = [];
+  try {
+    const raw = localStorage.getItem(DB_PURCHASES_INVOICES_KEY);
+    if (raw) purchaseInvoices = JSON.parse(raw);
+  } catch (e) {
+    console.error('Error loading purchase invoices for cost center:', e);
+  }
+
+  // 8. Load Manufacturing Work Orders
+  let workOrders: any[] = [];
+  try {
+    const raw = localStorage.getItem('alpha_accounting_work_orders_v1');
+    if (raw) workOrders = JSON.parse(raw);
+  } catch (e) {
+    console.error('Error loading work orders for cost center:', e);
+  }
+
   // Build summary for each center
   return targetCenters.map(center => {
     const transactions: CostCenterTransaction[] = [];
@@ -412,9 +392,8 @@ export function calculateCostCenterAnalytics(
               const credit = Number(item.credit) || 0;
               
               if (debit > 0) {
-                // Debit movement on cost center (typically expense or asset assignment)
                 totalExpenses += debit;
-                addExpenseCategory(entry.description || 'قيد تسوية يومية', debit);
+                addExpenseCategory(item.description || entry.description || 'قيد تسوية يومية', debit);
                 transactions.push({
                   id: `tx-je-d-${entry.id}-${item.id}`,
                   date: entry.date,
@@ -422,12 +401,11 @@ export function calculateCostCenterAnalytics(
                   docType: 'JOURNAL_ENTRY',
                   docTypeLabel: 'قيد يومية تسوية',
                   partnerName: item.partnerName || 'حساب أستاذ عام',
-                  description: entry.description || 'قيد محاسبي مباشر لمركز التكلفة',
+                  description: item.description || entry.description || 'قيد محاسبي مباشر لمركز التكلفة',
                   amount: debit,
                   entryType: 'EXPENSE'
                 });
               } else if (credit > 0) {
-                // Credit movement on cost center (typically revenue or recovery)
                 totalRevenues += credit;
                 transactions.push({
                   id: `tx-je-c-${entry.id}-${item.id}`,
@@ -436,13 +414,115 @@ export function calculateCostCenterAnalytics(
                   docType: 'JOURNAL_ENTRY',
                   docTypeLabel: 'قيد يومية تسوية',
                   partnerName: item.partnerName || 'حساب أستاذ عام',
-                  description: entry.description || 'قيد إيراد / تسوية دائنة للمركز',
+                  description: item.description || entry.description || 'قيد إيراد / تسوية دائنة للمركز',
                   amount: credit,
                   entryType: 'REVENUE'
                 });
               }
             }
           });
+        }
+      });
+    }
+
+    // F) Sales Invoices linked to this center
+    if (Array.isArray(salesInvoices)) {
+      salesInvoices.forEach(inv => {
+        const isPosted = inv.status === 'POSTED' || (!inv.status && Number(inv.totals?.grandTotal ?? inv.grandTotal) > 0);
+        const matchesCenter =
+          inv.costCenterId === center.id ||
+          inv.costCenterId === center.code;
+
+        if (isPosted && matchesCenter && isInRange(inv.date)) {
+          const isReturn = String(inv.invoiceType || '').toUpperCase().includes('RETURN') || Boolean(inv.isReturn);
+          const netRev = Math.max(0, Number(inv.totals?.subtotal ?? inv.subtotal ?? inv.totals?.grandTotal ?? inv.grandTotal) - Number(inv.totals?.discountTotal ?? inv.discountTotal ?? 0));
+          if (netRev > 0) {
+            if (isReturn) {
+              totalExpenses += netRev;
+              addExpenseCategory('مرتجعات مبيعات الفرع/المركز', netRev);
+              transactions.push({
+                id: `tx-sinv-ret-${inv.id}`,
+                date: inv.date,
+                docNumber: inv.invoiceNumber || inv.id,
+                docType: 'SALES_INVOICE',
+                docTypeLabel: 'مرتجع مبيعات',
+                partnerName: inv.partnerName || inv.customerName || 'عميل',
+                description: `مرتجع فاتورة مبيعات رقم ${inv.invoiceNumber}`,
+                amount: netRev,
+                entryType: 'EXPENSE'
+              });
+            } else {
+              totalRevenues += netRev;
+              transactions.push({
+                id: `tx-sinv-${inv.id}`,
+                date: inv.date,
+                docNumber: inv.invoiceNumber || inv.id,
+                docType: 'SALES_INVOICE',
+                docTypeLabel: 'فاتورة مبيعات',
+                partnerName: inv.partnerName || inv.customerName || 'عميل',
+                description: `إيراد مبيعات فاتورة رقم ${inv.invoiceNumber}`,
+                amount: netRev,
+                entryType: 'REVENUE'
+              });
+            }
+          }
+        }
+      });
+    }
+
+    // G) Purchase Invoices linked to this center
+    if (Array.isArray(purchaseInvoices)) {
+      purchaseInvoices.forEach(inv => {
+        const isPosted = inv.status === 'POSTED' || (!inv.status && Number(inv.totals?.grandTotal ?? inv.grandTotal) > 0);
+        const matchesCenter =
+          inv.costCenterId === center.id ||
+          inv.costCenterId === center.code;
+
+        if (isPosted && matchesCenter && isInRange(inv.date)) {
+          const isReturn = String(inv.invoiceType || '').toUpperCase().includes('RETURN') || Boolean(inv.isReturn);
+          const netCost = Math.max(0, Number(inv.totals?.subtotal ?? inv.subtotal ?? inv.totals?.grandTotal ?? inv.grandTotal) - Number(inv.totals?.discountTotal ?? inv.discountTotal ?? 0));
+          if (netCost > 0 && !isReturn) {
+            totalExpenses += netCost;
+            addExpenseCategory(`توريدات ومشتريات: ${inv.partnerName || inv.vendorName || 'مورد'}`, netCost);
+            transactions.push({
+              id: `tx-pinv-${inv.id}`,
+              date: inv.date,
+              docNumber: inv.invoiceNumber || inv.id,
+              docType: 'PURCHASE_INVOICE',
+              docTypeLabel: 'فاتورة مشتريات',
+              partnerName: inv.partnerName || inv.vendorName || 'مورد',
+              description: `فاتورة مشتريات وتوريد رقم ${inv.invoiceNumber}`,
+              amount: netCost,
+              entryType: 'EXPENSE'
+            });
+          }
+        }
+      });
+    }
+
+    // H) Manufacturing Work Orders linked to this center
+    if (Array.isArray(workOrders)) {
+      workOrders.forEach(wo => {
+        const matchesCenter =
+          wo.costCenterId === center.id ||
+          wo.costCenterId === center.code;
+        if (matchesCenter && (wo.status === 'IN_PROGRESS' || wo.status === 'COMPLETED') && isInRange(wo.startDate)) {
+          const prodCost = Number(wo.totalProductionCost) || 0;
+          if (prodCost > 0) {
+            totalExpenses += prodCost;
+            addExpenseCategory(`تكاليف تشغيل وتصنيع (${wo.finalProductName})`, prodCost);
+            transactions.push({
+              id: `tx-mfg-${wo.id}`,
+              date: wo.startDate,
+              docNumber: wo.orderNumber,
+              docType: 'MANUFACTURING_ORDER',
+              docTypeLabel: 'أمر تشغيل صناعي',
+              partnerName: wo.supervisor || wo.workCenter,
+              description: `تكاليف إنتاج ${wo.plannedQuantity} ${wo.unit} من ${wo.finalProductName}`,
+              amount: prodCost,
+              entryType: 'EXPENSE'
+            });
+          }
         }
       });
     }

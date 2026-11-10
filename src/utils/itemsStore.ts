@@ -1,3 +1,12 @@
+
+export function getWarehouseLabel(warehouseKey?: string): string {
+  if (!warehouseKey) return 'المستودع الرئيسي';
+  if (warehouseKey === 'MAIN_WAREHOUSE') return 'المستودع الرئيسي';
+  if (warehouseKey === 'SHOWROOM') return 'معرض المبيعات';
+  if (warehouseKey === 'BRANCH_1') return 'فرع الرياض';
+  return warehouseKey;
+}
+
 import { DB_ITEMS_KEY } from './sequences';
 import { notifyDataChanged } from './localFolderBackup';
 
@@ -15,6 +24,7 @@ export interface Item {
   unit: string;
   costPrice: number;
   wholesalePrice: number;
+  semiWholesalePrice?: number;
   retailPrice: number;
   consumerPrice: number;
   salePrice: number;
@@ -51,248 +61,58 @@ export interface StockStatusInfo {
   textClass: string;
 }
 
-export const DEFAULT_INITIAL_ITEMS: Item[] = [
-  {
-    id: '1',
-    code: '1',
-    name: 'لابتوب ديل انسبايرون Core i7',
-    barcode: '1234567890123',
-    category: 'إلكترونيات',
-    unit: 'حبة / قطعة',
-    costPrice: 1500,
-    wholesalePrice: 1750,
-    retailPrice: 1900,
-    consumerPrice: 2000,
-    salePrice: 2000,
-    stock: 14,
-    taxRate: 15,
-    isActive: true,
-    warehouseName: 'المستودع الرئيسي - الرياض',
-    shelfLocation: 'A-12-R3',
-    minReorderLevel: 20, // Low stock
-    maxStockLevel: 50,
-    lastRestockDate: '2026-08-15',
-    daysInStock: 23,
-    monthlyVelocity: 28,
-    supplierName: 'شركة التوريدات العالمية'
-  },
-  {
-    id: '2',
-    code: '2',
-    name: 'أرز بسمتي درجة أولى كلاسيك (شيكارة 40 كجم)',
-    barcode: '1234567890124',
-    category: 'مواد غذائية',
-    unit: 'شيكارة',
-    costPrice: 120,
-    wholesalePrice: 135,
-    retailPrice: 150,
-    consumerPrice: 160,
-    salePrice: 160,
-    stock: 45,
-    taxRate: 0,
-    isActive: true,
-    warehouseName: 'المستودع الرئيسي - الرياض',
-    shelfLocation: 'B-04-F1',
-    minReorderLevel: 30,
-    maxStockLevel: 100,
-    lastRestockDate: '2026-08-28',
-    daysInStock: 10,
-    monthlyVelocity: 85,
-    supplierName: 'مؤسسة المواد الأولية'
-  },
-  {
-    id: '3',
-    code: '3',
-    name: 'سكر أبيض ناعم 50 كجم',
-    barcode: '1234567890125',
-    category: 'مواد غذائية',
-    unit: 'شوال',
-    costPrice: 90,
-    wholesalePrice: 100,
-    retailPrice: 110,
-    consumerPrice: 115,
-    salePrice: 115,
-    stock: 8, // Low stock
-    taxRate: 0,
-    isActive: true,
-    warehouseName: 'مستودع فرع جدة',
-    shelfLocation: 'C-02-F2',
-    minReorderLevel: 25,
-    maxStockLevel: 80,
-    lastRestockDate: '2026-07-20',
-    daysInStock: 49,
-    monthlyVelocity: 42,
-    supplierName: 'مؤسسة المواد الأولية'
-  },
-  {
-    id: '4',
-    code: '4',
-    name: 'شاي أسود فاخر 100 فتلة (كرتونة 24 باكت)',
-    barcode: '1234567890126',
-    category: 'مواد غذائية',
-    unit: 'كرتونة',
-    costPrice: 18,
-    wholesalePrice: 21,
-    retailPrice: 24,
-    consumerPrice: 26,
-    salePrice: 26,
-    stock: 80,
-    taxRate: 15,
-    isActive: true,
-    warehouseName: 'المستودع الرئيسي - الرياض',
-    shelfLocation: 'B-08-R1',
-    minReorderLevel: 20,
-    maxStockLevel: 120,
-    lastRestockDate: '2026-08-01',
-    daysInStock: 37,
-    monthlyVelocity: 55,
-    supplierName: 'شركة الخليج للتجارة'
-  },
-  {
-    id: '5',
-    code: '5',
-    name: 'شاشة سامسونج ذكية 55 بوصة 4K Ultra HD',
-    barcode: '1234567890127',
-    category: 'إلكترونيات',
-    unit: 'جهاز',
-    costPrice: 1850,
-    wholesalePrice: 2100,
-    retailPrice: 2350,
-    consumerPrice: 2400,
-    salePrice: 2400,
-    stock: 0, // OUT OF STOCK
-    taxRate: 15,
-    isActive: true,
-    warehouseName: 'المستودع الرئيسي - الرياض',
-    shelfLocation: 'A-01-R1',
-    minReorderLevel: 10,
-    maxStockLevel: 30,
-    lastRestockDate: '2026-06-10',
-    daysInStock: 89,
-    monthlyVelocity: 16,
-    supplierName: 'شركة التوريدات العالمية'
-  },
-  {
-    id: '6',
-    code: '6',
-    name: 'طابعة ليزر متعددة الوظائف HP LaserJet Pro',
-    barcode: '1234567890128',
-    category: 'إلكترونيات',
-    unit: 'جهاز',
-    costPrice: 920,
-    wholesalePrice: 1050,
-    retailPrice: 1180,
-    consumerPrice: 1200,
-    salePrice: 1200,
-    stock: 22,
-    taxRate: 15,
-    isActive: true,
-    warehouseName: 'مستودع فرع جدة',
-    shelfLocation: 'A-09-R2',
-    minReorderLevel: 15,
-    maxStockLevel: 40,
-    lastRestockDate: '2026-08-10',
-    daysInStock: 28,
-    monthlyVelocity: 12,
-    supplierName: 'شركة التوريدات العالمية'
-  },
-  {
-    id: '7',
-    code: '7',
-    name: 'زيت دوار الشمس نقي (كرتون 12 قارورة 1.5 لتر)',
-    barcode: '1234567890129',
-    category: 'مواد غذائية',
-    unit: 'كرتون',
-    costPrice: 85,
-    wholesalePrice: 98,
-    retailPrice: 108,
-    consumerPrice: 112,
-    salePrice: 112,
-    stock: 120, // High stock
-    taxRate: 0,
-    isActive: true,
-    warehouseName: 'المستودع الرئيسي - الرياض',
-    shelfLocation: 'B-14-F1',
-    minReorderLevel: 30,
-    maxStockLevel: 90,
-    lastRestockDate: '2026-05-15',
-    daysInStock: 115,
-    monthlyVelocity: 14,
-    supplierName: 'مؤسسة المواد الأولية'
-  },
-  {
-    id: '8',
-    code: '8',
-    name: 'هاتف ذكي أبل آيفون 15 برو ماكس 256GB',
-    barcode: '1234567890130',
-    category: 'إلكترونيات',
-    unit: 'جهاز',
-    costPrice: 4200,
-    wholesalePrice: 4550,
-    retailPrice: 4800,
-    consumerPrice: 4950,
-    salePrice: 4950,
-    stock: 12,
-    taxRate: 15,
-    isActive: true,
-    warehouseName: 'مستودع معرض المبيعات',
-    shelfLocation: 'SAFE-V01',
-    minReorderLevel: 8,
-    maxStockLevel: 25,
-    lastRestockDate: '2026-08-25',
-    daysInStock: 13,
-    monthlyVelocity: 35,
-    supplierName: 'شركة التوريدات العالمية'
-  },
-  {
-    id: '9',
-    code: '9',
-    name: 'بن قهوة عربي محمص فاخر مع هيل 1 كجم',
-    barcode: '1234567890131',
-    category: 'مواد غذائية',
-    unit: 'كيس',
-    costPrice: 45,
-    wholesalePrice: 54,
-    retailPrice: 62,
-    consumerPrice: 65,
-    salePrice: 65,
-    stock: 0, // OUT OF STOCK
-    taxRate: 15,
-    isActive: true,
-    warehouseName: 'مستودع فرع جدة',
-    shelfLocation: 'B-02-R3',
-    minReorderLevel: 15,
-    maxStockLevel: 60,
-    lastRestockDate: '2026-07-05',
-    daysInStock: 64,
-    monthlyVelocity: 48,
-    supplierName: 'شركة الخليج للتجارة'
-  },
-  {
-    id: '10',
-    code: '10',
-    name: 'مكتب خشبي إداري تنفيذي مقاس 180 سم',
-    barcode: '1234567890132',
-    category: 'أثاث ومكتبيات',
-    unit: 'قطعة',
-    costPrice: 1100,
-    wholesalePrice: 1350,
-    retailPrice: 1500,
-    consumerPrice: 1600,
-    salePrice: 1600,
-    stock: 5,
-    taxRate: 15,
-    isActive: true,
-    warehouseName: 'المستودع الرئيسي - الرياض',
-    shelfLocation: 'FURN-03',
-    minReorderLevel: 3,
-    maxStockLevel: 10,
-    lastRestockDate: '2026-06-20',
-    daysInStock: 79,
-    monthlyVelocity: 4,
-    supplierName: 'مصنع الأمل للأثاث'
+export const DEFAULT_INITIAL_ITEMS: Item[] = [];
+
+export const CUSTOM_WAREHOUSES_STORAGE_KEY = 'alpha_custom_warehouses_v1';
+
+/**
+ * Returns dynamic list of warehouses from stored items, custom warehouses, and active transactions.
+ */
+export function getDynamicWarehousesList(extraWarehouseNames?: string[]): { id: string; label: string }[] {
+  const map = new Map<string, string>();
+  map.set('MAIN_WAREHOUSE', 'المستودع الرئيسي');
+
+  if (typeof window !== 'undefined') {
+    try {
+      const customRaw = localStorage.getItem(CUSTOM_WAREHOUSES_STORAGE_KEY);
+      if (customRaw) {
+        const parsed = JSON.parse(customRaw);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((w: any) => {
+            const name = typeof w === 'string' ? w.trim() : String(w?.name || w?.label || '').trim();
+            const id = typeof w === 'string' ? w.trim() : String(w?.id || name).trim();
+            if (name) map.set(id, name);
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const items = loadStoredItems();
+      items.forEach(item => {
+        const wh = (item.warehouseName || '').trim();
+        if (wh && wh !== 'المستودع الرئيسي') {
+          map.set(wh, wh);
+        }
+      });
+    } catch {
+      // ignore
+    }
   }
-];
+
+  if (Array.isArray(extraWarehouseNames)) {
+    extraWarehouseNames.forEach(wh => {
+      const clean = (wh || '').trim();
+      if (clean && !map.has(clean)) {
+        map.set(clean, getWarehouseLabel(clean));
+      }
+    });
+  }
+
+  return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
+}
 
 /**
  * Broadcasts events across the window so all components (Sales, Purchases, Items, Warehouse, Dashboard, Alerts)
@@ -323,12 +143,13 @@ export function loadStoredItems(): Item[] {
           stock: Number(item.stock) || 0,
           costPrice: Number(item.costPrice) || 0,
           wholesalePrice: Number(item.wholesalePrice) || Number(item.costPrice) || 0,
+          semiWholesalePrice: item.semiWholesalePrice !== undefined ? Number(item.semiWholesalePrice) : (Number(item.wholesalePrice) ? Math.round(Number(item.wholesalePrice) * 1.1) : undefined),
           retailPrice: Number(item.retailPrice) || Number(item.salePrice) || 0,
           consumerPrice: Number(item.consumerPrice) || Number(item.salePrice) || 0,
           salePrice: Number(item.salePrice) || Number(item.consumerPrice) || 0,
           minReorderLevel: item.minReorderLevel !== undefined ? Number(item.minReorderLevel) : 10,
           maxStockLevel: item.maxStockLevel !== undefined ? Number(item.maxStockLevel) : 50,
-          warehouseName: item.warehouseName || (idx % 2 === 0 ? 'المستودع الرئيسي - الرياض' : 'مستودع فرع جدة'),
+          warehouseName: item.warehouseName || 'المستودع الرئيسي',
           shelfLocation: item.shelfLocation || `S-${idx + 1}-R1`,
           taxRate: item.taxRate !== undefined ? Number(item.taxRate) : 15,
           isActive: item.isActive !== false
@@ -428,14 +249,14 @@ export function deductStockOnSalesInvoice(
   const itemsList = loadStoredItems();
   let changed = false;
 
-  saleItems.forEach(sItem => {
+  (saleItems || []).forEach(sItem => {
     const sQty = Number(sItem.quantity) || 0;
     if (sQty <= 0) return;
 
     const idx = itemsList.findIndex(it =>
       (sItem.itemId && it.id === sItem.itemId) ||
       (sItem.itemCode && String(it.code).trim().toLowerCase() === String(sItem.itemCode).trim().toLowerCase()) ||
-      (sItem.description && it.name.trim().toLowerCase() === sItem.description.trim().toLowerCase())
+      (sItem.description && (it.name || '').trim().toLowerCase() === (sItem.description || '').trim().toLowerCase())
     );
 
     if (idx !== -1 && itemsList[idx]) {
@@ -470,14 +291,14 @@ export function restoreStockOnSalesInvoiceUnpost(
   const itemsList = loadStoredItems();
   let changed = false;
 
-  saleItems.forEach(sItem => {
+  (saleItems || []).forEach(sItem => {
     const sQty = Number(sItem.quantity) || 0;
     if (sQty <= 0) return;
 
     const idx = itemsList.findIndex(it =>
       (sItem.itemId && it.id === sItem.itemId) ||
       (sItem.itemCode && String(it.code).trim().toLowerCase() === String(sItem.itemCode).trim().toLowerCase()) ||
-      (sItem.description && it.name.trim().toLowerCase() === sItem.description.trim().toLowerCase())
+      (sItem.description && (it.name || '').trim().toLowerCase() === (sItem.description || '').trim().toLowerCase())
     );
 
     if (idx !== -1 && itemsList[idx]) {
@@ -517,7 +338,7 @@ export function addStockOnPurchaseInvoice(
   let changed = false;
   const effectiveDate = invoiceDate || new Date().toISOString().split('T')[0];
 
-  purchaseItems.forEach(pItem => {
+  (purchaseItems || []).forEach(pItem => {
     const pQty = Number(pItem.quantity) || 0;
     const pPrice = Number(pItem.unitPrice) || 0;
     if (pQty <= 0) return;
@@ -525,7 +346,7 @@ export function addStockOnPurchaseInvoice(
     const idx = itemsList.findIndex(it =>
       (pItem.itemId && it.id === pItem.itemId) ||
       (pItem.itemCode && String(it.code).trim().toLowerCase() === String(pItem.itemCode).trim().toLowerCase()) ||
-      (pItem.description && it.name.trim().toLowerCase() === pItem.description.trim().toLowerCase())
+      (pItem.description && (it.name || '').trim().toLowerCase() === (pItem.description || '').trim().toLowerCase())
     );
 
     if (idx !== -1 && itemsList[idx]) {
@@ -582,14 +403,14 @@ export function restoreStockOnPurchaseInvoiceUnpost(
   const itemsList = loadStoredItems();
   let changed = false;
 
-  purchaseItems.forEach(pItem => {
+  (purchaseItems || []).forEach(pItem => {
     const pQty = Number(pItem.quantity) || 0;
     if (pQty <= 0) return;
 
     const idx = itemsList.findIndex(it =>
       (pItem.itemId && it.id === pItem.itemId) ||
       (pItem.itemCode && String(it.code).trim().toLowerCase() === String(pItem.itemCode).trim().toLowerCase()) ||
-      (pItem.description && it.name.trim().toLowerCase() === pItem.description.trim().toLowerCase())
+      (pItem.description && (it.name || '').trim().toLowerCase() === (pItem.description || '').trim().toLowerCase())
     );
 
     if (idx !== -1 && itemsList[idx]) {

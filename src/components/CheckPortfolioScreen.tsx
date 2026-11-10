@@ -36,17 +36,20 @@ import {
   getTodayIsoDate
 } from '../utils/checkStore';
 import { loadChartOfAccounts, loadJournalEntries } from '../utils/trialBalanceStore';
-import { loadVendors } from '../utils/partnerLedger';
+import { loadVendors, loadCustomers } from '../utils/partnerLedger';
 import { getSystemSettings } from '../utils/settings';
 import { tafqeetArabic } from '../utils/tafqeet';
 import { JournalEntry, Partner } from '../types/accounting';
 import ExportButtonGroup from './ExportButtonGroup';
+import { useIsInWindow } from './DesktopWindowManager';
 
 interface CheckPortfolioScreenProps {
   onNavigate?: (view: string) => void;
+  isInWindow?: boolean;
 }
 
-export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScreenProps) {
+export default function CheckPortfolioScreen({ onNavigate, isInWindow: explicitIsInWindow }: CheckPortfolioScreenProps) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const [checks, setChecks] = useState<BankCheck[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'ALL' | 'UNDER_COLLECTION' | 'URGENT' | 'CLEARED' | 'ENDORSED' | 'BOUNCED'>('ALL');
@@ -107,14 +110,15 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
   const [newCheckAmount, setNewCheckAmount] = useState<number | ''>('');
   const [newCheckIssueDate, setNewCheckIssueDate] = useState(getTodayIsoDate());
   const [newCheckDueDate, setNewCheckDueDate] = useState(getTodayIsoDate());
-  const [newCheckBankName, setNewCheckBankName] = useState('مصرف الراجحي');
+  const [newCheckBankName, setNewCheckBankName] = useState('');
+  const [newCheckPartnerId, setNewCheckPartnerId] = useState('');
   const [newCheckPartnerName, setNewCheckPartnerName] = useState('');
   const [newCheckDrawer, setNewCheckDrawer] = useState('');
   const [newCheckNotes, setNewCheckNotes] = useState('');
 
   const systemSettings = useMemo(() => getSystemSettings(), []);
   const currencySymbol = systemSettings.financial?.currencySymbol || 'ر.س';
-  const companyName = systemSettings.company?.nameAr || systemSettings.company?.nameEn || 'مؤسسة صرح الأعمال للتجارة والتوريدات';
+  const companyName = systemSettings.company?.nameAr || systemSettings.company?.nameEn || 'شركة لوجوستريا للمحاسبة والحلول المالية';
 
   // Available bank accounts from Chart of Accounts
   const bankAccounts = useMemo(() => {
@@ -129,9 +133,12 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
 
   const defaultBankId = bankAccounts[0]?.id || 'acc-1102';
 
-  // Available Vendors for Endorsement
+  // Available Vendors & Customers
   const vendorsList = useMemo<Partner[]>(() => {
     return loadVendors();
+  }, []);
+  const customersList = useMemo<Partner[]>(() => {
+    return loadCustomers();
   }, []);
 
   // Load checks
@@ -419,12 +426,13 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
       checkNumber: newCheckNumber.trim(),
       type: newCheckType,
       source: 'MANUAL',
+      partnerId: newCheckPartnerId || undefined,
       partnerName: newCheckPartnerName.trim(),
       partnerType: newCheckType === 'INCOMING' ? 'CUSTOMER' : 'VENDOR',
       amount: amt,
       issueDate: newCheckIssueDate || getTodayIsoDate(),
       dueDate: newCheckDueDate || getTodayIsoDate(),
-      bankName: newCheckBankName.trim() || 'البنك المسحوب عليه',
+      bankName: newCheckBankName.trim() || bankAccounts[0]?.name || 'البنك المسحوب عليه',
       drawerName: newCheckDrawer.trim() || undefined,
       payeeName: newCheckType === 'OUTGOING' ? newCheckPartnerName.trim() : undefined,
       status: 'UNDER_COLLECTION',
@@ -434,11 +442,12 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
     };
 
     saveBankCheck(check);
-    showToast('تم تسجيل الشيك الجديد في الحافظة بنجاح', 'success');
+    showToast('تم تسجيل الشيك الجديد في الحافظة وتوليد قيده المحاسبي بنجاح', 'success');
     setIsNewCheckModalOpen(false);
     // Reset form
     setNewCheckNumber('');
     setNewCheckAmount('');
+    setNewCheckPartnerId('');
     setNewCheckPartnerName('');
     setNewCheckDrawer('');
     setNewCheckNotes('');
@@ -474,85 +483,156 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
       )}
 
       {/* Screen Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-500/20">
-              <Landmark size={24} />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">
-                حافظة ودورة حياة الشيكات البنكية (Bank Check Cycle)
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                متابعة التحصيل، إشعارات الاستحقاق، التظهير للموردين، والقيود المحاسبية التلقائية
-              </p>
+      {!isInWindow ? (
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-500/20">
+                <Landmark size={24} />
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">
+                  حافظة ودورة حياة الشيكات البنكية (Bank Check Cycle)
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+                  متابعة التحصيل، إشعارات الاستحقاق، التظهير للموردين، والقيود المحاسبية التلقائية
+                </p>
+              </div>
             </div>
           </div>
+
+          <div className="flex items-center flex-wrap gap-2 print:hidden">
+            <button
+              type="button"
+              onClick={reloadChecks}
+              disabled={isRefreshing}
+              className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+              title="مزامنة وتحديث الشيكات من السندات"
+            >
+              <RotateCw size={14} className={isRefreshing ? 'animate-spin text-blue-600' : ''} />
+              <span>مزامنة</span>
+            </button>
+
+            <ExportButtonGroup
+              title="حافظة ودورة الشيكات البنكية (شيكات القبض والصرف)"
+              filename="حافظة_الشيكات_البنكية"
+              headers={[
+                'رقم الشيك',
+                'نوع الشيك',
+                'الطرف المستفيد / الساحب',
+                'المبلغ',
+                'تاريخ الاستحقاق',
+                'البنك المسحوب عليه',
+                'الحالة الحالية',
+                'رقم الحساب / الفرع',
+                'رقم السند المرجعي',
+                'البيان والشرح'
+              ]}
+              rows={filteredChecks.map(c => [
+                c.checkNumber,
+                c.type === 'INCOMING' ? 'شيك قبض (وارد)' : 'شيك صرف (صادر)',
+                c.partnerName,
+                c.amount,
+                c.dueDate,
+                c.bankName,
+                c.status === 'CLEARED' ? 'تم التحصيل / الصرف' : c.status === 'BOUNCED' ? 'مرتد ومرفوض' : c.status === 'UNDER_COLLECTION' ? 'برسم التحصيل' : 'في المحفظة',
+                c.depositBankAccountName || c.bankName,
+                c.sourceVoucherNumber || '-',
+                c.notes || '-'
+              ])}
+              filterSummary={`إجمالي الشيكات: ${filteredChecks.length} | إجمالي المبالغ: ${filteredChecks.reduce((s, c) => s + c.amount, 0).toLocaleString()} ${currencySymbol}`}
+              size="sm"
+            />
+
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+            >
+              <Printer size={14} />
+              <span>طباعة الحافظة</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsNewCheckModalOpen(true)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs flex items-center gap-2 shadow-md shadow-blue-600/20 transition-all cursor-pointer"
+            >
+              <Plus size={16} />
+              <span>تسجيل شيك جديد</span>
+            </button>
+          </div>
         </div>
+      ) : (
+        <div className="flex items-center justify-between gap-2.5 pb-2.5 border-b border-slate-200 print:hidden">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+            <span className="text-xs font-bold text-slate-700">عمليات الحافظة:</span>
+          </div>
 
-        <div className="flex items-center flex-wrap gap-2 print:hidden">
-          <button
-            type="button"
-            onClick={reloadChecks}
-            disabled={isRefreshing}
-            className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer"
-            title="مزامنة وتحديث الشيكات من السندات"
-          >
-            <RotateCw size={14} className={isRefreshing ? 'animate-spin text-blue-600' : ''} />
-            <span>مزامنة</span>
-          </button>
+          <div className="flex items-center flex-wrap gap-2 print:hidden">
+            <button
+              type="button"
+              onClick={reloadChecks}
+              disabled={isRefreshing}
+              className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+              title="مزامنة وتحديث الشيكات من السندات"
+            >
+              <RotateCw size={13} className={isRefreshing ? 'animate-spin text-blue-600' : ''} />
+              <span>مزامنة</span>
+            </button>
 
-          <ExportButtonGroup
-            title="حافظة ودورة الشيكات البنكية (شيكات القبض والصرف)"
-            filename="حافظة_الشيكات_البنكية"
-            headers={[
-              'رقم الشيك',
-              'نوع الشيك',
-              'الطرف المستفيد / الساحب',
-              'المبلغ',
-              'تاريخ الاستحقاق',
-              'البنك المسحوب عليه',
-              'الحالة الحالية',
-              'رقم الحساب / الفرع',
-              'رقم السند المرجعي',
-              'البيان والشرح'
-            ]}
-            rows={filteredChecks.map(c => [
-              c.checkNumber,
-              c.type === 'INCOMING' ? 'شيك قبض (وارد)' : 'شيك صرف (صادر)',
-              c.partnerName,
-              c.amount,
-              c.dueDate,
-              c.bankName,
-              c.status === 'CLEARED' ? 'تم التحصيل / الصرف' : c.status === 'BOUNCED' ? 'مرتد ومرفوض' : c.status === 'UNDER_COLLECTION' ? 'برسم التحصيل' : 'في المحفظة',
-              c.depositBankAccountName || c.bankName,
-              c.sourceVoucherNumber || '-',
-              c.notes || '-'
-            ])}
-            filterSummary={`إجمالي الشيكات: ${filteredChecks.length} | إجمالي المبالغ: ${filteredChecks.reduce((s, c) => s + c.amount, 0).toLocaleString()} ${currencySymbol}`}
-            size="sm"
-          />
+            <ExportButtonGroup
+              title="حافظة ودورة الشيكات البنكية (شيكات القبض والصرف)"
+              filename="حافظة_الشيكات_البنكية"
+              headers={[
+                'رقم الشيك',
+                'نوع الشيك',
+                'الطرف المستفيد / الساحب',
+                'المبلغ',
+                'تاريخ الاستحقاق',
+                'البنك المسحوب عليه',
+                'الحالة الحالية',
+                'رقم الحساب / الفرع',
+                'رقم السند المرجعي',
+                'البيان والشرح'
+              ]}
+              rows={filteredChecks.map(c => [
+                c.checkNumber,
+                c.type === 'INCOMING' ? 'شيك قبض (وارد)' : 'شيك صرف (صادر)',
+                c.partnerName,
+                c.amount,
+                c.dueDate,
+                c.bankName,
+                c.status === 'CLEARED' ? 'تم التحصيل / الصرف' : c.status === 'BOUNCED' ? 'مرتد ومرفوض' : c.status === 'UNDER_COLLECTION' ? 'برسم التحصيل' : 'في المحفظة',
+                c.depositBankAccountName || c.bankName,
+                c.sourceVoucherNumber || '-',
+                c.notes || '-'
+              ])}
+              filterSummary={`إجمالي الشيكات: ${filteredChecks.length} | إجمالي المبالغ: ${filteredChecks.reduce((s, c) => s + c.amount, 0).toLocaleString()} ${currencySymbol}`}
+              size="sm"
+            />
 
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer"
-          >
-            <Printer size={14} />
-            <span>طباعة الحافظة</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+            >
+              <Printer size={13} />
+              <span>طباعة</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setIsNewCheckModalOpen(true)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs flex items-center gap-2 shadow-md shadow-blue-600/20 transition-all cursor-pointer"
-          >
-            <Plus size={16} />
-            <span>تسجيل شيك جديد</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setIsNewCheckModalOpen(true)}
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>تسجيل شيك جديد</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Maturity Real-Time Notification Banner */}
       {(stats.overdueCount > 0 || stats.dueTodayCount > 0 || stats.dueSoonCount > 0) && (
@@ -1881,7 +1961,11 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
                     min="0"
                     step="0.01"
                     value={bounceFee || ''}
-                    onChange={(e) => setBounceFee(Number(e.target.value) || 0)}
+                    onFocus={e => e.target.select()}
+                    onChange={(e) => setBounceFee(e.target.value === '' ? '' as any : Number(e.target.value))}
+                    onBlur={() => {
+                      if ((bounceFee as any) === '') setBounceFee(0);
+                    }}
                     placeholder="0.00"
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono"
                   />
@@ -2562,6 +2646,7 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
                       step="0.01"
                       min="0.01"
                       value={newCheckAmount}
+                      onFocus={e => e.target.select()}
                       onChange={(e) => setNewCheckAmount(e.target.value ? Number(e.target.value) : '')}
                       placeholder="0.00"
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono font-black focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
@@ -2600,25 +2685,53 @@ export default function CheckPortfolioScreen({ onNavigate }: CheckPortfolioScree
                     <label className="block text-slate-700 font-bold mb-1">البنك المسحوب عليه *</label>
                     <input
                       type="text"
+                      list="check-banks-datalist"
                       value={newCheckBankName}
                       onChange={(e) => setNewCheckBankName(e.target.value)}
-                      placeholder="مثال: مصرف الراجحي"
+                      placeholder="اختر من شجرة الحسابات أو اكتب اسم البنك..."
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
                       required
                     />
+                    <datalist id="check-banks-datalist">
+                      {bankAccounts.map(b => (
+                        <option key={b.id} value={b.name} />
+                      ))}
+                    </datalist>
                   </div>
                   <div>
                     <label className="block text-slate-700 font-bold mb-1">
-                      {newCheckType === 'INCOMING' ? 'اسم العميل / الساحب *' : 'اسم المورد / المستفيد *'}
+                      {newCheckType === 'INCOMING' ? 'اختيار العميل (أو كتابة اسم الساحب) *' : 'اختيار المورد (أو كتابة اسم المستفيد) *'}
                     </label>
-                    <input
-                      type="text"
-                      value={newCheckPartnerName}
-                      onChange={(e) => setNewCheckPartnerName(e.target.value)}
-                      placeholder={newCheckType === 'INCOMING' ? 'اسم العميل أو الجهة الدافعة' : 'اسم المورد أو المستفيد'}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold"
-                      required
-                    />
+                    <div className="space-y-1.5">
+                      <select
+                        value={newCheckPartnerId}
+                        onChange={(e) => {
+                          const pid = e.target.value;
+                          setNewCheckPartnerId(pid);
+                          if (pid) {
+                            const list = newCheckType === 'INCOMING' ? customersList : vendorsList;
+                            const found = list.find(p => p.id === pid);
+                            if (found) setNewCheckPartnerName(found.name);
+                          }
+                        }}
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold bg-slate-50"
+                      >
+                        <option value="">
+                          {newCheckType === 'INCOMING' ? '-- اختر من سجل العملاء (اختياري) --' : '-- اختر من سجل الموردين (اختياري) --'}
+                        </option>
+                        {(newCheckType === 'INCOMING' ? customersList : vendorsList).map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={newCheckPartnerName}
+                        onChange={(e) => setNewCheckPartnerName(e.target.value)}
+                        placeholder={newCheckType === 'INCOMING' ? 'اسم العميل أو الجهة الدافعة' : 'اسم المورد أو المستفيد'}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
 

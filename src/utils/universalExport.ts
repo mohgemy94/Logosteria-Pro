@@ -367,7 +367,13 @@ async function captureAndSavePdf(element: HTMLElement, filename: string, orienta
         * {
           -webkit-font-smoothing: antialiased !important;
           -moz-osx-font-smoothing: grayscale !important;
-          text-rendering: optimizeLegibility !important;
+          text-rendering: geometricPrecision !important;
+          letter-spacing: 0px !important;
+          word-spacing: normal !important;
+        }
+        h1, h2, h3, h4, th, td, p, span, div, strong, b {
+          letter-spacing: 0px !important;
+          font-feature-settings: "liga" 1, "dlig" 1, "calt" 1 !important;
         }
         .text-slate-900, .text-slate-800, .text-black, h1, h2, h3, h4, th, strong, b {
           color: #000000 !important;

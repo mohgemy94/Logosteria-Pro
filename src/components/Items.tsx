@@ -2,24 +2,28 @@ import { useState, useMemo, useEffect, type FormEvent } from 'react';
 import { 
   Plus, Search, Save, PackagePlus, BarChart3, TrendingUp, X, 
   AlertTriangle, Edit3, Trash2, Lock, ShieldAlert, CheckCircle2, FileText,
-  Warehouse
+  Warehouse, ArrowRightLeft
 } from 'lucide-react';
 import PrintDropdown from './PrintDropdown';
 import ItemAnalyticsModal from './ItemAnalyticsModal';
+import StockTransferModal from './StockTransferModal';
 import { 
   getNextSequentialNumber, 
   isCodeOrNumberDuplicated, 
   advanceSequenceAfterSave
 } from '../utils/sequences';
-import { loadStoredItems, saveStoredItems, syncItemRecord, Item } from '../utils/itemsStore';
+import { loadStoredItems, saveStoredItems, syncItemRecord, getDynamicWarehousesList, Item } from '../utils/itemsStore';
 import { loadStoredSalesInvoices, type StoredSalesInvoice } from '../utils/salesStore';
 import { loadStoredPurchaseInvoices, type StoredPurchaseInvoice } from '../utils/purchasesStore';
 import { checkItemInvoicesUsage, type ItemInvoicesUsage } from '../utils/itemUsage';
 import { useSystemCurrency } from '../utils/currency';
+import { getSystemSettings } from '../utils/settings';
+import { useIsInWindow } from './DesktopWindowManager';
 
 export type { Item };
 
-export default function Items() {
+export default function Items({ isInWindow: explicitIsInWindow }: { isInWindow?: boolean } = {}) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { symbol: currencySymbol } = useSystemCurrency();
   const [items, setItems] = useState<Item[]>(() => loadStoredItems());
   const [salesInvoices, setSalesInvoices] = useState<StoredSalesInvoice[]>(() => loadStoredSalesInvoices());
@@ -75,6 +79,8 @@ export default function Items() {
     return map;
   }, [items, salesInvoices, purchaseInvoices]);
 
+  const dynamicWarehouses = useMemo(() => getDynamicWarehousesList(), [items]);
+
   const [isAdding, setIsAdding] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -83,6 +89,7 @@ export default function Items() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCustomUnit, setIsCustomUnit] = useState(false);
   const [customUnitName, setCustomUnitName] = useState('');
+  const [isStockTransferOpen, setIsStockTransferOpen] = useState(false);
   
   const [newItem, setNewItem] = useState<Partial<Item>>(() => ({
     code: getNextSequentialNumber('itemCode', items.map(i => i.code)).formatted, 
@@ -92,6 +99,7 @@ export default function Items() {
     unit: 'حبة / قطعة', 
     costPrice: 0, 
     wholesalePrice: 0, 
+    semiWholesalePrice: 0,
     retailPrice: 0, 
     consumerPrice: 0, 
     salePrice: 0, 
@@ -122,6 +130,7 @@ export default function Items() {
       unit: 'حبة / قطعة',
       costPrice: 0,
       wholesalePrice: 0,
+      semiWholesalePrice: 0,
       retailPrice: 0,
       consumerPrice: 0,
       salePrice: 0,
@@ -143,9 +152,10 @@ export default function Items() {
       : (newItem.unit || 'حبة / قطعة');
 
     const wholesale = Number(newItem.wholesalePrice) || 0;
+    const semiWholesale = newItem.semiWholesalePrice !== undefined && newItem.semiWholesalePrice !== '' ? Number(newItem.semiWholesalePrice) : undefined;
     const retail = Number(newItem.retailPrice) || 0;
     const consumer = Number(newItem.consumerPrice) || 0;
-    const baseSale = consumer || retail || wholesale || Number(newItem.salePrice) || 0;
+    const baseSale = consumer || retail || (semiWholesale || 0) || wholesale || Number(newItem.salePrice) || 0;
     const finalCode = newItem.code?.trim() || nextCalculatedCode;
 
     // Strict non-duplication check against all existing items
@@ -165,13 +175,14 @@ export default function Items() {
       unit: finalUnit,
       costPrice: Number(newItem.costPrice) || 0,
       wholesalePrice: wholesale,
+      ...(semiWholesale !== undefined ? { semiWholesalePrice: semiWholesale } : {}),
       retailPrice: retail,
       consumerPrice: consumer,
       salePrice: baseSale,
       stock: Number(newItem.stock) || 0,
       minReorderLevel: Number(newItem.minReorderLevel) || 10,
       maxStockLevel: Number(newItem.maxStockLevel) || 100,
-      warehouseName: newItem.warehouseName || 'المستودع الرئيسي - الرياض',
+      warehouseName: newItem.warehouseName || 'المستودع الرئيسي',
       shelfLocation: newItem.shelfLocation || '',
       taxRate: newItem.taxRate !== undefined ? newItem.taxRate : 15,
       isActive: true,
@@ -203,7 +214,7 @@ export default function Items() {
       stock: 0, 
       minReorderLevel: 10,
       maxStockLevel: 100,
-      warehouseName: 'المستودع الرئيسي - الرياض',
+      warehouseName: 'المستودع الرئيسي',
       shelfLocation: '',
       taxRate: 15, 
       isActive: true 
@@ -224,15 +235,17 @@ export default function Items() {
     if (!editingItem || !editingItem.name.trim()) return;
 
     const wholesale = Number(editingItem.wholesalePrice) || 0;
+    const semiWholesale = editingItem.semiWholesalePrice !== undefined && (editingItem.semiWholesalePrice as any) !== '' ? Number(editingItem.semiWholesalePrice) : undefined;
     const retail = Number(editingItem.retailPrice) || 0;
     const consumer = Number(editingItem.consumerPrice) || 0;
-    const baseSale = consumer || retail || wholesale || Number(editingItem.salePrice) || 0;
+    const baseSale = consumer || retail || (semiWholesale || 0) || wholesale || Number(editingItem.salePrice) || 0;
 
     const updatedItem: Item = {
       ...editingItem,
       name: editingItem.name.trim(),
       costPrice: Number(editingItem.costPrice) || 0,
       wholesalePrice: wholesale,
+      ...(semiWholesale !== undefined ? { semiWholesalePrice: semiWholesale } : {}),
       retailPrice: retail,
       consumerPrice: consumer,
       salePrice: baseSale,
@@ -293,16 +306,19 @@ export default function Items() {
   };
 
   const filteredItems = useMemo(() => {
+    const q = (searchQuery || '').toLowerCase().trim();
+    if (!q) return items;
     return items.filter(c => 
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      c.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.barcode.includes(searchQuery)
+      (c.name || '').toLowerCase().includes(q) || 
+      (c.code && String(c.code).toLowerCase().includes(q)) ||
+      (c.barcode && String(c.barcode).includes(q))
     );
   }, [items, searchQuery]);
 
   return (
     <div className="flex flex-col flex-1 h-full">
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4 mb-6 print:hidden">
+        {!isInWindow && (
         <div>
           <div className="flex items-center gap-2 mb-1 text-slate-500">
             <span className="text-xs uppercase font-bold tracking-tight">المخزون والأصناف</span>
@@ -312,6 +328,7 @@ export default function Items() {
           <h2 className="text-3xl font-bold text-slate-800">بطاقات الأصناف</h2>
           <p className="text-slate-500 mt-1 text-sm">إضافة واستعراض الأصناف والخدمات، وتحديد أسعارها.</p>
         </div>
+        )}
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-4 w-full xl:w-auto">
           <div className="order-2 sm:order-none flex-1 min-w-[200px]">
             <div className="relative w-full">
@@ -327,6 +344,15 @@ export default function Items() {
           </div>
           <div className="order-1 sm:order-none flex items-center gap-2">
             <PrintDropdown />
+            <button 
+              type="button"
+              onClick={() => setIsStockTransferOpen(true)}
+              className="btn-3d btn-3d-indigo px-3.5 py-2 text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-xs"
+              title="إذن تحويل وصرف مخزني بين المستودعات والفروع"
+            >
+              <ArrowRightLeft size={15} /> 
+              <span>تحويل مخزني</span>
+            </button>
           </div>
           <button 
             type="button"
@@ -599,14 +625,13 @@ export default function Items() {
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-bold uppercase text-slate-500">المستودع والموقع</label>
                   <select 
-                    value={newItem.warehouseName || 'المستودع الرئيسي - الرياض'} 
+                    value={newItem.warehouseName || 'المستودع الرئيسي'} 
                     onChange={e => setNewItem({...newItem, warehouseName: e.target.value})}
                     className="border border-slate-200 p-2 rounded text-sm focus:outline-none focus:border-blue-500 bg-white"
                   >
-                    <option value="المستودع الرئيسي - الرياض">المستودع الرئيسي - الرياض</option>
-                    <option value="مستودع فرع جدة">مستودع فرع جدة</option>
-                    <option value="مستودع معرض المبيعات">مستودع معرض المبيعات</option>
-                    <option value="مستودع المنطقة الشرقية">مستودع المنطقة الشرقية</option>
+                    {dynamicWarehouses.map(wh => (
+                      <option key={wh.id} value={wh.label}>{wh.label}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -623,7 +648,17 @@ export default function Items() {
 
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-bold uppercase text-slate-500">الرصيد الافتتاحي (المخزون)</label>
-                  <input type="number" value={newItem.stock} onChange={e => setNewItem({...newItem, stock: Number(e.target.value)})} className="border border-slate-200 p-2 rounded text-sm focus:outline-none focus:border-blue-500 font-mono" />
+                  <input 
+                    type="number" 
+                    value={newItem.stock ?? ''} 
+                    onFocus={e => e.target.select()}
+                    onChange={e => setNewItem({...newItem, stock: e.target.value === '' ? ('' as any) : Number(e.target.value)})} 
+                    onBlur={() => {
+                      if ((newItem.stock as any) === '') setNewItem({ ...newItem, stock: 0 });
+                    }}
+                    placeholder="0"
+                    className="border border-slate-200 p-2 rounded text-sm focus:outline-none focus:border-blue-500 font-mono" 
+                  />
                 </div>
 
                 <div className="flex flex-col gap-1">
@@ -634,8 +669,12 @@ export default function Items() {
                   <input 
                     type="number" 
                     min="0"
-                    value={newItem.minReorderLevel ?? 10} 
-                    onChange={e => setNewItem({...newItem, minReorderLevel: Number(e.target.value)})} 
+                    value={newItem.minReorderLevel ?? ''} 
+                    onFocus={e => e.target.select()}
+                    onChange={e => setNewItem({...newItem, minReorderLevel: e.target.value === '' ? ('' as any) : Number(e.target.value)})} 
+                    onBlur={() => {
+                      if ((newItem.minReorderLevel as any) === '') setNewItem({ ...newItem, minReorderLevel: 10 });
+                    }}
                     placeholder="10" 
                     className="border border-amber-200 bg-amber-50/20 p-2 rounded text-sm focus:outline-none focus:border-amber-500 font-mono" 
                   />
@@ -646,8 +685,12 @@ export default function Items() {
                   <input 
                     type="number" 
                     min="0"
-                    value={newItem.maxStockLevel ?? 100} 
-                    onChange={e => setNewItem({...newItem, maxStockLevel: Number(e.target.value)})} 
+                    value={newItem.maxStockLevel ?? ''} 
+                    onFocus={e => e.target.select()}
+                    onChange={e => setNewItem({...newItem, maxStockLevel: e.target.value === '' ? ('' as any) : Number(e.target.value)})} 
+                    onBlur={() => {
+                      if ((newItem.maxStockLevel as any) === '') setNewItem({ ...newItem, maxStockLevel: 100 });
+                    }}
                     placeholder="100" 
                     className="border border-slate-200 p-2 rounded text-sm focus:outline-none focus:border-blue-500 font-mono" 
                   />
@@ -662,10 +705,14 @@ export default function Items() {
                       min="0" 
                       max="100" 
                       value={newItem.taxRate ?? ''} 
+                      onFocus={e => e.target.select()}
                       onChange={e => {
                         const val = e.target.value;
-                        setNewItem({ ...newItem, taxRate: val === '' ? 0 : Number(val) });
+                        setNewItem({ ...newItem, taxRate: val === '' ? ('' as any) : Number(val) });
                       }} 
+                      onBlur={() => {
+                        if ((newItem.taxRate as any) === '') setNewItem({ ...newItem, taxRate: 15 });
+                      }}
                       placeholder="15" 
                       className="border border-slate-200 p-2 pl-8 rounded text-sm focus:outline-none focus:border-blue-500 font-mono w-full bg-white" 
                     />
@@ -704,8 +751,12 @@ export default function Items() {
                         type="number" 
                         min="0" 
                         step="0.01" 
-                        value={newItem.costPrice || ''} 
-                        onChange={e => setNewItem({...newItem, costPrice: Number(e.target.value)})} 
+                        value={newItem.costPrice ?? ''} 
+                        onFocus={e => e.target.select()}
+                        onChange={e => setNewItem({...newItem, costPrice: e.target.value === '' ? ('' as any) : Number(e.target.value)})} 
+                        onBlur={() => {
+                          if ((newItem.costPrice as any) === '') setNewItem({ ...newItem, costPrice: 0 });
+                        }}
                         placeholder="0.00" 
                         className="border border-slate-200 p-2 rounded text-sm focus:outline-none focus:border-blue-500 font-mono bg-white" 
                       />
@@ -722,10 +773,34 @@ export default function Items() {
                         min="0" 
                         step="0.01" 
                         required 
-                        value={newItem.wholesalePrice || ''} 
-                        onChange={e => setNewItem({...newItem, wholesalePrice: Number(e.target.value)})} 
+                        value={newItem.wholesalePrice ?? ''} 
+                        onFocus={e => e.target.select()}
+                        onChange={e => setNewItem({...newItem, wholesalePrice: e.target.value === '' ? ('' as any) : Number(e.target.value)})} 
+                        onBlur={() => {
+                          if ((newItem.wholesalePrice as any) === '') setNewItem({ ...newItem, wholesalePrice: 0 });
+                        }}
                         placeholder="0.00" 
                         className="border border-blue-200 p-2 rounded text-sm focus:outline-none focus:border-blue-500 font-mono bg-white font-semibold text-blue-700" 
+                      />
+                    </div>
+
+                    {/* سعر البيع نصف جملة (موزع) */}
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-teal-700 flex items-center justify-between">
+                        <span>سعر البيع نصف جملة (موزع)</span>
+                      </label>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        step="0.01" 
+                        value={newItem.semiWholesalePrice ?? ''} 
+                        onFocus={e => e.target.select()}
+                        onChange={e => setNewItem({...newItem, semiWholesalePrice: e.target.value === '' ? ('' as any) : Number(e.target.value)})} 
+                        onBlur={() => {
+                          if ((newItem.semiWholesalePrice as any) === '') setNewItem({ ...newItem, semiWholesalePrice: 0 });
+                        }}
+                        placeholder="0.00" 
+                        className="border border-teal-200 p-2 rounded text-sm focus:outline-none focus:border-teal-500 font-mono bg-white font-semibold text-teal-700" 
                       />
                     </div>
 
@@ -740,8 +815,12 @@ export default function Items() {
                         min="0" 
                         step="0.01" 
                         required 
-                        value={newItem.retailPrice || ''} 
-                        onChange={e => setNewItem({...newItem, retailPrice: Number(e.target.value)})} 
+                        value={newItem.retailPrice ?? ''} 
+                        onFocus={e => e.target.select()}
+                        onChange={e => setNewItem({...newItem, retailPrice: e.target.value === '' ? ('' as any) : Number(e.target.value)})} 
+                        onBlur={() => {
+                          if ((newItem.retailPrice as any) === '') setNewItem({ ...newItem, retailPrice: 0 });
+                        }}
                         placeholder="0.00" 
                         className="border border-emerald-200 p-2 rounded text-sm focus:outline-none focus:border-emerald-500 font-mono bg-white font-semibold text-emerald-700" 
                       />
@@ -758,8 +837,12 @@ export default function Items() {
                         min="0" 
                         step="0.01" 
                         required 
-                        value={newItem.consumerPrice || ''} 
-                        onChange={e => setNewItem({...newItem, consumerPrice: Number(e.target.value)})} 
+                        value={newItem.consumerPrice ?? ''} 
+                        onFocus={e => e.target.select()}
+                        onChange={e => setNewItem({...newItem, consumerPrice: e.target.value === '' ? ('' as any) : Number(e.target.value)})} 
+                        onBlur={() => {
+                          if ((newItem.consumerPrice as any) === '') setNewItem({ ...newItem, consumerPrice: 0 });
+                        }}
                         placeholder="0.00" 
                         className="border border-purple-200 p-2 rounded text-sm focus:outline-none focus:border-purple-500 font-mono bg-white font-semibold text-purple-700" 
                       />
@@ -790,8 +873,8 @@ export default function Items() {
 
       {/* Print Header */}
       <div className="hidden print:block text-center mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">لوجوستريا للمحاسبة</h1>
-        <p className="text-sm text-slate-500">الفرع الرئيسي - الرياض</p>
+        <h1 className="text-2xl font-bold text-slate-900">{getSystemSettings().company?.nameAr || 'شركة لوجوستريا'}</h1>
+        <p className="text-sm text-slate-500">{getSystemSettings().company?.branchName ? `${getSystemSettings().company.branchName} - ` : ''}{getSystemSettings().company?.address || getSystemSettings().company?.city || 'المملكة العربية السعودية'}</p>
         <h2 className="text-xl font-bold mt-4 border-b pb-2 inline-block">قائمة الأصناف والخدمات</h2>
         <div className="mt-4 text-sm flex justify-between px-10 text-slate-600">
           <span>تاريخ الطباعة: {new Date().toLocaleDateString('ar-SA')}</span>
@@ -1065,8 +1148,12 @@ export default function Items() {
                       type="number"
                       step="0.01"
                       min={0}
-                      value={editingItem.costPrice || 0}
-                      onChange={(e) => setEditingItem({...editingItem, costPrice: Number(e.target.value)})}
+                      value={editingItem.costPrice ?? ''}
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => setEditingItem({...editingItem, costPrice: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                      onBlur={() => {
+                        if ((editingItem.costPrice as any) === '') setEditingItem({ ...editingItem, costPrice: 0 });
+                      }}
                       className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white font-mono"
                     />
                   </div>
@@ -1076,9 +1163,28 @@ export default function Items() {
                       type="number"
                       step="0.01"
                       min={0}
-                      value={editingItem.wholesalePrice || 0}
-                      onChange={(e) => setEditingItem({...editingItem, wholesalePrice: Number(e.target.value)})}
+                      value={editingItem.wholesalePrice ?? ''}
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => setEditingItem({...editingItem, wholesalePrice: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                      onBlur={() => {
+                        if ((editingItem.wholesalePrice as any) === '') setEditingItem({ ...editingItem, wholesalePrice: 0 });
+                      }}
                       className="w-full px-2.5 py-1.5 border border-blue-200 rounded-lg bg-white font-mono text-blue-700 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-teal-700 text-[11px] font-bold mb-1">سعر نصف جملة:</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={editingItem.semiWholesalePrice ?? ''}
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => setEditingItem({...editingItem, semiWholesalePrice: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                      onBlur={() => {
+                        if ((editingItem.semiWholesalePrice as any) === '') setEditingItem({ ...editingItem, semiWholesalePrice: 0 });
+                      }}
+                      className="w-full px-2.5 py-1.5 border border-teal-200 rounded-lg bg-white font-mono text-teal-700 font-bold"
                     />
                   </div>
                   <div>
@@ -1087,8 +1193,12 @@ export default function Items() {
                       type="number"
                       step="0.01"
                       min={0}
-                      value={editingItem.retailPrice || 0}
-                      onChange={(e) => setEditingItem({...editingItem, retailPrice: Number(e.target.value)})}
+                      value={editingItem.retailPrice ?? ''}
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => setEditingItem({...editingItem, retailPrice: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                      onBlur={() => {
+                        if ((editingItem.retailPrice as any) === '') setEditingItem({ ...editingItem, retailPrice: 0 });
+                      }}
                       className="w-full px-2.5 py-1.5 border border-emerald-200 rounded-lg bg-white font-mono text-emerald-700 font-bold"
                     />
                   </div>
@@ -1098,8 +1208,12 @@ export default function Items() {
                       type="number"
                       step="0.01"
                       min={0}
-                      value={editingItem.consumerPrice || 0}
-                      onChange={(e) => setEditingItem({...editingItem, consumerPrice: Number(e.target.value)})}
+                      value={editingItem.consumerPrice ?? ''}
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => setEditingItem({...editingItem, consumerPrice: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                      onBlur={() => {
+                        if ((editingItem.consumerPrice as any) === '') setEditingItem({ ...editingItem, consumerPrice: 0 });
+                      }}
                       className="w-full px-2.5 py-1.5 border border-purple-200 rounded-lg bg-white font-mono text-purple-700 font-bold"
                     />
                   </div>
@@ -1111,14 +1225,13 @@ export default function Items() {
                 <div>
                   <label className="block text-slate-600 font-bold mb-1">المستودع:</label>
                   <select 
-                    value={editingItem.warehouseName || 'المستودع الرئيسي - الرياض'} 
+                    value={editingItem.warehouseName || 'المستودع الرئيسي'} 
                     onChange={e => setEditingItem({...editingItem, warehouseName: e.target.value})}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 bg-white"
                   >
-                    <option value="المستودع الرئيسي - الرياض">المستودع الرئيسي - الرياض</option>
-                    <option value="مستودع فرع جدة">مستودع فرع جدة</option>
-                    <option value="مستودع معرض المبيعات">مستودع معرض المبيعات</option>
-                    <option value="مستودع المنطقة الشرقية">مستودع المنطقة الشرقية</option>
+                    {dynamicWarehouses.map(wh => (
+                      <option key={wh.id} value={wh.label}>{wh.label}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -1139,8 +1252,12 @@ export default function Items() {
                   <label className="block text-slate-600 font-bold mb-1">الرصيد بالمخزن:</label>
                   <input
                     type="number"
-                    value={editingItem.stock || 0}
-                    onChange={(e) => setEditingItem({...editingItem, stock: Number(e.target.value)})}
+                    value={editingItem.stock ?? ''}
+                    onFocus={e => e.target.select()}
+                    onChange={(e) => setEditingItem({...editingItem, stock: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                    onBlur={() => {
+                      if ((editingItem.stock as any) === '') setEditingItem({ ...editingItem, stock: 0 });
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 font-mono"
                   />
                 </div>
@@ -1149,8 +1266,12 @@ export default function Items() {
                   <input
                     type="number"
                     min={0}
-                    value={editingItem.minReorderLevel !== undefined ? editingItem.minReorderLevel : 10}
-                    onChange={(e) => setEditingItem({...editingItem, minReorderLevel: Number(e.target.value)})}
+                    value={editingItem.minReorderLevel ?? ''}
+                    onFocus={e => e.target.select()}
+                    onChange={(e) => setEditingItem({...editingItem, minReorderLevel: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                    onBlur={() => {
+                      if ((editingItem.minReorderLevel as any) === '') setEditingItem({ ...editingItem, minReorderLevel: 10 });
+                    }}
                     className="w-full px-3 py-2 border border-amber-200 bg-amber-50/20 rounded-xl focus:outline-none focus:border-amber-500 font-mono"
                   />
                 </div>
@@ -1159,8 +1280,12 @@ export default function Items() {
                   <input
                     type="number"
                     min={0}
-                    value={editingItem.maxStockLevel !== undefined ? editingItem.maxStockLevel : 100}
-                    onChange={(e) => setEditingItem({...editingItem, maxStockLevel: Number(e.target.value)})}
+                    value={editingItem.maxStockLevel ?? ''}
+                    onFocus={e => e.target.select()}
+                    onChange={(e) => setEditingItem({...editingItem, maxStockLevel: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                    onBlur={() => {
+                      if ((editingItem.maxStockLevel as any) === '') setEditingItem({ ...editingItem, maxStockLevel: 100 });
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 font-mono"
                   />
                 </div>
@@ -1171,8 +1296,12 @@ export default function Items() {
                     step="0.01"
                     min={0}
                     max={100}
-                    value={editingItem.taxRate !== undefined ? editingItem.taxRate : 15}
-                    onChange={(e) => setEditingItem({...editingItem, taxRate: Number(e.target.value)})}
+                    value={editingItem.taxRate ?? ''}
+                    onFocus={e => e.target.select()}
+                    onChange={(e) => setEditingItem({...editingItem, taxRate: e.target.value === '' ? ('' as any) : Number(e.target.value)})}
+                    onBlur={() => {
+                      if ((editingItem.taxRate as any) === '') setEditingItem({ ...editingItem, taxRate: 15 });
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 font-mono"
                   />
                 </div>
@@ -1332,6 +1461,13 @@ export default function Items() {
           </div>
         </div>
       )}
+
+      {/* Inter-Warehouse Stock Transfer Modal */}
+      <StockTransferModal
+        isOpen={isStockTransferOpen}
+        onClose={() => setIsStockTransferOpen(false)}
+        onSuccess={() => setItems(loadStoredItems())}
+      />
     </div>
   );
 }

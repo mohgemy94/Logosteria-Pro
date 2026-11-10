@@ -145,8 +145,9 @@ export function getCurrencyInfo(codeOrSymbol?: string): CurrencyMetadata {
       return matchedUpper;
     }
     // Match by symbol or name
+    const lowerTarget = codeOrSymbol.toLowerCase();
     const found = Object.values(SUPPORTED_CURRENCIES).find(
-      c => c.symbol === codeOrSymbol || c.symbolEn === codeOrSymbol || c.nameAr === codeOrSymbol || c.nameEn.toLowerCase() === codeOrSymbol.toLowerCase()
+      c => c.symbol === codeOrSymbol || c.symbolEn === codeOrSymbol || c.nameAr === codeOrSymbol || (c.nameEn || '').toLowerCase() === lowerTarget
     );
     if (found) return found;
   }

@@ -730,6 +730,10 @@ export const translations: TranslationDictionary = {
     ar: 'أرصدة العملاء والموردين',
     en: 'Customer & Vendor Balances',
   },
+  nav_customerStatement: {
+    ar: 'كشف حساب عميل أو مورد',
+    en: 'Customer & Vendor Statement',
+  },
   nav_inventoryGroup: {
     ar: 'المخزون والتصنيع والأصناف',
     en: 'Inventory, Manufacturing & Items',

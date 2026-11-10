@@ -20,9 +20,9 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   financial: {
     currency: 'SAR',
     currencySymbol: 'ر.س',
-    fiscalYear: '2024',
-    fiscalYearStart: '2024-01-01',
-    fiscalYearEnd: '2024-12-31',
+    fiscalYear: String(new Date().getFullYear()),
+    fiscalYearStart: `${new Date().getFullYear()}-01-01`,
+    fiscalYearEnd: `${new Date().getFullYear()}-12-31`,
     isFiscalYearClosed: false,
     costMethod: 'WEIGHTED_AVG',
     decimalPlaces: 2,
@@ -65,48 +65,6 @@ export const DEFAULT_SETTINGS: SystemSettings = {
       canPrint: true,
       canExport: true,
       isActive: true,
-    },
-    {
-      id: 'usr-2',
-      username: 'accountant1',
-      displayName: 'محاسب أول - الإدارة المالية',
-      role: 'ACCOUNTANT',
-      branch: 'الفرع الرئيسي',
-      canCreate: true,
-      canEdit: true,
-      canDelete: false,
-      canPost: true,
-      canPrint: true,
-      canExport: true,
-      isActive: true,
-    },
-    {
-      id: 'usr-3',
-      username: 'cashier_pos',
-      displayName: 'كاشير نقطة البيع 1',
-      role: 'CASHIER',
-      branch: 'معرض المبيعات',
-      canCreate: true,
-      canEdit: false,
-      canDelete: false,
-      canPost: false,
-      canPrint: true,
-      canExport: false,
-      isActive: true,
-    },
-    {
-      id: 'usr-4',
-      username: 'storekeeper',
-      displayName: 'أمين المستودع المركزي',
-      role: 'STOREKEEPER',
-      branch: 'المستودع الرئيسي',
-      canCreate: true,
-      canEdit: true,
-      canDelete: false,
-      canPost: false,
-      canPrint: true,
-      canExport: true,
-      isActive: true,
     }
   ],
   taxAndInvoice: {
@@ -132,9 +90,9 @@ export const DEFAULT_SETTINGS: SystemSettings = {
     minAmountThreshold: 5000,
     requireGeneralManagerForVeryLarge: true,
     veryLargeThreshold: 50000,
-    defaultApproverName: 'أ. د. عبد الرحمن الشهري',
+    defaultApproverName: 'المدير المالي',
     defaultApproverRole: 'المدير المالي',
-    generalManagerName: 'م. فهد بن عبدالعزيز',
+    generalManagerName: 'المدير العام',
     blockPostingWithoutApproval: true,
     enableForInternalVouchers: true,
   },
@@ -142,12 +100,12 @@ export const DEFAULT_SETTINGS: SystemSettings = {
     salesTransactionType: 'CREDIT_SALES',
     salesClassification: 'TAX',
     salesWarehouse: 'MAIN_WAREHOUSE',
-    salesSafe: 'MAIN_SAFE',
+    salesSafe: '1101',
     salesServiceType: '',
     purchasesTransactionType: 'CREDIT_PURCHASE',
     purchasesClassification: 'TAX',
     purchasesWarehouse: 'MAIN_WAREHOUSE',
-    purchasesSafe: 'MAIN_SAFE',
+    purchasesSafe: '1101',
     purchasesServiceType: '',
   },
 };
@@ -160,11 +118,21 @@ export function getSystemSettings(): SystemSettings {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw);
+    const currentYear = new Date().getFullYear();
+    const storedFy = Number(parsed.financial?.fiscalYear);
+    const activeFy = (!isNaN(storedFy) && storedFy >= currentYear) ? String(storedFy) : String(currentYear);
+
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
       company: { ...DEFAULT_SETTINGS.company, ...(parsed.company || {}) },
-      financial: { ...DEFAULT_SETTINGS.financial, ...(parsed.financial || {}) },
+      financial: { 
+        ...DEFAULT_SETTINGS.financial, 
+        ...(parsed.financial || {}),
+        fiscalYear: activeFy,
+        fiscalYearStart: parsed.financial?.fiscalYearStart || `${activeFy}-01-01`,
+        fiscalYearEnd: parsed.financial?.fiscalYearEnd || `${activeFy}-12-31`
+      },
       currencies: parsed.currencies && Array.isArray(parsed.currencies) && parsed.currencies.length > 0 ? parsed.currencies : DEFAULT_SETTINGS.currencies,
       controlAndLimits: { ...DEFAULT_SETTINGS.controlAndLimits, ...(parsed.controlAndLimits || {}) },
       branding: { ...DEFAULT_SETTINGS.branding, ...(parsed.branding || {}) },

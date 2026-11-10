@@ -11,11 +11,15 @@ import PrintPreviewModal, { PrintPreviewData } from './PrintPreviewModal';
 import VouchersExportModal from './VouchersExportModal';
 import VoucherApprovalStepper from './VoucherApprovalStepper';
 import VouchersApprovalCenterModal from './VouchersApprovalCenterModal';
+import { useIsInWindow } from './DesktopWindowManager';
 import { 
   isApprovalRequired, 
   canVoucherBePosted 
 } from '../utils/voucherApproval';
 import { getSystemSettings } from '../utils/settings';
+import { loadChartOfAccounts } from '../utils/trialBalanceStore';
+import { isCashOrBankAccount } from '../utils/accountingIntegration';
+import { Account } from '../types/accounting';
 import { 
   getNextSequentialNumber, 
   isCodeOrNumberDuplicated, 
@@ -47,11 +51,7 @@ export interface StoredInternalVoucher {
   preparedBy?: string | undefined;
 }
 
-const ACCOUNTS = [
-  { id: 'cash1', name: 'الصندوق الرئيسي' },
-  { id: 'bank1', name: 'البنك الأهلي' },
-  { id: 'bank2', name: 'بنك الراجحي' },
-];
+
 
 function loadStoredInternalVouchers(): StoredInternalVoucher[] {
   if (typeof window === 'undefined') return [];
@@ -69,7 +69,8 @@ function loadStoredInternalVouchers(): StoredInternalVoucher[] {
 
 import { useSystemCurrency } from '../utils/currency';
 
-export default function InternalVouchers() {
+export default function InternalVouchers({ isInWindow: explicitIsInWindow }: { isInWindow?: boolean } = {}) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { symbol: currencySymbol, fullNameAr: currencyFullNameAr, tafqeet } = useSystemCurrency();
   const [savedVouchers, setSavedVouchers] = useState<StoredInternalVoucher[]>(() => loadStoredInternalVouchers());
   const [showHistory, setShowHistory] = useState(false);
@@ -81,6 +82,21 @@ export default function InternalVouchers() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showApprovalCenterModal, setShowApprovalCenterModal] = useState(false);
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => getSystemSettings());
+  const [chartAccounts, setChartAccounts] = useState<Account[]>(() => loadChartOfAccounts());
+
+  useEffect(() => {
+    const handleAccountsUpdate = () => setChartAccounts(loadChartOfAccounts());
+    window.addEventListener('alpha-chart-of-accounts-updated', handleAccountsUpdate);
+    window.addEventListener('alpha-data-changed', handleAccountsUpdate);
+    return () => {
+      window.removeEventListener('alpha-chart-of-accounts-updated', handleAccountsUpdate);
+      window.removeEventListener('alpha-data-changed', handleAccountsUpdate);
+    };
+  }, []);
+
+  const availableTransferAccounts = useMemo(() => {
+    return chartAccounts.filter(a => isCashOrBankAccount(a, chartAccounts));
+  }, [chartAccounts]);
 
   useEffect(() => {
     const handleSettingsUpdate = () => {
@@ -252,6 +268,14 @@ export default function InternalVouchers() {
       if (editingVoucherId === id) {
         handleNewVoucher();
       }
+    }
+  };
+
+  const handleCurrentVoucherDelete = () => {
+    if (editingVoucherId) {
+      handleDelete(editingVoucherId, voucherNumber || nextCalculatedVoucherNum);
+    } else {
+      handleNewVoucher();
     }
   };
 
@@ -433,33 +457,36 @@ export default function InternalVouchers() {
     saveVoucherWithStatus(voucherStatus || 'DRAFT');
   };
 
-  const getAccountName = (id: string) => ACCOUNTS.find(a => a.id === id)?.name || id;
+  const getAccountName = (id: string) => {
+    const found = chartAccounts.find(a => a.id === id || a.code === id);
+    if (found) return `${found.code} - ${found.name}`;
+    if (id === 'cash1' || id === '1101') return '1101 - النقدية بالصندوق';
+    if (id === 'bank1' || id === '1102') return '1102 - النقدية بالبنك';
+    return id;
+  };
 
   return (
     <div className="flex flex-col flex-1">
       {/* Top Application Bar */}
-      <div className="flex flex-col gap-3 mb-4 print:hidden">
-        {/* Breadcrumb & Title */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div>
-            <div className="flex items-center gap-2 mb-1 text-slate-500 text-xs font-bold">
-              <span>الخزينة والبنوك</span>
-              <span>/</span>
-              <span className="text-slate-800 font-extrabold">سندات داخلية</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-800">سند تحويل داخلي</h2>
-              <span className="text-xs sm:text-sm font-black text-blue-950 bg-blue-50 px-2.5 py-1 rounded-lg font-mono border border-blue-200 shadow-2xs">
-                سند رقم: #{voucherNumber}
-              </span>
-              {editingVoucherId && (
-                <span className="text-xs bg-amber-50 text-amber-950 px-2.5 py-1 rounded-lg font-black border border-amber-300 flex items-center gap-1 shadow-2xs">
-                  <Edit3 size={12} className="text-amber-700" /> وضع التعديل
+      <div className={`flex flex-col gap-3 ${isInWindow ? 'mb-2' : 'mb-4'} print:hidden`}>
+        {/* Title (Shown ONLY in full screen mode; In multi-window mode, the top window bar is the single title) */}
+        {!isInWindow && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-800">سند تحويل داخلي</h2>
+                <span className="text-xs sm:text-sm font-black text-blue-950 bg-blue-50 px-2.5 py-1 rounded-lg font-mono border border-blue-200 shadow-2xs">
+                  سند رقم: #{voucherNumber}
                 </span>
-              )}
+                {editingVoucherId && (
+                  <span className="text-xs bg-amber-50 text-amber-950 px-2.5 py-1 rounded-lg font-black border border-amber-300 flex items-center gap-1 shadow-2xs">
+                    <Edit3 size={12} className="text-amber-700" /> وضع التعديل
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Global 3D Responsive Internal Voucher Actions Toolbar */}
         <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
@@ -529,6 +556,12 @@ export default function InternalVouchers() {
               <History size={14} className={showHistory ? 'text-indigo-200' : 'text-indigo-600'} />
               <span>سجل السندات ({savedVouchers.length})</span>
             </button>
+
+            {isInWindow && (
+              <span className="text-xs font-black text-blue-950 bg-blue-50 px-2.5 py-1.5 rounded-lg font-mono border border-blue-200 shadow-2xs self-center">
+                سند رقم: #{voucherNumber}
+              </span>
+            )}
 
             {editingVoucherId && (
               <button
@@ -992,8 +1025,8 @@ export default function InternalVouchers() {
 
       {/* Print Header */}
       <div className="hidden print:block text-center mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">لوجوستريا للمحاسبة</h1>
-        <p className="text-sm text-slate-500">الفرع الرئيسي - الرياض</p>
+        <h1 className="text-2xl font-bold text-slate-900">{systemSettings.company?.nameAr || 'شركة لوجوستريا'}</h1>
+        <p className="text-sm text-slate-500">{systemSettings.company?.branchName ? `${systemSettings.company.branchName} - ` : ''}{systemSettings.company?.address || systemSettings.company?.city || 'المملكة العربية السعودية'}</p>
         <h2 className="text-xl font-bold mt-4 border-b pb-2 inline-block">سند تحويل داخلي</h2>
         <div className="mt-4 text-sm flex justify-between px-10 text-slate-600">
           <span className="font-bold font-mono">رقم السند: #{voucherNumber}</span>
@@ -1149,8 +1182,8 @@ export default function InternalVouchers() {
                   className="border-2 border-slate-300 focus:border-rose-500 p-2.5 rounded-xl text-sm font-bold text-slate-800 bg-white shadow-2xs focus:outline-none"
                 >
                   <option value="">-- حدد الحساب المحوّل منه --</option>
-                  {ACCOUNTS.map(a => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
+                  {availableTransferAccounts.map(a => (
+                    <option key={a.id || a.code} value={a.id || a.code}>{a.code} - {a.name}</option>
                   ))}
                 </select>
               </div>
@@ -1182,8 +1215,8 @@ export default function InternalVouchers() {
                   className="border-2 border-slate-300 focus:border-emerald-500 p-2.5 rounded-xl text-sm font-bold text-slate-800 bg-white shadow-2xs focus:outline-none"
                 >
                   <option value="">-- حدد الحساب المحوّل إليه --</option>
-                  {ACCOUNTS.map(a => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
+                  {availableTransferAccounts.map(a => (
+                    <option key={a.id || a.code} value={a.id || a.code}>{a.code} - {a.name}</option>
                   ))}
                 </select>
               </div>
@@ -1385,6 +1418,15 @@ export default function InternalVouchers() {
                 <span>معاينة الطباعة</span>
               </button>
 
+              <button
+                type="button"
+                onClick={handleCurrentVoucherDelete}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded-xl font-bold text-xs border border-rose-500/40 transition-colors cursor-pointer min-h-[42px]"
+                title="حذف هذا السند أو مسح البيانات"
+              >
+                <Trash2 size={15} />
+                <span>حذف السند</span>
+              </button>
               <button
                 type="button"
                 onClick={() => saveVoucherWithStatus('DRAFT')}

@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Printer, X, ZoomIn, ZoomOut, Type, Layout } from 'lucide-react';
+import { 
+  Printer, 
+  X, 
+  ZoomIn, 
+  ZoomOut, 
+  Type, 
+  Layout
+} from 'lucide-react';
 
 interface ReportPrintPreviewToolbarProps {
   isOpen: boolean;
@@ -16,12 +23,27 @@ export default function ReportPrintPreviewToolbar({
   targetId
 }: ReportPrintPreviewToolbarProps) {
   const [zoom, setZoom] = useState(100);
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [fontSize, setFontSize] = useState<number>(12); // pt
   const [margin, setMargin] = useState<number>(15); // mm
 
+  const resetPan = () => {
+    setPan({ x: 0, y: 0 });
+  };
+
+  const handleClose = () => {
+    setZoom(100);
+    setPan({ x: 0, y: 0 });
+    onClose();
+  };
+
   // Automatically calculate optimal zoom to fit report width to screen size on mobile/tablet/desktop
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setZoom(100);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
 
     const calculateReportFit = () => {
       if (typeof window === 'undefined') return;
@@ -78,9 +100,9 @@ export default function ReportPrintPreviewToolbar({
         font-size: ${fontSize}pt !important;
         max-width: 210mm !important; /* A4 width */
         min-height: 297mm !important; /* A4 height */
-        transform: scale(${zoom / 100});
+        transform: translate3d(${pan.x}px, ${pan.y}px, 0px) scale(${zoom / 100});
         transform-origin: top center;
-        transition: transform 0.2s ease-out;
+        transition: transform 0.15s ease-out;
       }
 
       @media (max-width: 640px) {
@@ -138,7 +160,7 @@ export default function ReportPrintPreviewToolbar({
       <div className="bg-slate-900 text-white px-3 sm:px-6 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-xl">
         <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
           <h2 className="font-bold text-base sm:text-lg text-blue-100">{title} - معاينة الطباعة</h2>
-          <button onClick={onClose} className="p-1.5 hover:bg-slate-800 rounded-lg sm:hidden">
+          <button onClick={handleClose} className="p-1.5 hover:bg-slate-800 rounded-lg sm:hidden">
             <X size={20} />
           </button>
         </div>
@@ -160,11 +182,52 @@ export default function ReportPrintPreviewToolbar({
              <span className="text-[11px] sm:text-xs font-mono w-5 sm:w-6 text-center">{margin}</span>
           </div>
 
-          {/* Zoom Control */}
-          <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700">
-             <button onClick={() => setZoom(z => Math.max(30, z - 10))} className="p-1 sm:p-1.5 hover:bg-slate-700 rounded-lg text-slate-300 hover:text-white transition-colors" title="تصغير المعاينة"><ZoomOut size={14}/></button>
-             <span className="text-[10px] sm:text-xs font-mono w-8 sm:w-10 text-center">{zoom}%</span>
-             <button onClick={() => setZoom(z => Math.min(200, z + 10))} className="p-1 sm:p-1.5 hover:bg-slate-700 rounded-lg text-slate-300 hover:text-white transition-colors" title="تكبير المعاينة"><ZoomIn size={14}/></button>
+          {/* أداة التكبير والتصغير المرنة بأي قيمة (Flexible Zoom Control with Slider & Stepper) */}
+          <div className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 shadow-2xs text-white">
+            <button
+              type="button"
+              onClick={() => setZoom(z => Math.max(z - 15, 30))}
+              className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              title="تصغير (-15%)"
+            >
+              <ZoomOut size={14} />
+            </button>
+
+            <input
+              type="range"
+              min="30"
+              max="220"
+              step="5"
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="w-20 sm:w-28 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              title={`نسبة التكبير: ${zoom}% (اسحب للتحكم بأي قيمة)`}
+            />
+
+            <button
+              type="button"
+              onClick={() => setZoom(z => Math.min(z + 15, 220))}
+              className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              title="تكبير (+15%)"
+            >
+              <ZoomIn size={14} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setZoom(100);
+                resetPan();
+              }}
+              className={`font-mono text-xs font-bold px-2 py-0.5 rounded-lg transition-colors cursor-pointer ${
+                zoom === 100 
+                  ? 'bg-slate-700 text-slate-300' 
+                  : 'bg-blue-600 text-white hover:bg-blue-500'
+              }`}
+              title="إعادة ضبط المعاينة إلى 100%"
+            >
+              {zoom}%
+            </button>
           </div>
 
           <div className="flex items-center gap-2 mr-auto sm:mr-0 ml-auto sm:ml-0">
@@ -172,7 +235,7 @@ export default function ReportPrintPreviewToolbar({
               <Printer size={15} />
               <span>طباعة الآن</span>
             </button>
-            <button onClick={onClose} className="p-1.5 sm:p-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors hidden sm:block">
+            <button onClick={handleClose} className="p-1.5 sm:p-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors hidden sm:block">
               <X size={20} />
             </button>
           </div>

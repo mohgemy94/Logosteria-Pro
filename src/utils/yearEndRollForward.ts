@@ -1109,7 +1109,7 @@ export function applyRollForwardToNewYear(bundle: RollForwardBundle, targetYear:
     const updatedCustomers: Partner[] = [...existingCustomers];
 
     for (const rollCust of bundle.customers) {
-      const idx = updatedCustomers.findIndex(c => (c.code && c.code === rollCust.code) || c.name.trim().toLowerCase() === rollCust.name.trim().toLowerCase());
+      const idx = updatedCustomers.findIndex(c => (c.code && c.code === rollCust.code) || (c.name || '').trim().toLowerCase() === (rollCust.name || '').trim().toLowerCase());
       if (idx >= 0) {
         const currentCust = updatedCustomers[idx];
         if (currentCust) {
@@ -1137,7 +1137,7 @@ export function applyRollForwardToNewYear(bundle: RollForwardBundle, targetYear:
     const updatedVendors: Partner[] = [...existingVendors];
 
     for (const rollVend of bundle.vendors) {
-      const idx = updatedVendors.findIndex(v => (v.code && v.code === rollVend.code) || v.name.trim().toLowerCase() === rollVend.name.trim().toLowerCase());
+      const idx = updatedVendors.findIndex(v => (v.code && v.code === rollVend.code) || (v.name || '').trim().toLowerCase() === (rollVend.name || '').trim().toLowerCase());
       if (idx >= 0) {
         const currentVend = updatedVendors[idx];
         if (currentVend) {
@@ -1165,7 +1165,7 @@ export function applyRollForwardToNewYear(bundle: RollForwardBundle, targetYear:
     const updatedItems = [...existingItems];
 
     for (const rollItem of bundle.inventory) {
-      const idx = updatedItems.findIndex(it => (it.barcode && it.barcode === rollItem.barcode) || (it.code && it.code === rollItem.code) || it.name.trim().toLowerCase() === rollItem.name.trim().toLowerCase());
+      const idx = updatedItems.findIndex(it => (it.barcode && it.barcode === rollItem.barcode) || (it.code && it.code === rollItem.code) || (it.name || '').trim().toLowerCase() === (rollItem.name || '').trim().toLowerCase());
       if (idx >= 0) {
         const it = updatedItems[idx];
         if (it) {

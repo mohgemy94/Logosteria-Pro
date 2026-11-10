@@ -13,6 +13,8 @@ interface AddVendorFormProps {
     country?: string | undefined;
     address?: string | undefined;
     email?: string | undefined;
+    region?: string | undefined;
+    city?: string | undefined;
     creditLimit?: number | undefined;
     paymentTermsDays?: number | undefined;
     openingBalance?: number;
@@ -38,12 +40,35 @@ export default function AddVendorForm({
     country: 'SA',
     address: '',
     email: '',
+    region: '',
+    city: '',
     creditLimit: '',
     paymentTermsDays: '0',
     openingBalance: '',
     balanceType: 'CREDIT' as 'CREDIT' | 'DEBIT' // CREDIT (دائن - مستحق للمورد علينا) or DEBIT (مدين - دفعة مقدمة لنا)
   });
-  const [errors, setErrors] = useState({ name: '', taxNumber: '', phone: '' });
+  // Load dynamic lists from MasterDatabaseSettings
+  const masterData = React.useMemo(() => {
+    try {
+      const raw = localStorage.getItem('alpha_master_database_settings_v1');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return {};
+  }, []);
+
+  const regionsList: string[] = React.useMemo(() => {
+    if (Array.isArray(masterData?.regions)) {
+      return masterData.regions.map((r: any) => r.name || r.title || '').filter(Boolean);
+    }
+    return ['المنطقة الوسطى', 'المنطقة الغربية', 'المنطقة الشرقية', 'المنطقة الجنوبية', 'المنطقة الشمالية'];
+  }, [masterData]);
+
+  const citiesList: string[] = React.useMemo(() => {
+    if (Array.isArray(masterData?.cities)) {
+      return masterData.cities.map((c: any) => c.name || c.title || '').filter(Boolean);
+    }
+    return ['الرياض', 'جدة', 'الدمام', 'مكة المكرمة', 'المدينة المنورة', 'الخبر', 'القصيم', 'أبها', 'تبوك'];
+  }, [masterData]);
 
   const validate = () => {
     let isValid = true;
@@ -78,6 +103,8 @@ export default function AddVendorForm({
         country: newVendor.country,
         address: newVendor.address.trim(),
         email: newVendor.email.trim() || undefined,
+        region: newVendor.region.trim() || undefined,
+        city: newVendor.city.trim() || undefined,
         creditLimit: limitVal !== undefined && !isNaN(limitVal) ? limitVal : undefined,
         paymentTermsDays: termsVal !== undefined && !isNaN(termsVal) ? termsVal : undefined,
         openingBalance: finalBal
@@ -206,6 +233,40 @@ export default function AddVendorForm({
             />
           </div>
 
+          {/* Region */}
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+              المنطقة
+            </label>
+            <input 
+              list="vendor-regions-list"
+              value={newVendor.region} 
+              onChange={e => setNewVendor({...newVendor, region: e.target.value})} 
+              className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all shadow-2xs" 
+              placeholder="اختر أو اكتب المنطقة..." 
+            />
+            <datalist id="vendor-regions-list">
+              {regionsList.map((r, i) => <option key={i} value={r} />)}
+            </datalist>
+          </div>
+
+          {/* City */}
+          <div>
+            <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
+              المدينة
+            </label>
+            <input 
+              list="vendor-cities-list"
+              value={newVendor.city} 
+              onChange={e => setNewVendor({...newVendor, city: e.target.value})} 
+              className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all shadow-2xs" 
+              placeholder="اختر أو اكتب المدينة..." 
+            />
+            <datalist id="vendor-cities-list">
+              {citiesList.map((c, i) => <option key={i} value={c} />)}
+            </datalist>
+          </div>
+
           {/* Address */}
           <div>
             <label className="block text-slate-700 font-semibold mb-1 text-xs sm:text-sm">
@@ -215,7 +276,7 @@ export default function AddVendorForm({
               value={newVendor.address} 
               onChange={e => setNewVendor({...newVendor, address: e.target.value})} 
               className="w-full px-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all shadow-2xs" 
-              placeholder="المدينة - الحي - الشارع" 
+              placeholder="الحي - الشارع" 
             />
           </div>
         </div>
@@ -245,6 +306,7 @@ export default function AddVendorForm({
                 step="0.01"
                 min="0"
                 value={newVendor.creditLimit} 
+                onFocus={e => e.target.select()}
                 onChange={e => setNewVendor({...newVendor, creditLimit: e.target.value})} 
                 className="w-full pl-10 pr-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all shadow-2xs" 
                 placeholder="100000" 
@@ -288,6 +350,7 @@ export default function AddVendorForm({
                 step="0.01"
                 min="0"
                 value={newVendor.openingBalance} 
+                onFocus={e => e.target.select()}
                 onChange={e => setNewVendor({...newVendor, openingBalance: e.target.value})} 
                 className="w-full pl-10 pr-3 py-2 sm:py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all shadow-2xs" 
                 placeholder="0.00" 

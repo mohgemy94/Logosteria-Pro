@@ -50,6 +50,102 @@ body {
   box-shadow: none !important;
 }
 
+/* -------------------------------------------------------------------------- */
+/* ECO INK-SAVING BLACK & WHITE MODE (درجات الرمادي الفاتحة لتوفير الحبر)     */
+/* -------------------------------------------------------------------------- */
+.print-bw-mode {
+  filter: grayscale(100%) !important;
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+  border-color: #64748b !important;
+}
+
+.print-bw-mode * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.print-bw-mode table,
+.print-bw-mode th,
+.print-bw-mode td,
+.print-bw-mode tr {
+  border-color: #64748b !important;
+}
+
+.print-bw-mode th,
+.print-bw-mode thead tr {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #475569 !important;
+}
+
+.print-bw-mode th {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  border-color: #475569 !important;
+}
+
+.print-bw-mode td {
+  border-color: #64748b !important;
+}
+
+.print-bw-mode .bg-slate-950,
+.print-bw-mode .bg-slate-900,
+.print-bw-mode .bg-slate-800,
+.print-bw-mode .bg-slate-700,
+.print-bw-mode .bg-black {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #475569 !important;
+}
+
+.print-bw-mode .text-white {
+  color: #0f172a !important;
+}
+
+.print-bw-mode .bg-rose-50,
+.print-bw-mode .bg-rose-100,
+.print-bw-mode .bg-rose-200,
+.print-bw-mode .bg-emerald-50,
+.print-bw-mode .bg-emerald-100,
+.print-bw-mode .bg-emerald-200,
+.print-bw-mode .bg-blue-50,
+.print-bw-mode .bg-blue-100,
+.print-bw-mode .bg-blue-200,
+.print-bw-mode .bg-indigo-50,
+.print-bw-mode .bg-indigo-100,
+.print-bw-mode .bg-amber-50,
+.print-bw-mode .bg-amber-100,
+.print-bw-mode .bg-amber-200 {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+
+.print-bw-mode .text-rose-700,
+.print-bw-mode .text-rose-800,
+.print-bw-mode .text-rose-900,
+.print-bw-mode .text-rose-950,
+.print-bw-mode .text-emerald-700,
+.print-bw-mode .text-emerald-800,
+.print-bw-mode .text-emerald-900,
+.print-bw-mode .text-emerald-950,
+.print-bw-mode .text-blue-700,
+.print-bw-mode .text-blue-800,
+.print-bw-mode .text-blue-900,
+.print-bw-mode .text-blue-950,
+.print-bw-mode .text-indigo-700,
+.print-bw-mode .text-indigo-800,
+.print-bw-mode .text-indigo-900,
+.print-bw-mode .text-amber-700,
+.print-bw-mode .text-amber-800,
+.print-bw-mode .text-amber-900 {
+  color: #1e293b !important;
+}
+
+.print-bw-mode img {
+  filter: grayscale(100%) contrast(1.1) brightness(1.02) !important;
+}
+
 /* Custom Visible Scrollbar for All Modals and Scrollable Containers */
 ::-webkit-scrollbar {
   width: 8px;
@@ -501,6 +597,64 @@ body {
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
 }
 
+/* -------------------------------------------------------------------------- */
+/* TACTILE 3D GLOBAL NAVIGATION BAR & SEQUENTIAL BACK CONTROLS                */
+/* -------------------------------------------------------------------------- */
+.nav-3d-bar {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 45%, #f1f5f9 100%);
+  border: 1px solid #cbd5e1;
+  border-top-color: #f1f5f9;
+  border-left-color: #cbd5e1;
+  border-right-color: #cbd5e1;
+  border-bottom: 3.5px solid #94a3b8;
+  border-radius: 1.125rem;
+  box-shadow: 0 4px 14px -2px rgba(15, 23, 42, 0.08), 
+              inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+              inset 0 -1px 0 rgba(203, 213, 225, 0.35);
+  position: relative;
+}
+
+.btn-3d-nav-back {
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 55%, #1e40af 100%);
+  color: #ffffff;
+  border-top-color: #60a5fa;
+  border-left-color: #1d4ed8;
+  border-right-color: #1d4ed8;
+  border-bottom-color: #172554;
+  border-bottom-width: 3.5px;
+  box-shadow: 0 3px 8px -1px rgba(37, 99, 235, 0.38), 
+              0 1px 2px -1px rgba(0, 0, 0, 0.1),
+              inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.btn-3d-nav-back:hover:not(:disabled) {
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 55%, #1d4ed8 100%);
+  filter: brightness(1.06);
+  box-shadow: 0 6px 18px -2px rgba(37, 99, 235, 0.48), 
+              inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.btn-3d-nav-back:active:not(:disabled) {
+  transform: translateY(2px) scale(0.97);
+  border-bottom-width: 1.5px !important;
+  box-shadow: 0 1px 3px 0 rgba(23, 37, 84, 0.3) !important;
+}
+
+.badge-3d-view {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #cbd5e1;
+  border-top-color: #ffffff;
+  border-bottom: 3px solid #94a3b8;
+  border-radius: 0.75rem;
+  box-shadow: 0 2px 5px -1px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+.badge-3d-dest {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.12) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-bottom: 2px solid rgba(15, 23, 42, 0.25);
+  border-radius: 0.5rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
 /* Universal Tactile Depth Enhancement for Standard UI Buttons */
 button:not(.btn-flat):not([role="tab"]):not(.recharts-legend-item):not(.btn-3d) {
   transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.15s ease, box-shadow 0.15s ease;
@@ -515,3 +669,29 @@ button:not(.btn-flat):not([role="tab"]):not(.recharts-legend-item):not(.btn-3d):
   transform: translateY(1.5px) scale(0.98);
 }
 
+
+
+/* ========================================================================== */
+/* MULTI-WINDOW MANAGER: HIDE DUPLICATE INTERNAL SCREEN HEADERS               */
+/* In multi-window mode, each window has its own native top title bar         */
+/* (showing window title, icon, badge, minimize/maximize/snap/close buttons). */
+/* Inside the window body, redundant top headers should be cleanly hidden.   */
+/* ========================================================================== */
+.window-content-body > div > header h1,
+.window-content-body > form > header h1,
+.window-content-body > div > div > header h1,
+.window-content-body > div > div:first-child h1:first-of-type:not([data-keep-title="true"]),
+.window-content-body > form > div:first-child h1:first-of-type:not([data-keep-title="true"]),
+.window-content-body > div:first-child > div:first-child h1:first-of-type:not([data-keep-title="true"]),
+.window-content-body > div:first-child > div:first-child > div:first-child h1:first-of-type:not([data-keep-title="true"]),
+.window-content-body [data-screen-header="true"] {
+  display: none !important;
+}
+
+/* Also ensure printable documents keep their headers when printing or in export modal */
+.print-invoice-page h1,
+.print-report-target h1,
+[id*="print"] h1,
+[id*="printable"] h1 {
+  display: block !important;
+}

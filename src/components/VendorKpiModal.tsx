@@ -151,12 +151,12 @@ export default function VendorKpiModal({
     if (!search.trim()) return data;
     const q = search.toLowerCase().trim();
     return data.filter(({ vendor: v }) => 
-      v.name.toLowerCase().includes(q) ||
+      (v.name || '').toLowerCase().includes(q) ||
       (v.phone && v.phone.includes(q)) ||
       (v.taxNumber && v.taxNumber.includes(q)) ||
-      (v.code && v.code.toLowerCase().includes(q)) ||
-      (v.address && v.address.toLowerCase().includes(q)) ||
-      (v.email && v.email.toLowerCase().includes(q))
+      (v.code && (v.code || '').toLowerCase().includes(q)) ||
+      (v.address && (v.address || '').toLowerCase().includes(q)) ||
+      (v.email && (v.email || '').toLowerCase().includes(q))
     );
   }, [data, search]);
 

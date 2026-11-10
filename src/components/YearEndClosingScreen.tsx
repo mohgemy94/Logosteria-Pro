@@ -7,6 +7,7 @@ import {
   Warehouse, Printer, Search
 } from 'lucide-react';
 import { useSystemCurrency } from '../utils/currency';
+import { useIsInWindow } from './DesktopWindowManager';
 import { computeDashboardKPIsLocally, closeYearLocally } from '../utils/trialBalanceStore';
 import { 
   computeRollForwardData, 
@@ -32,9 +33,11 @@ import {
 
 interface YearEndClosingScreenProps {
   onNavigate: (view: string) => void;
+  isInWindow?: boolean;
 }
 
-export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScreenProps) {
+export default function YearEndClosingScreen({ onNavigate, isInWindow: explicitIsInWindow }: YearEndClosingScreenProps) {
+  const isInWindow = useIsInWindow(explicitIsInWindow);
   const { symbol: currencySymbol } = useSystemCurrency();
   const currentYear = new Date().getFullYear();
   
@@ -359,6 +362,7 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
     <div className="flex flex-col gap-6" dir="rtl">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        {!isInWindow && (
         <div className="flex items-center gap-3">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-700 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20">
             <CalendarCheck size={30} />
@@ -372,6 +376,7 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
             </p>
           </div>
         </div>
+        )}
 
         {/* Tab Switcher */}
         <div className="flex items-center p-1.5 bg-slate-100 rounded-xl self-start md:self-auto flex-wrap gap-1">
@@ -878,7 +883,8 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
                 )}
               </div>
 
-              <div className="flex items-center gap-3">
+              {!isInWindow && (
+        <div className="flex items-center gap-3">
                 <button
                   onClick={handleApplyImport}
                   disabled={isApplying}
@@ -897,6 +903,7 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
                   )}
                 </button>
               </div>
+              )}
             </div>
           </div>
 
@@ -1192,10 +1199,10 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
                             if (inventorySearchQuery.trim()) {
                               const q = inventorySearchQuery.toLowerCase();
                               return (
-                                it.name.toLowerCase().includes(q) ||
-                                (it.barcode && it.barcode.toLowerCase().includes(q)) ||
-                                (it.code && it.code.toLowerCase().includes(q)) ||
-                                (it.shelfLocation && it.shelfLocation.toLowerCase().includes(q))
+                                (it.name || '').toLowerCase().includes(q) ||
+                                (it.barcode && (it.barcode || '').toLowerCase().includes(q)) ||
+                                (it.code && (it.code || '').toLowerCase().includes(q)) ||
+                                (it.shelfLocation && (it.shelfLocation || '').toLowerCase().includes(q))
                               );
                             }
                             return true;
@@ -1425,8 +1432,8 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
                             if (customerSearchQuery.trim()) {
                               const q = customerSearchQuery.toLowerCase();
                               return (
-                                c.name.toLowerCase().includes(q) ||
-                                (c.code && c.code.toLowerCase().includes(q)) ||
+                                (c.name || '').toLowerCase().includes(q) ||
+                                (c.code && (c.code || '').toLowerCase().includes(q)) ||
                                 (c.phone && c.phone.includes(q))
                               );
                             }
@@ -1765,7 +1772,8 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
                   {periodLockState.isLocked ? <Lock size={32} /> : <Unlock size={32} />}
                 </div>
                 <div>
-                  <div className="flex items-center gap-3">
+                  {!isInWindow && (
+        <div className="flex items-center gap-3">
                     <h3 className="text-xl font-black text-slate-800">
                       {periodLockState.isLocked 
                         ? `الفترة المالية مقفلة ومجمدة حتى (${periodLockState.lockDate})`
@@ -1777,6 +1785,7 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
                       {periodLockState.isLocked ? 'حماية تامة نشطة' : 'فترات قابلة للتعديل'}
                     </span>
                   </div>
+                  )}
                   <p className="text-sm text-slate-500 mt-1">
                     {periodLockState.isLocked
                       ? `تم تفعيل القفل الرقابي بواسطة: ${periodLockState.lockedBy || 'الإدارة المالية'}. يمنع النظام إضافة أو تعديل أو ترحيل أي حركات بتاريخ يسبق هذا التاريخ.`
@@ -1945,7 +1954,8 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center gap-3">
+              {!isInWindow && (
+        <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-cyan-700 text-white flex items-center justify-center shadow-md">
                   <Sliders size={20} />
                 </div>
@@ -1958,6 +1968,7 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
                   </p>
                 </div>
               </div>
+              )}
               <button
                 onClick={() => setShowBadDebtConfigModal(false)}
                 className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 flex items-center justify-center"
@@ -2038,13 +2049,19 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
                               min="0"
                               max="100"
                               step="0.5"
-                              value={badDebtConfig.matrixRates?.current ?? 1}
+                              value={badDebtConfig.matrixRates?.current ?? ''}
+                              onFocus={e => e.target.select()}
                               onChange={(e) => {
-                                const val = Number(e.target.value);
+                                const val = e.target.value === '' ? ('' as any) : Number(e.target.value);
                                 setBadDebtConfig(prev => ({
                                   ...prev,
                                   matrixRates: { ...prev.matrixRates!, current: val }
                                 }));
+                              }}
+                              onBlur={() => {
+                                if ((badDebtConfig.matrixRates?.current as any) === '') {
+                                  setBadDebtConfig(prev => ({ ...prev, matrixRates: { ...prev.matrixRates!, current: 1 } }));
+                                }
                               }}
                               className="w-full border border-slate-300 rounded-lg px-3 py-1.5 bg-white font-mono font-bold"
                             />
@@ -2060,13 +2077,19 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
                               min="0"
                               max="100"
                               step="1"
-                              value={badDebtConfig.matrixRates?.bucket90to180 ?? 10}
+                              value={badDebtConfig.matrixRates?.bucket90to180 ?? ''}
+                              onFocus={e => e.target.select()}
                               onChange={(e) => {
-                                const val = Number(e.target.value);
+                                const val = e.target.value === '' ? ('' as any) : Number(e.target.value);
                                 setBadDebtConfig(prev => ({
                                   ...prev,
                                   matrixRates: { ...prev.matrixRates!, bucket90to180: val }
                                 }));
+                              }}
+                              onBlur={() => {
+                                if ((badDebtConfig.matrixRates?.bucket90to180 as any) === '') {
+                                  setBadDebtConfig(prev => ({ ...prev, matrixRates: { ...prev.matrixRates!, bucket90to180: 10 } }));
+                                }
                               }}
                               className="w-full border border-slate-300 rounded-lg px-3 py-1.5 bg-white font-mono font-bold"
                             />
@@ -2082,13 +2105,19 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
                               min="0"
                               max="100"
                               step="1"
-                              value={badDebtConfig.matrixRates?.bucket180to360 ?? 35}
+                              value={badDebtConfig.matrixRates?.bucket180to360 ?? ''}
+                              onFocus={e => e.target.select()}
                               onChange={(e) => {
-                                const val = Number(e.target.value);
+                                const val = e.target.value === '' ? ('' as any) : Number(e.target.value);
                                 setBadDebtConfig(prev => ({
                                   ...prev,
                                   matrixRates: { ...prev.matrixRates!, bucket180to360: val }
                                 }));
+                              }}
+                              onBlur={() => {
+                                if ((badDebtConfig.matrixRates?.bucket180to360 as any) === '') {
+                                  setBadDebtConfig(prev => ({ ...prev, matrixRates: { ...prev.matrixRates!, bucket180to360: 35 } }));
+                                }
                               }}
                               className="w-full border border-slate-300 rounded-lg px-3 py-1.5 bg-white font-mono font-bold"
                             />
@@ -2104,13 +2133,19 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
                               min="0"
                               max="100"
                               step="1"
-                              value={badDebtConfig.matrixRates?.over360 ?? 80}
+                              value={badDebtConfig.matrixRates?.over360 ?? ''}
+                              onFocus={e => e.target.select()}
                               onChange={(e) => {
-                                const val = Number(e.target.value);
+                                const val = e.target.value === '' ? ('' as any) : Number(e.target.value);
                                 setBadDebtConfig(prev => ({
                                   ...prev,
                                   matrixRates: { ...prev.matrixRates!, over360: val }
                                 }));
+                              }}
+                              onBlur={() => {
+                                if ((badDebtConfig.matrixRates?.over360 as any) === '') {
+                                  setBadDebtConfig(prev => ({ ...prev, matrixRates: { ...prev.matrixRates!, over360: 80 } }));
+                                }
                               }}
                               className="w-full border border-slate-300 rounded-lg px-3 py-1.5 bg-white font-mono font-bold"
                             />
@@ -2130,10 +2165,16 @@ export default function YearEndClosingScreen({ onNavigate }: YearEndClosingScree
                           min="0"
                           max="100"
                           step="0.5"
-                          value={badDebtConfig.flatPercentage ?? 5}
+                          value={badDebtConfig.flatPercentage ?? ''}
+                          onFocus={e => e.target.select()}
                           onChange={(e) => {
-                            const val = Number(e.target.value);
+                            const val = e.target.value === '' ? ('' as any) : Number(e.target.value);
                             setBadDebtConfig(prev => ({ ...prev, flatPercentage: val }));
+                          }}
+                          onBlur={() => {
+                            if ((badDebtConfig.flatPercentage as any) === '') {
+                              setBadDebtConfig(prev => ({ ...prev, flatPercentage: 5 }));
+                            }
                           }}
                           className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white font-mono font-bold text-sm"
                         />
