@@ -2253,9 +2253,9 @@ ${(data.paidAmount ?? 0) > 0 ? `• المدفوع: ${(data.paidAmount || 0).toL
         <div className="hidden print:block p-8 border-b-2 border-slate-800">
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">{currSettings.company.nameAr || 'شركة لوجوستريا'}</h1>
-              <p className="text-xs text-slate-500">{currSettings.company.branchName ? `${currSettings.company.branchName} - ` : ''}{currSettings.company.address || currSettings.company.city || 'المملكة العربية السعودية'}</p>
-              {currSettings.company.vatNumber && <p className="text-xs text-slate-500 font-mono">الرقم الضريبي: {currSettings.company.vatNumber}</p>}
+              <h1 className="text-2xl font-bold text-slate-900">{systemSettings.company?.nameAr || 'شركة لوجوستريا'}</h1>
+              <p className="text-xs text-slate-500">{systemSettings.company?.branchName ? `${systemSettings.company.branchName} - ` : ''}{systemSettings.company?.address || systemSettings.company?.city || 'المملكة العربية السعودية'}</p>
+              {systemSettings.company?.vatNumber && <p className="text-xs text-slate-500 font-mono">الرقم الضريبي: {systemSettings.company.vatNumber}</p>}
             </div>
             <div className="text-left">
               <h2 className="text-xl font-bold text-slate-900">
